@@ -38,7 +38,7 @@ class InstanceListView {
             instanceName: "name",
             instanceVersion: "version",
             instanceUpdatedAt: "lastUpdated",
-            instanceToken: "token",
+            instanceToken: "id",
         };
     }
 
@@ -87,21 +87,24 @@ class InstanceListView {
                     id: this.NAMES.addBtn,
                     value: this.LABELS.add,
                     width: 100,
-                    click: () => this._showAddDialog()
+                    click: () => this._showAddDialog(),
+                    hotkey: "insert"
                 },
                 {
                     view: "button",
                     id: this.NAMES.deleteBtn,
                     value: this.LABELS.delete,
                     width: 100,
-                    click: () => this._deleteInstance()
+                    click: () => this._deleteInstance(),
+                    hotkey: "delete"
                 },
                 {
                     view: "button",
                     id: this.NAMES.refreshBtn,
                     value: this.LABELS.refresh,
                     width: 100,
-                    click: () => this._loadData()
+                    click: () => this._loadData(),
+                    hotkey: "f5"
                 },
                 {},
                 {
@@ -110,7 +113,8 @@ class InstanceListView {
                     value: this.LABELS.prevButton,
                     width: 50,
                     disabled: true,
-                    click: () => this._goToPage(this.pageNumber - 1)
+                    click: () => this._goToPage(this.pageNumber - 1),
+                    hotkey: "ctrl+left"
                 },
                 {
                     view: "label",
@@ -125,7 +129,8 @@ class InstanceListView {
                     value: this.LABELS.nextButton,
                     width: 50,
                     disabled: true,
-                    click: () => this._goToPage(this.pageNumber + 1)
+                    click: () => this._goToPage(this.pageNumber + 1),
+                    hotkey: "ctrl+right"
                 },
             ]
         };
@@ -138,8 +143,7 @@ class InstanceListView {
             columns: [
                 { id: this.NAMES.instanceName, header: this.LABELS.instanceName, fillspace: true },
                 { id: this.NAMES.instanceVersion, header: this.LABELS.instanceVersion, width: 100 },
-                { id: this.NAMES.instanceUpdatedAt, header: this.LABELS.instanceUpdatedAt, width: 100 },
-                { id: this.NAMES.instanceToken, header: this.LABELS.instanceToken, width: 100 },
+                { id: this.NAMES.instanceUpdatedAt, header: this.LABELS.instanceUpdatedAt, width: 280 },
             ],
             select: "row",
             multiselect: false,
@@ -157,11 +161,25 @@ class InstanceListView {
                 return;
             }
 
+            if (!data.listEnabled) {
+                webix.message({
+                    text: data.description,
+                    type: "error"
+                });
+                return;
+            }
+
             const table = $$(this.NAMES.dataTable);
             table.clearAll();
-            table.parse(data.Content);
+            table.parse(data.content);
+
             $$(this.id).enable();
 
+            if (data.content.length > 0) {
+                table.select(data.content[0].id);
+                webix.UIManager.setFocus(this.NAMES.dataTable); 
+            }
+            
             this._updatePagination(data);
 
         } catch (error) {
@@ -171,6 +189,37 @@ class InstanceListView {
                 type: "error"
             });
         }
+    }
+
+    async _deleteInstance() {
+        const recordId = $$(this.NAMES.dataTable).getSelectedId();
+
+        if (!recordId) {
+            webix.message({
+                text: "Выберите запись для удаления",
+                type: "error"
+            });
+            return;
+        }
+
+        webix.confirm({
+            title: "Вы уверены?",
+            text: "Вы собираетесь удалить запись?",
+            ok: "Да",
+            cancel: "Нет",
+        }).then(async () => {
+            try {
+                await instanceMonitoringService.delete(recordId);
+                $$(this.NAMES.dataTable).remove(recordId);
+                webix.message("Запись удалена успешно");
+            } catch (error) {
+                console.error(this.LABELS.errorDelete, error);
+                webix.message({
+                    text: this.LABELS.errorDelete,
+                    type: "error"
+                });
+            }
+        });
     }
 
     _updatePagination(data) {
@@ -212,9 +261,13 @@ class InstanceListView {
     }
 
     _showAddDialog() {
-        instanceElementView.showDialog((createdRecord, formData, file_obj) => {
-            this._addToTable(createdRecord, formData, file_obj);
+        instanceElementView.showDialog((createdRecord) => {
+            this._addToTable(createdRecord);
         });
+    }
+
+    _addToTable(createdRecord) {
+        $$(this.NAMES.dataTable).add(createdRecord);
     }
 }
 
