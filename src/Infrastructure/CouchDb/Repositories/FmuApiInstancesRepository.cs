@@ -16,6 +16,9 @@ public class FmuApiInstancesRepository : BaseCouchDbRepository<InstanceEntity>, 
 
     public async Task<Result> Update(InstanceEntity instance)
     {
+        if (!_appState.DbState())
+            return Result.Failure(DatabaseUnavailable);
+        
         var createResult = await CreateAsync(instance);
 
         return createResult ? Result.Success() : Result.Failure($"Не удалось создать или обновить данные инстанса {instance.Id}");
@@ -23,6 +26,9 @@ public class FmuApiInstancesRepository : BaseCouchDbRepository<InstanceEntity>, 
 
     public async Task<Result<InstanceEntity>> ByToken(string token)
     {
+        if (!_appState.DbState())
+            return Result.Failure<InstanceEntity>(DatabaseUnavailable);
+        
         var entity = await GetByIdAsync(token);
 
         if (entity == null)
@@ -33,6 +39,23 @@ public class FmuApiInstancesRepository : BaseCouchDbRepository<InstanceEntity>, 
 
     public async Task<Result<PaginatedResponse<InstanceEntity>>> List(int pageNumber, int pageSize, string filter = "")
     {
+        var skipElements = (pageNumber - 1) * pageSize;
+
+        if (!_appState.DbState())
+        {
+            PaginatedResponse<InstanceEntity> emptyResponse = new()
+            {
+                Description = DatabaseUnavailable,
+                ListEnabled = false,
+                TotalCount = 1,
+                PageSize = pageSize,
+                CurrentPage = 1,
+                Content = new List<InstanceEntity>()
+            };
+            
+            return Result.Success(emptyResponse);
+        }
+        
         try
         {
             var query = _database.AsQueryable();
@@ -65,22 +88,28 @@ public class FmuApiInstancesRepository : BaseCouchDbRepository<InstanceEntity>, 
 
     public async Task<Result<bool>> CreateInstance(InstanceEntity entity)
     {
+        if (!_appState.DbState())
+            return Result.Failure<bool>(DatabaseUnavailable);
+        
         var createResult = await CreateAsync(entity);
 
-        if (createResult)
-            Result.Success();
+        if (!createResult)
+            Result.Failure<bool>($"Не удалось создать запись инстанса {entity.Id} в БД");
 
-        return Result.Failure<bool>("Не удалось создать запись с инстансом в БД");
+        return Result.Success(true);
     }
 
     public async Task<Result<bool>> DeleteInstance(InstanceEntity entity)
     {
+        if (!_appState.DbState())
+            return Result.Failure<bool>(DatabaseUnavailable);
+        
         var deleteResult = await DeleteAsync(entity.Id);
         
         if (deleteResult)
-            Result.Success();
+            return Result.Success(true);
 
-        return Result.Failure<bool>("Не удалось создать запись с инстансом в БД");
+        return Result.Failure<bool>("Не удалось ужадить запись инстана из БД");
     }
     
 }

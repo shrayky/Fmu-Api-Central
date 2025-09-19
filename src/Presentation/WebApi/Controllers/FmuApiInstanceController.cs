@@ -38,10 +38,11 @@ public class FmuApiInstanceController : ControllerBase
         return createResult ? Ok() : BadRequest();
     }
 
-    [HttpDelete]
+    [HttpDelete("{token}")]
     public async Task<IActionResult> Delete(string token)
     {
         var deleteResult = await _managerService.Delete(token);
+        
         return deleteResult ? Ok() : BadRequest();
     }
 
