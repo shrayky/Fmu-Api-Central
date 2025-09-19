@@ -11,10 +11,6 @@ class SoftwareUpdatesService {
         
         const data = await this.authService.makeAuthenticatedRequest(endpoint);
 
-        if (!data.result) {
-            throw new Error(data.error);
-        }
-
         return data.value;  
     }
             
