@@ -86,8 +86,9 @@ public class IndexingService : IIndexingService
         var indexes = new[]
         {
             new { name = "name-idx", index = new { fields = new[] { "data.name" } } },
+            new { name = "updatedAt-idx", index = new { fields = new[] { "data.updatedAt" } } },
         };
 
-        return await CreateIndexesForDatabase(httpClient, DatabaseNames.SoftwareUpdateFiles, indexes, cancellationToken);
+        return await CreateIndexesForDatabase(httpClient, DatabaseNames.Instance, indexes, cancellationToken);
     }
 }
