@@ -15,6 +15,8 @@ namespace CouchDb.Repositories
         protected readonly ICouchDatabase<UniversalDocument<T>> _database;
         protected readonly IParametersService _parameters;
         protected readonly IApplicationState _appState;
+        
+        protected const string DatabaseUnavailable = "БД недоступна сейчас";
 
         protected BaseCouchDbRepository(ICouchDatabase<UniversalDocument<T>> database, IServiceProvider services)
         {
