@@ -32,7 +32,6 @@ class InstanceElementView {
                 id: this.NAMES.formId,
                 elements: [
                     TextBox("text", this.LABELS.instanceName, this.NAMES.instanceName, { required: true, invalidMessage: this.LABELS.invalidNameMessage }),
-                    //TextBox("text", this.LABELS.instanceToken, this.NAMES.instanceToken, { required: true, invalidMessage: this.LABELS.invalidTokenMessage }),
                     this._createTokenField(),
                     this._createButtons(onSuccess),
                 ]
@@ -40,13 +39,20 @@ class InstanceElementView {
         }).show();
 
         this._generateToken();
+
+        setTimeout(() => {
+            const nameField = $$(this.NAMES.instanceName);
+            if (nameField) {
+                nameField.focus();
+            }
+        }, 100);
     }
 
     _createButtons(onSuccess) {
         return {
             cols: [
-                { view: "button", value: "Создать", click: () => this._sendNewInstance(onSuccess) },
-                { view: "button", value: "Отмена", click: () => $$(this.NAMES.formId).close() }
+                { view: "button", value: "Создать", click: () => this._sendNewInstance(onSuccess), hotkey: "alt+enter" },
+                { view: "button", value: "Отмена", click: () => $$(this.NAMES.formId).close(), hotkey: "esc" }
             ]
         };
     }
@@ -99,17 +105,21 @@ class InstanceElementView {
         const instanceToken = $$(this.NAMES.instanceToken).getValue();
 
         const instanceData = {
-            Name: instanceName,
-            Token: instanceToken,
-            Version: "-",
-            LastUpdated: new Date()
+            name: instanceName,
+            id: instanceToken,
+            version: "-",
+            lastUpdated: new Date()
         };
 
         try {
-            const createdInstance = await instanceMonitoringService.create(instanceData);
+            await instanceMonitoringService.create(instanceData);
 
-            if (onSuccess)
-                onSuccess(createdInstance);
+            if (onSuccess) {
+                onSuccess(instanceData);
+            }
+
+            $$("instanceForm", this.NAMES.formId).close();
+
         } catch (error) {
             webix.message({ text: error.message, type: "error" });
             form.enable();
