@@ -99,8 +99,8 @@ class SoftwareUpdatesElementView {
     _createButtons(onSuccess) {
         return {
             cols: [
-                { view: "button", value: "Загрузить", click: () => this._uploadFile(onSuccess) },
-                { view: "button", value: "Отмена", click: () => $$("uploadWindow").close() }
+                { view: "button", value: "Загрузить", click: () => this._uploadFile(onSuccess), hotkey: "alt+enter" },
+                { view: "button", value: "Отмена", click: () => $$("uploadWindow").close(), hotkey: "esc" }
             ]
         };
     }

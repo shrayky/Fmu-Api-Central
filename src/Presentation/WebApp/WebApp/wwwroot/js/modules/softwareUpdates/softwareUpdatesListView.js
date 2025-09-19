@@ -35,7 +35,19 @@ class SoftwareUpdatesListView {
             dataTable: "softwareUpdatesDataTable",
             prevButton: "prevButton",
             nextButton: "nextButton",
-            paginationInfo: "paginationInfo"
+            paginationInfo: "paginationInfo",
+            version: "version",
+            assembly: "assembly",
+            architecture: "architecture",
+            os: "os",
+            fileSize: "fileSize",
+            createdAt: "createdAt",
+            comment: "comment",
+        };
+
+        this.TEMPLATES = {
+            fileSize: "#fileSize# байт",
+            createdAt: "#createdAt#"
         };
     }
 
@@ -80,21 +92,24 @@ class SoftwareUpdatesListView {
                     id: this.NAMES.uploadBtn,
                     value: this.LABELS.upload,
                     width: 100,
-                    click: () => this._showUploadDialog()
+                    click: () => this._showUploadDialog(),
+                    hotkey: "insert"
                 },
                 {
                     view: "button",
                     id: this.NAMES.deleteBtn,
                     value: this.LABELS.delete,
                     width: 100,
-                    click: () => this._deleteFile()
+                    click: () => this._deleteFile(),
+                    hotkey: "delete"
                 },
                 {
                     view: "button",
                     id: this.NAMES.refreshBtn,
                     value: this.LABELS.refresh,
                     width: 100,
-                    click: () => this._loadData()
+                    click: () => this._loadData(),
+                    hotkey: "f5"
                 },
                 {},
                 {
@@ -103,7 +118,8 @@ class SoftwareUpdatesListView {
                     value: this.LABELS.prevButton,
                     width: 50,
                     disabled: true,
-                    click: () => this._goToPage(this.pageNumber - 1)
+                    click: () => this._goToPage(this.pageNumber - 1),
+                    hotkey: "ctrl+left"
                 },
                 {
                     view: "label",
@@ -118,7 +134,8 @@ class SoftwareUpdatesListView {
                     value: this.LABELS.nextButton,
                     width: 50,
                     disabled: true,
-                    click: () => this._goToPage(this.pageNumber + 1)
+                    click: () => this._goToPage(this.pageNumber + 1),
+                    hotkey: "ctrl+right"
                 },
             ]
         };
@@ -129,13 +146,13 @@ class SoftwareUpdatesListView {
             view: "datatable",
             id: this.NAMES.dataTable,
             columns: [
-                { id: "version", header: this.LABELS.version, width: 80 },
-                { id: "assembly", header: this.LABELS.assembly, width: 80 },
-                { id: "architecture", header: this.LABELS.architecture, width: 100 },
-                { id: "os", header: this.LABELS.os, width: 100 },
-                { id: "fileSize", header: this.LABELS.fileSize, width: 200, template: "#fileSize# байт" },
-                { id: "createdAt", header: this.LABELS.createdAt, width: 150, template: "#createdAt#" },
-                { id: "comment", header: this.LABELS.comment, width: 200, fillspace: true },
+                { id: this.NAMES.version, header: this.LABELS.version, width: 80 },
+                { id: this.NAMES.assembly, header: this.LABELS.assembly, width: 80 },
+                { id: this.NAMES.architecture, header: this.LABELS.architecture, width: 100 },
+                { id: this.NAMES.os, header: this.LABELS.os, width: 100 },
+                { id: this.NAMES.fileSize, header: this.LABELS.fileSize, width: 200, template: this.TEMPLATES.fileSize },
+                { id: this.NAMES.createdAt, header: this.LABELS.createdAt, width: 150, template: this.TEMPLATES.createdAt },
+                { id: this.NAMES.comment, header: this.LABELS.comment, width: 200, fillspace: true },
             ],
             select: "row",
             multiselect: false,
@@ -153,10 +170,25 @@ class SoftwareUpdatesListView {
                 return;
             }
 
+            if (!data.listEnabled) {
+                webix.message({
+                    text: data.description,
+                    type: "error"
+                });
+                return;
+            }
+
             const table = $$(this.NAMES.dataTable);
+            
             table.clearAll();
             table.parse(data.content);
+            
             $$(this.id).enable();
+
+            if (data.content.length > 0) {
+                table.select(data.content[0].id);
+                webix.UIManager.setFocus(this.NAMES.dataTable); 
+            }
 
             this._updatePagination(data);
 
