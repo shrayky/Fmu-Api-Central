@@ -32,8 +32,9 @@ namespace Logger.Services
             else if (OperatingSystem.IsLinux())
             {
                 _logsFolderPath = Path.Combine(Folders.LogFolder(),
-                                             ApplicationInformation.Manufacture.ToLower(),
-                                             ApplicationInformation.Name.ToLower());
+                                             ApplicationInformation.Manufacture,
+                                             ApplicationInformation.Name,
+                                             "log");
             }
             else
             {
