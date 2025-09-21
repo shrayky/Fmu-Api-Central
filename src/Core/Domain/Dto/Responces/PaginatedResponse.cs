@@ -13,5 +13,7 @@ public record PaginatedResponse<T>
     public bool HasPreviousPage => CurrentPage > 1;
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public object? SearchTerm { get; init; }
+    public string Description { get; init; } = string.Empty;
+    public bool ListEnabled { get; init; } = true;
 }
 
