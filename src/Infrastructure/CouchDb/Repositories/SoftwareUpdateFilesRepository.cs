@@ -87,7 +87,15 @@ public class SoftwareUpdateFilesRepository : BaseCouchDbRepository<SoftwareUpdat
         var skipElements = (pageNumber - 1) * pageSize;
 
         if (!_appState.DbState())
-            return Result.Failure<PaginatedResponse<SoftwareUpdateFilesEntity>>(DatabaseUnavailable);
+            return Result.Success(new PaginatedResponse<SoftwareUpdateFilesEntity>()
+            {
+                ListEnabled = false,
+                Description = DatabaseUnavailable,
+                Content = [],
+                CurrentPage = 1,
+                PageSize = pageSize,
+                TotalCount = 0
+            });
 
         try
         {
