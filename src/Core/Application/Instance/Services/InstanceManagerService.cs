@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Application.Instance.DTO;
 using Application.Instance.Interfaces;
+using Application.SoftwareUpdates.Interfaces;
 using CSharpFunctionalExtensions;
 using Domain.Attributes;
 using Domain.Dto;
@@ -18,14 +19,16 @@ public class InstanceManagerService : IInstanceManagerService
 {
     private readonly ILogger<IInstanceManagerService> _logger;
     private readonly IInstanceRepository _instanceRepository; 
+    private readonly Lazy<ISoftwareUpdatesManagerService> _softwareVersionsManager;
 
-    public InstanceManagerService(ILogger<IInstanceManagerService> logger, IInstanceRepository instanceRepository)
+    public InstanceManagerService(ILogger<IInstanceManagerService> logger, IInstanceRepository instanceRepository, IServiceProvider serviceProvider)
     {
         _logger = logger;
         _instanceRepository = instanceRepository;
+        _softwareVersionsManager = new Lazy<ISoftwareUpdatesManagerService>(serviceProvider.GetRequiredService<ISoftwareUpdatesManagerService>);
     }
 
-    public async Task<Result<FmuApiAnswer>> Update(string instanceData)
+    public async Task<Result<FmuApiAnswer>> UpdateFmuApiInstanceInformation(string instanceData)
     {
         _logger.LogInformation("Обрабатываю пакет от fmu-api {InstanceData}", instanceData);
         
@@ -36,17 +39,11 @@ public class InstanceManagerService : IInstanceManagerService
             return Result.Failure<FmuApiAnswer>($"Не удалось десериализовать входящий пакет {instanceData}!");
 
         var entitySearchResult = await _instanceRepository.ByToken(packet.Token);
+        
+        if (entitySearchResult.IsFailure)
+            return Result.Failure<FmuApiAnswer>(entitySearchResult.Error);
 
-        InstanceEntity instanceEntity;
-            
-        if (entitySearchResult.IsSuccess)
-            instanceEntity = entitySearchResult.Value;
-        else
-            instanceEntity = new InstanceEntity
-            {
-                Id = packet.Token,
-                CreatedAt = DateTime.Now
-            };
+        var instanceEntity = entitySearchResult.Value;
         
         instanceEntity.UpdatedAt = DateTime.Now;
         instanceEntity.Name = packet.Name;
@@ -54,12 +51,15 @@ public class InstanceManagerService : IInstanceManagerService
         
         if (!instanceEntity.SettingsModified)
             instanceEntity.Settings = packet.Parameters;
-
+        
         var updateResult = await _instanceRepository.Update(instanceEntity);
 
+        var needUpdate = await _softwareVersionsManager.Value.NeedUpdate(packet.Os, packet.Architecture, packet.Parameters.AppVersion, packet.Parameters.Assembly);
+        
         var answer = new FmuApiAnswer()
         {
             ConfigurationUpdateAvailable = instanceEntity.SettingsModified,
+            SoftwareUpdateAvailable = needUpdate,
         };
         
         return updateResult.IsSuccess ? Result.Success(answer) : Result.Failure<FmuApiAnswer>(updateResult.Error);

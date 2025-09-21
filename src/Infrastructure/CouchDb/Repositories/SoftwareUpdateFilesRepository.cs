@@ -46,6 +46,21 @@ public class SoftwareUpdateFilesRepository : BaseCouchDbRepository<SoftwareUpdat
         return Result.Success(existEntity)!;
     }
 
+    public async Task<Result<SoftwareUpdateFilesEntity>> MaxUpdateEntity(string os, string architecture, int version, int assembly)
+    {
+        if (!_appState.DbState())
+            return Result.Failure<SoftwareUpdateFilesEntity>(DatabaseUnavailable);
+
+        var entity = await _database.FirstOrDefaultAsync(p =>
+            p.Data.Os == os && p.Data.Architecture == architecture && p.Data.Version >= version &&
+            p.Data.Assembly >= assembly);
+
+        if (entity == null)
+            return Result.Failure<SoftwareUpdateFilesEntity>($"Не найдено обновение для {version}_{assembly}_{os}_{architecture}");
+
+        return Result.Success(entity.Data);
+    }
+
     public async Task<Result<SoftwareUpdateFilesEntity>> Create(SoftwareUpdateFilesEntity entity)
     {
         if (!_appState.DbState())

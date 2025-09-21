@@ -7,9 +7,8 @@ namespace Application.Instance.Interfaces;
 
 public interface IInstanceManagerService
 {
-    Task<Result<FmuApiAnswer>> Update(string instanceData);
+    Task<Result<FmuApiAnswer>> UpdateFmuApiInstanceInformation(string instanceData);
     Task<PaginatedResponse<InstanceMonitoringInformation>> InstancesList(int pageNumber, int pageSize, string filter = "");
     Task<bool> CreateNew(InstanceMonitoringInformation instanceInformation);
     Task<bool> Delete(string instance);
-
 }

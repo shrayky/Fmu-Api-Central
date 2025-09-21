@@ -25,7 +25,7 @@ public class FmuApiInstanceController : ControllerBase
     {
         var informationPacket = packet.RootElement.GetRawText();
 
-        var updateResult = await _managerService.Update(informationPacket);
+        var updateResult = await _managerService.UpdateFmuApiInstanceInformation(informationPacket);
         
         return updateResult.IsSuccess ? Ok(updateResult.Value) : BadRequest(updateResult.Error);
     }

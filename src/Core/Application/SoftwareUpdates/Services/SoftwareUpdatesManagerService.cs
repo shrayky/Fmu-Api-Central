@@ -84,22 +84,21 @@ public class SoftwareUpdatesManagerService : ISoftwareUpdatesManagerService
 
         return Result.Failure<bool>($"Не удалось прикрепить файл обнавления к записи с id {id}");
     }
-    
+
+    public async Task<bool> NeedUpdate(string os, string architecture, int version, int assembly)
+    {
+        var softwareUpdate = await _repository.MaxUpdateEntity(os, architecture, version, assembly);
+
+        if (softwareUpdate.IsFailure)
+            return false;
+        
+        return softwareUpdate.Value.Version >= version && softwareUpdate.Value.Assembly > assembly;
+    }
+
     public async Task<Result<bool>> Delete(string id)
     {
         var deleteResult = await _repository.Delete(id);
 
         return deleteResult.IsSuccess ? Result.Success(true) : Result.Failure<bool>(deleteResult.Error);
     }
-
-    public async Task<Result<SoftwareUpdateFilesEntity>> Update(SoftwareUpdateFilesEntity entity)
-    {
-        throw new NotImplementedException();
-    }
-    
-    public async Task<Result<SoftwareUpdateFilesEntity>> ById(string id)
-    {
-        throw new NotImplementedException();
-    }
-
 }
