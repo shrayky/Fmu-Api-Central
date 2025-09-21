@@ -103,6 +103,8 @@ public class InstanceManagerService : IInstanceManagerService
             CurrentPage = answer.Value.CurrentPage,
             PageSize = answer.Value.PageSize,
             TotalCount = answer.Value.TotalCount,
+            ListEnabled = answer.Value.ListEnabled,
+            Description = answer.Value.Description,
         };
     }
 
