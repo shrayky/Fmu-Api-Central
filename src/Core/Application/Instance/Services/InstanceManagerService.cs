@@ -67,15 +67,43 @@ public class InstanceManagerService : IInstanceManagerService
 
     public async Task<PaginatedResponse<InstanceMonitoringInformation>> InstancesList(int pageNumber, int pageSize, string filter = "")
     {
-        var answer = new PaginatedResponse<InstanceMonitoringInformation>()
-        {
-            Content =[],
-            CurrentPage = 1,
-            PageSize = pageSize,
-            TotalCount = 0
-        };
+        var answer = await _instanceRepository.List(pageNumber, pageSize, filter);
 
-        return answer;
+        if (answer.IsFailure)
+        {
+            return new PaginatedResponse<InstanceMonitoringInformation>()
+            {
+                ListEnabled = false,
+                Description = answer.Value.Description,
+                Content = [],
+                CurrentPage = 1,
+                PageSize = pageSize,
+                TotalCount = 0,
+            };
+        }
+
+        List<InstanceMonitoringInformation> content = [];
+
+        foreach (var entity in answer.Value.Content)
+        {
+            InstanceMonitoringInformation record = new()
+            {
+                Name = entity.Name,
+                Token = entity.Id,
+                Version = $"{entity.Settings.AppVersion}.{entity.Settings.Assembly}",
+                LastUpdated = entity.UpdatedAt
+            };
+            
+            content.Add(record);
+        }
+
+        return new()
+        {
+            Content = content,
+            CurrentPage = answer.Value.CurrentPage,
+            PageSize = answer.Value.PageSize,
+            TotalCount = answer.Value.TotalCount,
+        };
     }
 
     public async Task<bool> CreateNew(InstanceMonitoringInformation instance)
