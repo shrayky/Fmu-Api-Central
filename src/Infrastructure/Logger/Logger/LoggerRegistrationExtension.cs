@@ -28,8 +28,9 @@ namespace Logger
             else if (OperatingSystem.IsLinux())
             {
                 logFolder = Path.Combine(Folders.LogFolder(),
-                                         ApplicationInformation.Manufacture.ToLower(),
-                                         ApplicationInformation.Name.ToLower());
+                                         ApplicationInformation.Manufacture,
+                                         ApplicationInformation.Name, 
+                                         "log");
             }
 
             if (!Directory.Exists(logFolder))

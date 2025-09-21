@@ -13,7 +13,7 @@
             }
             else if (OperatingSystem.IsLinux())
             {
-                logFolder = Path.Combine("/var", "log");
+                logFolder = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
             }
 
             return logFolder;
