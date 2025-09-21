@@ -20,9 +20,9 @@ namespace Application.Authentication.Services
         public AuthenticationApplicationService(IServiceProvider serviceProvider, ILogger<AuthenticationApplicationService> logger)
         {
             
-            _userAuthenticationService = new Lazy<IUserAuthenticationService>(() => serviceProvider.GetRequiredService<IUserAuthenticationService>());
-            _tokenService = new Lazy<ITokenService>(() => serviceProvider.GetRequiredService<ITokenService>());
-            _refreshTokenService = new Lazy<IRefreshTokenService>(() => serviceProvider.GetRequiredService<IRefreshTokenService>());
+            _userAuthenticationService = new Lazy<IUserAuthenticationService>(serviceProvider.GetRequiredService<IUserAuthenticationService>);
+            _tokenService = new Lazy<ITokenService>(serviceProvider.GetRequiredService<ITokenService>);
+            _refreshTokenService = new Lazy<IRefreshTokenService>(serviceProvider.GetRequiredService<IRefreshTokenService>);
 
             _logger = logger;
         }
