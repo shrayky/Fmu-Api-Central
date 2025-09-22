@@ -8,7 +8,7 @@ public record PaginatedResponse<T>
     public required IEnumerable<T> Content { get; init; }
     [JsonPropertyName("totalCount")]
     public required int TotalCount { get; init; }
-    [JsonPropertyName("currentPages")]
+    [JsonPropertyName("currentPage")]
     public required int CurrentPage { get; init; }
     [JsonPropertyName("pageSize")]
     public required int PageSize { get; init; }
