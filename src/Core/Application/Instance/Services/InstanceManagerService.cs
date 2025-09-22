@@ -10,7 +10,6 @@ using Domain.Dto.Interfaces;
 using Domain.Dto.Responces;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Microsoft.VisualBasic;
 
 namespace Application.Instance.Services;
 
@@ -114,7 +113,7 @@ public class InstanceManagerService : IInstanceManagerService
         {
             Id = instance.Token,
             Name = instance.Name,
-            CreatedAt = DateAndTime.Now,
+            CreatedAt = DateTime.Now,
             UpdatedAt = DateTime.Now
         };
         
