@@ -148,6 +148,9 @@ class InstanceListView {
             select: "row",
             multiselect: false,
             autoheight: true,
+            on: {
+                onItemDblClick: (rowId) => this._editInstance(rowId),
+            }
         };
     }
 
@@ -261,9 +264,25 @@ class InstanceListView {
     }
 
     _showAddDialog() {
-        instanceElementView.showDialog((createdRecord) => {
+        instanceElementView.showDialog([], (createdRecord) => {
             this._addToTable(createdRecord);
         });
+    }
+
+    _editInstance(rowId) {
+        const record = $$(this.NAMES.dataTable).getItem(rowId);
+
+        if (!record) {
+            return;
+        }
+
+        instanceElementView.showDialog(
+            (editedRecord) => {this._updateTable(editedRecord);},
+            record);
+    }
+
+    _updateTable(editedRecord) {
+        $$(this.NAMES.dataTable).updateItem(editedRecord.id, editedRecord);
     }
 
     _addToTable(createdRecord) {

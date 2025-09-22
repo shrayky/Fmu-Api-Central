@@ -1,11 +1,13 @@
 import instanceMonitoringService from '../../services/instanceMonitoringService.js';
-import { TextBox } from '../../utils/ui.js';
+import { Text } from '../../utils/ui.js';
 
 class InstanceElementView {
     constructor() {
         this.LABELS = {
             instanceName: "Имя инстанса",
             instanceToken: "Токен инстанса",
+            secretKey: "Секретный ключ",
+            secretKeyMessage: "если не указан, то пакет бует приниматься без расшифровки",
             formTitle: "Создание инстанса fmu-api",
             invalidNameMessage: "укажите имя",
             invalidTokenMessage: "укажите токен",
@@ -16,10 +18,11 @@ class InstanceElementView {
             instanceName: "instanceName",
             instanceToken: "instanceToken",
             copyToken: "copyToken",
+            generateToken: "generateToken",
         }
     }
 
-    showDialog(onSuccess) {
+    showDialog(onSuccess, editedData = []) {
         webix.ui({
             view: "window",
             id: this.NAMES.formId,
@@ -31,14 +34,31 @@ class InstanceElementView {
                 view: "form",
                 id: this.NAMES.formId,
                 elements: [
-                    TextBox("text", this.LABELS.instanceName, this.NAMES.instanceName, { required: true, invalidMessage: this.LABELS.invalidNameMessage }),
-                    this._createTokenField(),
+                    Text(this.LABELS.instanceName,
+                         this.NAMES.instanceName,
+                         editedData.name,
+                         { required: true, invalidMessage: this.LABELS.invalidNameMessage }
+                        ),
+
+                    Text(this.LABELS.secretKey,
+                         this.NAMES.secretKey,
+                         editedData.secretKey,
+                         { required: false, placeholder: this.LABELS.secretKeyMessage }
+                        ),
+
+                    this._createTokenField(editedData.id || ""),
+
                     this._createButtons(onSuccess),
                 ]
             }
         }).show();
 
-        this._generateToken();
+        if (!editedData.id) 
+            this._generateToken();
+        else {
+            $$(this.NAMES.instanceToken).disable();
+            $$(this.NAMES.generateToken).disable();
+        }
 
         setTimeout(() => {
             const nameField = $$(this.NAMES.instanceName);
@@ -51,16 +71,27 @@ class InstanceElementView {
     _createButtons(onSuccess) {
         return {
             cols: [
-                { view: "button", value: "Создать", click: () => this._sendNewInstance(onSuccess), hotkey: "alt+enter" },
-                { view: "button", value: "Отмена", click: () => $$(this.NAMES.formId).close(), hotkey: "esc" }
+                { 
+                    view: "button",
+                    value: "Создать",
+                    click: () => this._sendInstance(onSuccess),
+                    hotkey: "alt+enter"
+                },
+                { 
+                    view: "button",
+                    value: "Отмена",
+                    click: () => $$(this.NAMES.formId).close(),
+                    hotkey: "esc"
+                }
             ]
         };
     }
 
-    _createTokenField() {
+    _createTokenField(token = "") {
         return {
             view: "forminput",
             label: this.LABELS.instanceToken,
+            labelPosition: "top",
             name: this.NAMES.instanceToken,
             required: true,
             invalidMessage: this.LABELS.invalidTokenMessage,
@@ -69,9 +100,11 @@ class InstanceElementView {
                     {
                         view: "text",
                         id: this.NAMES.instanceToken,
-                        placeholder: "Токен будет сгенерирован автоматически"
+                        placeholder: "Токен будет сгенерирован автоматически",
+                        value: token,
                     },
                     {
+                        id: this.NAMES.generateToken,
                         view: "button",
                         type: "icon",
                         icon: "wxi-sync",
@@ -93,7 +126,7 @@ class InstanceElementView {
         }
     }
 
-    async _sendNewInstance(onSuccess) {
+    async _sendInstance(onSuccess) {
         const form = $$("instanceForm", this.NAMES.formId);
         if (!this._validateForm()) return;
 
@@ -124,10 +157,10 @@ class InstanceElementView {
             webix.message({ text: error.message, type: "error" });
             form.enable();
             form.hideProgress();
-        }
 
-        form.enable();
-        form.hideProgress();
+            form.enable();
+            form.hideProgress();
+        }
     }
 
     _validateForm() {
@@ -136,6 +169,12 @@ class InstanceElementView {
         if (!instanceName || instanceName === "") {
             webix.message({ text: this.LABELS.invalidNameMessage, type: "error" });
             return false;
+        }
+
+        const instanceToken = $$(this.NAMES.instanceToken).getValue();
+
+        if (!instanceToken || instanceToken === "") {
+            this._generateToken();
         }
 
         return true;
