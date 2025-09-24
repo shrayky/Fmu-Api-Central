@@ -1,4 +1,4 @@
-using Domain.Dto.fmuApiStateInformation;
+using Domain.Dto.FmuApiExchangeData.Request;
 using Domain.Dto.Interfaces;
 
 namespace Domain.Dto;
@@ -10,8 +10,8 @@ public class InstanceEntity : IHaveStringId
     public DateTime CreatedAt { get; set; } = DateTime.Now;
     public DateTime UpdatedAt { get; set; } = DateTime.Now;
     public string SecretKey { get; set; } = string.Empty;
-    public FmuApiParameters Settings { get; set; } = new();
-    public List<CdnData> Cdn { get; set; } = [];
-    public object LocalModules { get; set; } = new object();
+    public FmuApiSetting Settings { get; set; } = new();
+    public List<CdnInformation> Cdn { get; set; } = [];
+    public List<LocalModuleInformation> LocalModules { get; set; } = [];
     public bool SettingsModified { get; set; } = false;
 }

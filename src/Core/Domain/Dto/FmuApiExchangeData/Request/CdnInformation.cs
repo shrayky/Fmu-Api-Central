@@ -1,8 +1,8 @@
 using System.Text.Json.Serialization;
 
-namespace Domain.Dto.fmuApiStateInformation;
+namespace Domain.Dto.FmuApiExchangeData.Request;
 
-public record CdnData
+public record CdnInformation
 {
     [JsonPropertyName("host")]
     public string Host { get; init; } = string.Empty;

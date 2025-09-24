@@ -5,7 +5,8 @@ using Application.SoftwareUpdates.Interfaces;
 using CSharpFunctionalExtensions;
 using Domain.Attributes;
 using Domain.Dto;
-using Domain.Dto.fmuApiAnswer;
+using Domain.Dto.FmuApiExchangeData.Answer;
+using Domain.Dto.FmuApiExchangeData.Request;
 using Domain.Dto.Interfaces;
 using Domain.Dto.Responces;
 using Microsoft.Extensions.DependencyInjection;
@@ -27,41 +28,59 @@ public class InstanceManagerService : IInstanceManagerService
         _softwareVersionsManager = new Lazy<ISoftwareUpdatesManagerService>(serviceProvider.GetRequiredService<ISoftwareUpdatesManagerService>);
     }
 
-    public async Task<Result<FmuApiAnswer>> UpdateFmuApiInstanceInformation(string instanceData)
+    public async Task<Result<FmuApiCentralResponse>> UpdateFmuApiInstanceInformation(string instanceData)
     {
         _logger.LogInformation("Обрабатываю пакет от fmu-api {InstanceData}", instanceData);
         
         using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(instanceData));
-        var packet = await JsonSerializer.DeserializeAsync<FmuApiPacket>(stream);
+        var packet = await JsonSerializer.DeserializeAsync<DataPacket>(stream);
         
         if  (packet == null)
-            return Result.Failure<FmuApiAnswer>($"Не удалось десериализовать входящий пакет {instanceData}!");
+            return Result.Failure<FmuApiCentralResponse>($"Не удалось десериализовать входящий пакет {instanceData}!");
 
         var entitySearchResult = await _instanceRepository.ByToken(packet.Token);
         
         if (entitySearchResult.IsFailure)
-            return Result.Failure<FmuApiAnswer>(entitySearchResult.Error);
+            return Result.Failure<FmuApiCentralResponse>(entitySearchResult.Error);
 
         var instanceEntity = entitySearchResult.Value;
+
+        var encodedData = packet.Data;
+
+        if (string.IsNullOrEmpty(instanceEntity.SecretKey))
+        {
+            
+        }
+        
+        using var payload = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(encodedData));
+        var fmuApiState = await JsonSerializer.DeserializeAsync<Payload>(payload);
+        
+        if (fmuApiState == null)
+            return Result.Failure<FmuApiCentralResponse>($"Входящий пакет {instanceData} не соответсвует ожидаемой структуре!");
         
         instanceEntity.UpdatedAt = DateTime.Now;
-        instanceEntity.Name = packet.Name;
-        instanceEntity.Cdn = packet.CdnData;
+        
+        instanceEntity.Cdn = fmuApiState.CdnInformation;
+        instanceEntity.LocalModules = fmuApiState.LocalModuleInformation;
         
         if (!instanceEntity.SettingsModified)
-            instanceEntity.Settings = packet.Parameters;
+            instanceEntity.Settings = fmuApiState.FmuApiSetting;
         
         var updateResult = await _instanceRepository.Update(instanceEntity);
 
-        var needUpdate = await _softwareVersionsManager.Value.NeedUpdate(packet.Os, packet.Architecture, packet.Parameters.AppVersion, packet.Parameters.Assembly);
+        var needUpdate = await _softwareVersionsManager.Value.NeedUpdate(fmuApiState.NodeInformation.Os,
+            fmuApiState.NodeInformation.Architecture,
+            fmuApiState.FmuApiSetting.Version,
+            fmuApiState.FmuApiSetting.Assembly);
         
-        var answer = new FmuApiAnswer()
+        var answer = new FmuApiCentralResponse()
         {
-            ConfigurationUpdateAvailable = instanceEntity.SettingsModified,
+            SettingsUpdateAvailable = instanceEntity.SettingsModified,
             SoftwareUpdateAvailable = needUpdate,
+            Success = true,
         };
         
-        return updateResult.IsSuccess ? Result.Success(answer) : Result.Failure<FmuApiAnswer>(updateResult.Error);
+        return updateResult.IsSuccess ? Result.Success(answer) : Result.Failure<FmuApiCentralResponse>(updateResult.Error);
     }
 
     public async Task<PaginatedResponse<InstanceMonitoringInformation>> InstancesList(int pageNumber, int pageSize, string filter = "")
@@ -89,7 +108,7 @@ public class InstanceManagerService : IInstanceManagerService
             {
                 Name = entity.Name,
                 Token = entity.Id,
-                Version = $"{entity.Settings.AppVersion}.{entity.Settings.Assembly}",
+                Version = $"{entity.Settings.Version}.{entity.Settings.Assembly}",
                 LastUpdated = entity.UpdatedAt
             };
             

@@ -1,13 +1,13 @@
 using Application.Instance.DTO;
 using CSharpFunctionalExtensions;
-using Domain.Dto.fmuApiAnswer;
+using Domain.Dto.FmuApiExchangeData.Answer;
 using Domain.Dto.Responces;
 
 namespace Application.Instance.Interfaces;
 
 public interface IInstanceManagerService
 {
-    Task<Result<FmuApiAnswer>> UpdateFmuApiInstanceInformation(string instanceData);
+    Task<Result<FmuApiCentralResponse>> UpdateFmuApiInstanceInformation(string instanceData);
     Task<PaginatedResponse<InstanceMonitoringInformation>> InstancesList(int pageNumber, int pageSize, string filter = "");
     Task<bool> CreateNew(InstanceMonitoringInformation instanceInformation);
     Task<bool> Delete(string instance);
