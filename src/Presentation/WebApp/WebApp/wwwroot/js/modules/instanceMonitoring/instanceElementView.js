@@ -22,7 +22,7 @@ class InstanceElementView {
         }
     }
 
-    showDialog(onSuccess, editedData = []) {
+    showDialog(editedData = [], onSuccess) {
         webix.ui({
             view: "window",
             id: this.NAMES.formId,
