@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Application.Instance.DTO;
 using Application.Instance.Interfaces;
@@ -11,6 +13,7 @@ using Domain.Dto.Interfaces;
 using Domain.Dto.Responces;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Shared.Strings;
 
 namespace Application.Instance.Services;
 
@@ -49,7 +52,7 @@ public class InstanceManagerService : IInstanceManagerService
 
         if (string.IsNullOrEmpty(instanceEntity.SecretKey))
         {
-            
+            encodedData = SecretString.DecryptData(packet.Data, instanceEntity.SecretKey);
         }
         
         using var payload = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(encodedData));
@@ -62,13 +65,14 @@ public class InstanceManagerService : IInstanceManagerService
         
         instanceEntity.Cdn = fmuApiState.CdnInformation;
         instanceEntity.LocalModules = fmuApiState.LocalModuleInformation;
+        instanceEntity.NodeInformation = fmuApiState.NodeInformation;
         
         if (!instanceEntity.SettingsModified)
             instanceEntity.Settings = fmuApiState.FmuApiSetting;
         
         var updateResult = await _instanceRepository.Update(instanceEntity);
 
-        var needUpdate = await _softwareVersionsManager.Value.NeedUpdate(fmuApiState.NodeInformation.Os,
+        var (needUpdate, updateHash) = await _softwareVersionsManager.Value.NeedUpdate(fmuApiState.NodeInformation.Os,
             fmuApiState.NodeInformation.Architecture,
             fmuApiState.FmuApiSetting.Version,
             fmuApiState.FmuApiSetting.Assembly);
@@ -77,6 +81,7 @@ public class InstanceManagerService : IInstanceManagerService
         {
             SettingsUpdateAvailable = instanceEntity.SettingsModified,
             SoftwareUpdateAvailable = needUpdate,
+            UpdateHash = updateHash,
             Success = true,
         };
         
@@ -133,7 +138,8 @@ public class InstanceManagerService : IInstanceManagerService
             Id = instance.Token,
             Name = instance.Name,
             CreatedAt = DateTime.Now,
-            UpdatedAt = DateTime.Now
+            UpdatedAt = DateTime.Now,
+            SecretKey = instance.SecretKey
         };
         
         var createResult = await _instanceRepository.CreateInstance(entity);
@@ -155,4 +161,62 @@ public class InstanceManagerService : IInstanceManagerService
 
         return false;
     }
+
+    public async Task<string> InstanceSettings(string token)
+    {
+        var entitySearch = await _instanceRepository.ByToken(token);
+        
+        if (entitySearch.IsFailure)
+            return string.Empty;
+        
+        var settings = entitySearch.Value.Settings.ToString();
+
+        if (!string.IsNullOrEmpty(entitySearch.Value.SecretKey))
+        {   
+            settings = SecretString.EncryptData(settings, entitySearch.Value.SecretKey);
+        }
+        
+        return settings;
+    }
+
+    public async Task<Result> SettingsUploaded(string token)
+    {
+        var entitySearch = await _instanceRepository.ByToken(token);
+        
+        if (entitySearch.IsFailure)
+            return Result.Failure($"Инстанс с id {token} не найден");
+
+        entitySearch.Value.SettingsModified = false;
+        
+        var updateResult =await _instanceRepository.Update(entitySearch.Value);
+        
+        return updateResult.IsSuccess ? Result.Success() : Result.Failure(updateResult.Error);
+    }
+
+    public async Task<Result<Stream>> FmuApiUpdate(string token)
+    {
+        var entitySearch = await _instanceRepository.ByToken(token);
+        
+        if  (entitySearch.IsFailure)
+            return Result.Failure<Stream>(entitySearch.Error);
+        
+        var entity = entitySearch.Value;
+        
+        var (needUpdate, _) = await _softwareVersionsManager.Value.NeedUpdate(entity.NodeInformation.Os,
+            entity.NodeInformation.Architecture,
+            entity.Settings.Version,
+            entity.Settings.Assembly);;
+        
+        if (!needUpdate)
+            return Result.Failure<Stream>($"Для инстанса с id {token} не требуется обновление");
+
+        var updateStream = await _softwareVersionsManager.Value.FmuApiUpdateData(entity.NodeInformation.Os,
+            entity.NodeInformation.Architecture,
+            entity.Settings.Version,
+            entity.Settings.Assembly);
+        
+        return updateStream.IsSuccess ? Result.Success(updateStream.Value) : Result.Failure<Stream>(updateStream.Error);
+    }
+        
+    
 }

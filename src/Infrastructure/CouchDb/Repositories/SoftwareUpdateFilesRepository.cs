@@ -135,4 +135,24 @@ public class SoftwareUpdateFilesRepository : BaseCouchDbRepository<SoftwareUpdat
             return Result.Failure<PaginatedResponse<SoftwareUpdateFilesEntity>>(ex.Message);
         }
     }
+
+    public async Task<Result<Stream>> FmuApiUpdate(string updateId)
+    {
+        if (!_appState.DbState())
+            return Result.Failure<Stream>(DatabaseUnavailable);
+        
+        var existEntity = await _database.FindAsync(updateId);
+        
+        if (existEntity == null)
+            return Result.Failure<Stream>($"Обновление ПО с id {updateId} не найдено в БД");
+
+        var attachment = existEntity.Attachments.FirstOrDefault();
+
+        if (attachment == null)
+            return Result.Failure<Stream>($"Нет присоединенного файла обновления с id {updateId}");
+        
+        var responseStream = await _database.DownloadAttachmentAsStreamAsync(attachment);
+        
+        return Result.Success(responseStream);
+    }
 }

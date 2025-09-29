@@ -11,4 +11,7 @@ public interface IInstanceManagerService
     Task<PaginatedResponse<InstanceMonitoringInformation>> InstancesList(int pageNumber, int pageSize, string filter = "");
     Task<bool> CreateNew(InstanceMonitoringInformation instanceInformation);
     Task<bool> Delete(string instance);
+    Task<string> InstanceSettings(string token);
+    Task<Result> SettingsUploaded(string token);
+    Task<Result<Stream>> FmuApiUpdate(string token);
 }
