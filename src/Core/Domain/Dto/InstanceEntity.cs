@@ -10,6 +10,7 @@ public class InstanceEntity : IHaveStringId
     public DateTime CreatedAt { get; set; } = DateTime.Now;
     public DateTime UpdatedAt { get; set; } = DateTime.Now;
     public string SecretKey { get; set; } = string.Empty;
+    public NodeInformation NodeInformation { get; set; } = new();
     public FmuApiSetting Settings { get; set; } = new();
     public List<CdnInformation> Cdn { get; set; } = [];
     public List<LocalModuleInformation> LocalModules { get; set; } = [];
