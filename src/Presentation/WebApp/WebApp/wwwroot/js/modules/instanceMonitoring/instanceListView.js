@@ -143,7 +143,12 @@ class InstanceListView {
             columns: [
                 { id: this.NAMES.instanceName, header: this.LABELS.instanceName, fillspace: true },
                 { id: this.NAMES.instanceVersion, header: this.LABELS.instanceVersion, width: 100 },
-                { id: this.NAMES.instanceUpdatedAt, header: this.LABELS.instanceUpdatedAt, width: 280 },
+                { 
+                    id: this.NAMES.instanceUpdatedAt, 
+                    header: this.LABELS.instanceUpdatedAt, 
+                    width: 280,
+                    template: (obj) => this._formatDate(obj.lastUpdated)
+                },
             ],
             select: "row",
             multiselect: false,
@@ -287,6 +292,31 @@ class InstanceListView {
 
     _addToTable(createdRecord) {
         $$(this.NAMES.dataTable).add(createdRecord);
+    }
+
+
+    _formatDate(dateString) {
+        if (!dateString) return '';
+        
+        const date = new Date(dateString);
+        if (isNaN(date.getTime())) return dateString;
+        
+        const day = date.getDate().toString().padStart(2, '0');
+        const month = (date.getMonth() + 1).toString().padStart(2, '0');
+        const year = date.getFullYear().toString().slice(-2);
+        const hours = date.getHours().toString().padStart(2, '0');
+        const minutes = date.getMinutes().toString().padStart(2, '0');
+        
+        const now = new Date();
+        const diffInHours = (now - date) / (1000 * 60 * 60);
+
+        const formattedDate = `${day}.${month}.${year} ${hours}:${minutes}`;
+        
+        if (diffInHours > 24) {
+            return `<span style="color: red; font-weight: bold;">${formattedDate}</span>`;
+        }
+
+        return formattedDate;
     }
 }
 
