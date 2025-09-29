@@ -85,14 +85,28 @@ public class SoftwareUpdatesManagerService : ISoftwareUpdatesManagerService
         return Result.Failure<bool>($"Не удалось прикрепить файл обнавления к записи с id {id}");
     }
 
-    public async Task<bool> NeedUpdate(string os, string architecture, int version, int assembly)
+    public async Task<(bool, string)> NeedUpdate(string os, string architecture, int version, int assembly)
     {
         var softwareUpdate = await _repository.MaxUpdateEntity(os, architecture, version, assembly);
 
         if (softwareUpdate.IsFailure)
-            return false;
+            return (false, string.Empty);
         
-        return softwareUpdate.Value.Version >= version && softwareUpdate.Value.Assembly > assembly;
+        var need = softwareUpdate.Value.Version >= version && softwareUpdate.Value.Assembly > assembly;
+
+        return (need, softwareUpdate.Value.Sha256);
+    }
+
+    public async Task<Result<Stream>> FmuApiUpdateData(string os, string architecture, int version, int assembly)
+    {
+        var softwareUpdateEntity = await _repository.MaxUpdateEntity(os, architecture, version, assembly);
+        
+        if (softwareUpdateEntity.IsFailure)
+            return Result.Failure<Stream>(softwareUpdateEntity.Error);
+
+        var fileStreamResult = await _repository.FmuApiUpdate(softwareUpdateEntity.Value.Id);
+        
+        return fileStreamResult.IsSuccess ? Result.Success(fileStreamResult.Value) : Result.Failure<Stream>(fileStreamResult.Error);
     }
 
     public async Task<Result<bool>> Delete(string id)
