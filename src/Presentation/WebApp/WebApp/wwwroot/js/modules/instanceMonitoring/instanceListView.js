@@ -277,8 +277,8 @@ class InstanceListView {
         }
 
         instanceElementView.showDialog(
-            (editedRecord) => {this._updateTable(editedRecord);},
-            record);
+            record,
+            (editedRecord) => {this._updateTable(editedRecord);});
     }
 
     _updateTable(editedRecord) {
