@@ -136,9 +136,9 @@ public record SaleControl
 
 public record StringValue
 {
-    [JsonPropertyName("id")]
+    [JsonPropertyName("Id")]
     public int Id { get; init; } = 0;
     
-    [JsonPropertyName("value")]
+    [JsonPropertyName("Value")]
     public string Value { get; init; } = string.Empty;
 }
