@@ -19,6 +19,7 @@ class InstanceElementView {
             instanceToken: "instanceToken",
             copyToken: "copyToken",
             generateToken: "generateToken",
+            secretKey: "secretKey",
         }
     }
 
@@ -136,12 +137,14 @@ class InstanceElementView {
 
         const instanceName = $$(this.NAMES.instanceName).getValue();
         const instanceToken = $$(this.NAMES.instanceToken).getValue();
+        const instanceSecretKey = $$(this.NAMES.secretKey).getValue();
 
         const instanceData = {
             name: instanceName,
             id: instanceToken,
             version: "-",
-            lastUpdated: new Date()
+            lastUpdated: new Date(),
+            secretKey: instanceSecretKey
         };
 
         try {
