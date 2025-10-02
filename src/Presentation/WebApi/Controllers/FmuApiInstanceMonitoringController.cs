@@ -47,7 +47,7 @@ public class FmuApiInstanceMonitoringController : ControllerBase
         return BadRequest(updateResult.Error);
     }
 
-    [HttpGet("downloadFmuApiUpdate/{token}")]
+    [HttpGet("fmuApiUpdate/{token}")]
     public async Task<IActionResult> DownloadFmuApiUpdate(string token)
     {
         var updateData = await _managerService.FmuApiUpdate(token);
