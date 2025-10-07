@@ -60,14 +60,14 @@ namespace Configuration
 
         private static string configFileName()
         {
-            string configFolder = Folders.CommonApplicationDataFolder(ApplicationInformation.Manufacture, ApplicationInformation.Name);
+            var configFolder = Folders.CommonApplicationDataFolder(ApplicationInformation.Manufacture, ApplicationInformation.Name);
 
             return Path.Combine(configFolder, "config.json");
         }
 
         private static string configBackupFileName()
         {
-            string configFolder = Folders.CommonApplicationDataFolder(ApplicationInformation.Manufacture, ApplicationInformation.Name);
+            var configFolder = Folders.CommonApplicationDataFolder(ApplicationInformation.Manufacture, ApplicationInformation.Name);
 
             return Path.Combine(configFolder, "config.json");
         }

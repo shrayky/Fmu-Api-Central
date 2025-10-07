@@ -22,24 +22,7 @@ namespace Logger.Services
 
             _logFileName = $"{ApplicationInformation.Name.ToLower()}";
 
-            if (OperatingSystem.IsWindows())
-            {
-                _logsFolderPath = Path.Combine(Folders.LogFolder(),
-                                             ApplicationInformation.Manufacture,
-                                             ApplicationInformation.Name,
-                                             "log");
-            }
-            else if (OperatingSystem.IsLinux())
-            {
-                _logsFolderPath = Path.Combine(Folders.LogFolder(),
-                                             ApplicationInformation.Manufacture,
-                                             ApplicationInformation.Name,
-                                             "log");
-            }
-            else
-            {
-                _logsFolderPath = string.Empty;
-            }
+            _logsFolderPath = Folders.LogFolder(ApplicationInformation.Manufacture, ApplicationInformation.Name);
         }
 
         public async Task<LogPacket> Collect()

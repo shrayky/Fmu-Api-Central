@@ -16,27 +16,12 @@ namespace Logger
             if (!settings.IsEnabled)
                 return services;
 
-            string logFolder = string.Empty;
-
-            if (OperatingSystem.IsWindows())
-            {
-                logFolder = Path.Combine(Folders.LogFolder(),
-                                         ApplicationInformation.Manufacture,
-                                         ApplicationInformation.Name,
-                                         "log");
-            }
-            else if (OperatingSystem.IsLinux())
-            {
-                logFolder = Path.Combine(Folders.LogFolder(),
-                                         ApplicationInformation.Manufacture,
-                                         ApplicationInformation.Name, 
-                                         "log");
-            }
+            var logFolder = Folders.LogFolder(ApplicationInformation.Manufacture, ApplicationInformation.Name);
 
             if (!Directory.Exists(logFolder))
                 Directory.CreateDirectory(logFolder);
 
-            string logFileName = Path.Combine(logFolder, $"{ApplicationInformation.Name.ToLower()}.log");
+            var logFileName = Path.Combine(logFolder, $"{ApplicationInformation.Name.ToLower()}.log");
 
             services.AddLogging(builder =>
             {

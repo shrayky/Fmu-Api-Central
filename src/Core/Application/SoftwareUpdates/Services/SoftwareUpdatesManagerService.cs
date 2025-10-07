@@ -82,7 +82,7 @@ public class SoftwareUpdatesManagerService : ISoftwareUpdatesManagerService
 
         await _repository.Delete(id);
 
-        return Result.Failure<bool>($"Не удалось прикрепить файл обнавления к записи с id {id}");
+        return Result.Failure<bool>($"Не удалось прикрепить файл обновления к записи с id {id}");
     }
 
     public async Task<(bool, string)> NeedUpdate(string os, string architecture, int version, int assembly)

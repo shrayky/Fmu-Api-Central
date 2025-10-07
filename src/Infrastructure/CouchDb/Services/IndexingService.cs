@@ -26,7 +26,7 @@ public class IndexingService : IIndexingService
         _logger.LogInformation("Проверка наличия индексов для баз данных CouchDB.");
 
         var httpClientResult = _httpClientFactory.CreateClientSafely("CouchDbState", _logger);
-        
+
         if (httpClientResult.IsFailure)
         {
             _logger.LogError("Не удалось создать HttpClient: {Error}", httpClientResult.Error);
@@ -51,7 +51,8 @@ public class IndexingService : IIndexingService
         return false;
     }
 
-    private async Task<bool> CreateIndexesForDatabase(HttpClient httpClient, string databaseName, object[] indexes, CancellationToken cancellationToken)
+    private async Task<bool> CreateIndexesForDatabase(HttpClient httpClient, string databaseName, object[] indexes,
+        CancellationToken cancellationToken)
     {
         foreach (var index in indexes)
         {
@@ -66,21 +67,37 @@ public class IndexingService : IIndexingService
             if (responseResult.IsSuccess)
                 _logger.LogDebug("Индекс для базы {DatabaseName} создан успешно", databaseName);
             else
-                _logger.LogWarning("Не удалось создать индекс для базы {DatabaseName}: {StatusCode}", databaseName, responseResult.Value.StatusCode);
+                _logger.LogWarning("Не удалось создать индекс для базы {DatabaseName}: {StatusCode}", databaseName,
+                    responseResult.Error);
         }
 
         return true;
     }
+
     private async Task<bool> CreateSoftwareUpdatesIndex(HttpClient httpClient, CancellationToken cancellationToken)
     {
         var indexes = new[]
         {
             new { name = "updatedAt-idx", index = new { fields = new[] { "data.updatedAt" } } },
+            new
+            {
+                name = "max-update-idx", index = new
+                {
+                    fields = new[]
+                    {
+                        "data.os",
+                        "data.architecture",
+                        "data.version",
+                        "data.assembly"
+                    }
+                }
+            },
         };
 
-        return await CreateIndexesForDatabase(httpClient, DatabaseNames.SoftwareUpdateFiles, indexes, cancellationToken);
+        return await CreateIndexesForDatabase(httpClient, DatabaseNames.SoftwareUpdateFiles, indexes,
+            cancellationToken);
     }
-    
+
     private async Task<bool> CreateInstanceIndex(HttpClient httpClient, CancellationToken cancellationToken)
     {
         var indexes = new[]

@@ -51,25 +51,23 @@ namespace Authentication
 
         private static string SigningKey()
         {
-            string configFolder = Folders.CommonApplicationDataFolder(ApplicationInformation.Manufacture, ApplicationInformation.Name);
+            var configFolder = Folders.CommonApplicationDataFolder(ApplicationInformation.Manufacture, ApplicationInformation.Name);
 
-            string keyFile = Path.Combine(configFolder, "jwt.key");
+            var keyFile = Path.Combine(configFolder, "jwt.key");
 
             if (!Directory.Exists(configFolder))
                 Directory.CreateDirectory(configFolder);
 
-            if (!File.Exists(keyFile))
-            {
-                var keyBytes = new byte[64];
-                using var rng = System.Security.Cryptography.RandomNumberGenerator.Create();
-                rng.GetBytes(keyBytes);
-                var key = Convert.ToBase64String(keyBytes);
+            if (File.Exists(keyFile)) return File.ReadAllText(keyFile);
+            
+            var keyBytes = new byte[64];
+            using var rng = System.Security.Cryptography.RandomNumberGenerator.Create();
+            rng.GetBytes(keyBytes);
+            var key = Convert.ToBase64String(keyBytes);
 
-                File.WriteAllText(keyFile, key);
-                return key;
-            }
+            File.WriteAllText(keyFile, key);
+            return key;
 
-            return File.ReadAllText(keyFile);
         }
     }
 }

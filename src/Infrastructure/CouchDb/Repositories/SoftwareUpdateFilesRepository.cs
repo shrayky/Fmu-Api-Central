@@ -51,14 +51,19 @@ public class SoftwareUpdateFilesRepository : BaseCouchDbRepository<SoftwareUpdat
         if (!_appState.DbState())
             return Result.Failure<SoftwareUpdateFilesEntity>(DatabaseUnavailable);
 
-        var entity = await _database.FirstOrDefaultAsync(p =>
+        var entity = await _database.Where(p =>
             p.Data.Os == os && p.Data.Architecture == architecture && p.Data.Version >= version &&
-            p.Data.Assembly >= assembly);
+            p.Data.Assembly >= assembly)
+            .OrderByDescending(v => v.Data.Version)
+            .ThenByDescending(a => a.Data.Assembly)
+            .ToListAsync();
 
-        if (entity == null)
-            return Result.Failure<SoftwareUpdateFilesEntity>($"Не найдено обновение для {version}_{assembly}_{os}_{architecture}");
+        if (entity.Count == 0)
+            return Result.Failure<SoftwareUpdateFilesEntity>($"Не найдено обновление для {version}_{assembly}_{os}_{architecture}");
 
-        return Result.Success(entity.Data);
+        var maxEntity = entity[0];
+        
+        return Result.Success(maxEntity.Data);
     }
 
     public async Task<Result<SoftwareUpdateFilesEntity>> Create(SoftwareUpdateFilesEntity entity)
