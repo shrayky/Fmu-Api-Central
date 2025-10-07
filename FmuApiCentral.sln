@@ -92,4 +92,6 @@ Global
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {CB0EE380-F315-4308-BAB8-99F101EEABE3}
 	EndGlobalSection
+	GlobalSection(RiderSharedRunConfigurations) = postSolution
+	EndGlobalSection
 EndGlobal
