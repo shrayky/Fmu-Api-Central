@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Domain.Dto.FmuApiExchangeData.Request;
 
 namespace Application.Instance.DTO;
 
@@ -18,5 +19,7 @@ public record InstanceMonitoringInformation
     
     [JsonPropertyName("secretKey")]
     public string SecretKey { get; init; } = string.Empty;
-    
+
+    [JsonPropertyName("localModules")]
+    public List<LocalModuleInformation> LocalModules { get; init; } = [];
 }

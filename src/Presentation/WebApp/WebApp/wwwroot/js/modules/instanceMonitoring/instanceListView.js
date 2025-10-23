@@ -1,6 +1,18 @@
 import instanceMonitoringService from '../../services/instanceMonitoringService.js';
 import instanceElementView from './instanceElementView.js';
 
+const style = document.createElement('style');
+
+style.textContent = `
+    .multiline_datatable .webix_cell {
+        white-space: normal !important;
+        vertical-align: top !important;
+        line-height: normal !important;
+    }
+`;
+
+document.head.appendChild(style);
+
 class InstanceListView {
     constructor(id) {
         this.formName = "SoftwareUpdatesView";
@@ -20,7 +32,7 @@ class InstanceListView {
             instanceName: "Имя инстанса",
             instanceToken: "Токен инстанса",
             instanceCreatedAt: "Дата создания",
-            instanceUpdatedAt: "Дата обновления",
+            instanceUpdatedAt: "Обновлен",
             instanceVersion: "Версия",
             errorLoad: "Ошибка при загрузке данных"
         };
@@ -58,8 +70,7 @@ class InstanceListView {
             view: "form",
             elements: [
                 this._toolbar(),
-                this._dataTable(),
-                {}
+                this._dataTable()
             ]
         };
 
@@ -141,18 +152,33 @@ class InstanceListView {
             view: "datatable",
             id: this.NAMES.dataTable,
             columns: [
-                { id: this.NAMES.instanceName, header: this.LABELS.instanceName, fillspace: true },
-                { id: this.NAMES.instanceVersion, header: this.LABELS.instanceVersion, width: 100 },
+                { 
+                    id: this.NAMES.instanceName,
+                    header: this.LABELS.instanceName,
+                    fillspace: true
+                },
+                { 
+                    id: this.NAMES.instanceVersion,
+                    header: this.LABELS.instanceVersion,
+                    width: 100 
+                },
+                {
+                    id: "localModules",
+                    header: "Локальные модули",
+                    fillspace: true,
+                    template: (obj) => this._formatLocalModules(obj.localModules)
+                },
                 { 
                     id: this.NAMES.instanceUpdatedAt, 
                     header: this.LABELS.instanceUpdatedAt, 
-                    width: 280,
+                    width: 120,
                     template: (obj) => this._formatDate(obj.lastUpdated)
                 },
             ],
             select: "row",
             multiselect: false,
-            autoheight: true,
+            rowHeight: 120,
+            css: "multiline_datatable",
             on: {
                 onItemDblClick: (rowId) => this._editInstance(rowId),
             }
@@ -189,7 +215,6 @@ class InstanceListView {
             }
             
             this._updatePagination(data);
-
         } catch (error) {
             console.error(this.LABELS.errorLoad, error);
             webix.message({
@@ -261,13 +286,6 @@ class InstanceListView {
         }
     }
 
-    _goToPage(page) {
-        if (page >= 1) {
-            this.pageNumber = page;
-            this._loadData();
-        }
-    }
-
     _showAddDialog() {
         instanceElementView.showDialog([], (createdRecord) => {
             this._addToTable(createdRecord);
@@ -287,13 +305,58 @@ class InstanceListView {
     }
 
     _updateTable(editedRecord) {
-        $$(this.NAMES.dataTable).updateItem(editedRecord.id, editedRecord);
+        const table = $$(this.NAMES.dataTable);
+
+        table.updateItem(editedRecord.id, editedRecord);
     }
 
     _addToTable(createdRecord) {
-        $$(this.NAMES.dataTable).add(createdRecord);
+        const table = $$(this.NAMES.dataTable);
+
+        table.add(createdRecord);
     }
 
+    _formatLocalModules(localModules) {
+        if (!localModules || localModules.length === 0) {
+            return 'Нет модулей';
+        }
+
+        let lm = localModules.map(module => {
+            const lastSyncDate = new Date(module.lastSync);
+            const formattedSyncDate = this._formatDate(lastSyncDate.toISOString());
+
+            const status = module.status == "" ? "нет данных" : module.status;
+            const version = module.version == "" ? "нет данных" : module.version;
+            
+            return `<strong>${module.address}</strong><br>статус: ${status} | версия: ${version} | ${formattedSyncDate}`;
+        }).join('<br>');
+
+        return lm;
+    }
+
+    _calculateRowHeight(obj) {
+        const baseHeight = 50;
+        const moduleHeight = 20;
+        
+        console.log(2);
+
+        if (!obj.localModules || obj.localModules.length === 0) {
+            return baseHeight;
+        }
+
+        console.log(3);
+        
+        return baseHeight + (obj.localModules.length * moduleHeight);
+    }
+
+    _statusColor(status) {
+        switch (status) {
+            case 'ready': return '#28a745';
+            case 'error': return '#dc3545';
+            case 'warning': return '#ffc107';
+            default: return '#6c757d';
+        }
+    }
 
     _formatDate(dateString) {
         if (!dateString) return '';

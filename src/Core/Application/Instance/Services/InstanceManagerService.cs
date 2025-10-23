@@ -133,7 +133,8 @@ public class InstanceManagerService : IInstanceManagerService
                 Name = entity.Name,
                 Token = entity.Id,
                 Version = $"{entity.Settings.Version}.{entity.Settings.Assembly}",
-                LastUpdated = entity.UpdatedAt
+                LastUpdated = entity.UpdatedAt,
+                LocalModules = entity.LocalModules,
             };
 
             content.Add(record);
