@@ -50,6 +50,11 @@ builder.Services.Configure<KestrelServerOptions>(options =>
     options.Limits.RequestHeadersTimeout = TimeSpan.FromMinutes(10);
 });
 
+if (OperatingSystem.IsWindows())
+{
+    builder.Host.UseWindowsService();
+}
+
 var app = builder.Build();
 
 app.UseCors("AllowWebApp");
@@ -68,4 +73,4 @@ app.UseAuthorization();
 
 app.MapControllers();
 
-app.Run();
+await app.RunAsync();
