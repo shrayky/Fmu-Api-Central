@@ -49,8 +49,11 @@ namespace CouchDb
             })
             .SetHandlerLifetime(TimeSpan.FromMinutes(5));
 
-            services.AddHostedService<DatabaseStatusCheckWorker>();
-            services.AddHostedService<DatabaseCompactWorker>();
+            if (settings.Enable)
+            {
+                services.AddHostedService<DatabaseStatusCheckWorker>();
+                services.AddHostedService<DatabaseCompactWorker>();
+            }
 
             return services;
         }
