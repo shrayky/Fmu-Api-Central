@@ -10,12 +10,13 @@
 <div id="window" style='width:80%; height:80%;' hidden></div>
 
 @section Scripts {
-    @if (Environment.IsDevelopment())
+    <script src="~/js/views/index.js" type="module"></script>
+    @*@if (Environment.IsDevelopment())
     {
-        <script src="~/js/views/index.js" type="module"></script>
+        
     }
     else
     {
         <script src="~/bundle/index.js" asp-append-version="true"></script>
-    }
+    }*@
 }
