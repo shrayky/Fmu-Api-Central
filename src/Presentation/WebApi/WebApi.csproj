@@ -1,27 +1,46 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
-  <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
-    <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
-  </PropertyGroup>
+    <PropertyGroup>
+        <TargetFramework>net8.0</TargetFramework>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
 
-  <ItemGroup>
-    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.18" />
-    <PackageReference Include="Scalar.AspNetCore" Version="2.6.1" />
-    <PackageReference Include="Serilog.Extensions.Hosting" Version="9.0.0" />
-    <PackageReference Include="Serilog.Sinks.Console" Version="6.0.0" />
-    <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
-    <PackageReference Include="Swashbuckle.AspNetCore" Version="9.0.3" />
-  </ItemGroup>
+        <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
 
-  <ItemGroup>
-    <ProjectReference Include="..\..\Core\Application\Application.csproj" />
-    <ProjectReference Include="..\..\Core\Domain\Domain.csproj" />
-    <ProjectReference Include="..\..\Core\Shared\Shared.csproj" />
-    <ProjectReference Include="..\..\Infrastructure\Authentication\Authentication.csproj" />
-    <ProjectReference Include="..\..\Infrastructure\Configuration\Configuration.csproj" />
-    <ProjectReference Include="..\..\Infrastructure\Logger\Logger\Logger.csproj" />
-  </ItemGroup>
+        <DebugType>none</DebugType>
+        <DebugSymbols>false</DebugSymbols>
+
+        <OptimizationPreference>Size</OptimizationPreference>
+      
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.18"/>
+        <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="9.0.10" />
+        <PackageReference Include="Scalar.AspNetCore" Version="2.6.1"/>
+        <PackageReference Include="Serilog.Extensions.Hosting" Version="9.0.0"/>
+        <PackageReference Include="Serilog.Sinks.Console" Version="6.0.0"/>
+        <PackageReference Include="Serilog.Sinks.File" Version="7.0.0"/>
+        <PackageReference Include="Swashbuckle.AspNetCore" Version="9.0.3"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\..\Core\Application\Application.csproj"/>
+        <ProjectReference Include="..\..\Core\Domain\Domain.csproj"/>
+        <ProjectReference Include="..\..\Core\Shared\Shared.csproj"/>
+        <ProjectReference Include="..\..\Infrastructure\Authentication\Authentication.csproj"/>
+        <ProjectReference Include="..\..\Infrastructure\Configuration\Configuration.csproj"/>
+        <ProjectReference Include="..\..\Infrastructure\CouchDb\CouchDb.csproj"/>
+        <ProjectReference Include="..\..\Infrastructure\Logger\Logger\Logger.csproj"/>
+    </ItemGroup>
+
+    <Target Name="CleanupPublishFolder" AfterTargets="Publish">
+        <ItemGroup>
+            <FilesToDelete Include="$(PublishDir)**\*.pdb"/>
+            <FilesToDelete Include="$(PublishDir)**\*.json"/>
+        </ItemGroup>
+        <Delete Files="@(FilesToDelete)"/>
+        <Message Text="Удалены .pdb и .json файлы из папки публикации" Importance="high"/>
+    </Target>
 
 </Project>
