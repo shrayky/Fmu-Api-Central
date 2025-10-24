@@ -36,11 +36,7 @@ namespace Shared.Http
             try
             {
                 var response = await requestFunc(httpClient);
-                
-                if (response.IsSuccessStatusCode)
-                    return Result.Success<HttpResponseMessage, string>(response);
-
-                return Result.Failure<HttpResponseMessage, string>($"{operationName} {response.StatusCode} {response.ReasonPhrase}");
+                return Result.Success<HttpResponseMessage, string>(response);
             }
             catch (HttpRequestException ex)
             {
