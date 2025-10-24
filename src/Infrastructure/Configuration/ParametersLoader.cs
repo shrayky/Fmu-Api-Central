@@ -11,7 +11,7 @@ namespace Configuration
     {
         public static async Task<Result<Parameters>> LoadFromAppFolder()
         {
-            string fileName = configFileName();
+            var fileName = configFileName();
 
             var loadedConfiguration = await ReadConfigurationFile(fileName);
 
@@ -31,7 +31,7 @@ namespace Configuration
             return Result.Success(loadedConfiguration);
         }
 
-        public static async Task<Parameters?> ReadConfigurationFile(string fileName)
+        private static async Task<Parameters?> ReadConfigurationFile(string fileName)
         {
             SemaphoreSlim _semaphore = new(1, 1);
             Parameters? loadedConfiguration = null;
@@ -71,7 +71,5 @@ namespace Configuration
 
             return Path.Combine(configFolder, "config.json");
         }
-
-
     }
 }
