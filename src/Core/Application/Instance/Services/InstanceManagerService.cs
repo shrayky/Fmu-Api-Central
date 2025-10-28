@@ -1,16 +1,14 @@
-using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
 using Application.Instance.DTO;
 using Application.Instance.Interfaces;
 using Application.SoftwareUpdates.Interfaces;
 using CSharpFunctionalExtensions;
 using Domain.Attributes;
-using Domain.Dto;
 using Domain.Dto.FmuApiExchangeData.Answer;
 using Domain.Dto.FmuApiExchangeData.Request;
-using Domain.Dto.Interfaces;
 using Domain.Dto.Responces;
+using Domain.Entitys;
+using Domain.Entitys.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Shared.Json;
@@ -18,7 +16,7 @@ using Shared.Strings;
 
 namespace Application.Instance.Services;
 
-[AutoRegisterService(ServiceLifetime.Scoped)]
+[AutoRegisterService()]
 public class InstanceManagerService : IInstanceManagerService
 {
     private readonly ILogger<IInstanceManagerService> _logger;
@@ -43,7 +41,7 @@ public class InstanceManagerService : IInstanceManagerService
         var packet = await JsonSerializer.DeserializeAsync<DataPacket>(stream);
 
         if (packet == null)
-            return Result.Failure<FmuApiCentralResponse>($"Не удалось десериализовать входящий пакет {instanceData}!");
+            return Result.Failure<FmuApiCentralResponse>($"Не удалось преобразовать входящий пакет {instanceData}!");
 
         var entitySearchResult = await _instanceRepository.ByToken(packet.Token);
 
@@ -61,7 +59,7 @@ public class InstanceManagerService : IInstanceManagerService
 
         using var payload = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(encodedData));
 
-        var fmuApiState = new Payload();
+        Payload? fmuApiState;
 
         try
         {
@@ -70,12 +68,12 @@ public class InstanceManagerService : IInstanceManagerService
         catch (Exception e)
         {
             return Result.Failure<FmuApiCentralResponse>(
-                $"Входящий пакет {instanceData} не соответсвует ожидаемой структуре! {e.Message}");
+                $"Входящий пакет {instanceData} не соответствует ожидаемой структуре! {e.Message}");
         }
 
         if (fmuApiState == null)
             return Result.Failure<FmuApiCentralResponse>(
-                $"Входящий пакет {instanceData} не соответсвует ожидаемой структуре!");
+                $"Входящий пакет {instanceData} не соответствует ожидаемой структуре!");
 
         instanceEntity.UpdatedAt = DateTime.Now;
 
@@ -189,7 +187,7 @@ public class InstanceManagerService : IInstanceManagerService
         if (entitySearch.IsFailure)
             return string.Empty;
 
-        var settings = await JsonHelpers.SerializeAsync<FmuApiSetting>(entitySearch.Value.Settings);
+        var settings = await JsonHelpers.SerializeAsync(entitySearch.Value.Settings);
 
         if (!string.IsNullOrEmpty(entitySearch.Value.SecretKey))
         {
@@ -204,7 +202,7 @@ public class InstanceManagerService : IInstanceManagerService
         var entitySearch = await _instanceRepository.ByToken(token);
 
         if (entitySearch.IsFailure)
-            return Result.Failure($"Инстанс с id {token} не найден");
+            return Result.Failure($"Узел с id {token} не найден");
 
         entitySearch.Value.SettingsModified = false;
 
@@ -226,10 +224,9 @@ public class InstanceManagerService : IInstanceManagerService
             entity.NodeInformation.Architecture,
             entity.Settings.Version,
             entity.Settings.Assembly);
-        ;
 
         if (!needUpdate)
-            return Result.Failure<Stream>($"Для инстанса с id {token} не требуется обновление");
+            return Result.Failure<Stream>($"Для узла с id {token} не требуется обновление");
 
         var updateStream = await _softwareVersionsManager.Value.FmuApiUpdateData(entity.NodeInformation.Os,
             entity.NodeInformation.Architecture,
@@ -237,5 +234,57 @@ public class InstanceManagerService : IInstanceManagerService
             entity.Settings.Assembly);
 
         return updateStream.IsSuccess ? Result.Success(updateStream.Value) : Result.Failure<Stream>(updateStream.Error);
+    }
+
+    public async Task<Result<List<InstanceMonitoringInformation>>> OfflineInstance(DateTime toDate)
+    {
+        var offLineInstances = await _instanceRepository.OfflineInstances(toDate);
+        
+        if (offLineInstances.IsFailure)
+            return Result.Failure<List<InstanceMonitoringInformation>>(offLineInstances.Error);
+        
+        List<InstanceMonitoringInformation> content = [];
+
+        foreach (var entity in offLineInstances.Value)
+        {
+            InstanceMonitoringInformation record = new()
+            {
+                Name = entity.Name,
+                Token = entity.Id,
+                Version = $"{entity.Settings.Version}.{entity.Settings.Assembly}",
+                LastUpdated = entity.UpdatedAt,
+                LocalModules = entity.LocalModules,
+            };
+
+            content.Add(record);
+        }
+        
+        return Result.Success(content);
+    }
+
+    public async Task<Result<List<InstanceMonitoringInformation>>> All()
+    {
+        var allEntities = await _instanceRepository.All();
+
+        if (allEntities.IsFailure)
+            return Result.Failure<List<InstanceMonitoringInformation>>(allEntities.Error);
+        
+        List<InstanceMonitoringInformation> content = [];
+        
+        foreach (var entity in allEntities.Value)
+        {
+            InstanceMonitoringInformation record = new()
+            {
+                Name = entity.Name,
+                Token = entity.Id,
+                Version = $"{entity.Settings.Version}.{entity.Settings.Assembly}",
+                LastUpdated = entity.UpdatedAt,
+                LocalModules = entity.LocalModules,
+            };
+
+            content.Add(record);
+        }
+        
+        return Result.Success(content);
     }
 }

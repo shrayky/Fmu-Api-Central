@@ -1,8 +1,8 @@
 using CouchDB.Driver.Extensions;
 using CSharpFunctionalExtensions;
-using Domain.Dto;
-using Domain.Dto.Interfaces;
 using Domain.Dto.Responces;
+using Domain.Entitys;
+using Domain.Entitys.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace CouchDb.Repositories;
@@ -21,7 +21,7 @@ public class FmuApiInstancesRepository : BaseCouchDbRepository<InstanceEntity>, 
         
         var createResult = await CreateAsync(instance);
 
-        return createResult ? Result.Success() : Result.Failure($"Не удалось создать или обновить данные инстанса {instance.Id}");
+        return createResult ? Result.Success() : Result.Failure($"Не удалось создать или обновить данные узла {instance.Id}");
     }
 
     public async Task<Result<InstanceEntity>> ByToken(string token)
@@ -39,8 +39,6 @@ public class FmuApiInstancesRepository : BaseCouchDbRepository<InstanceEntity>, 
 
     public async Task<Result<PaginatedResponse<InstanceEntity>>> List(int pageNumber, int pageSize, string filter = "")
     {
-        var skipElements = (pageNumber - 1) * pageSize;
-
         if (!_appState.DbState())
         {
             PaginatedResponse<InstanceEntity> emptyResponse = new()
@@ -94,7 +92,7 @@ public class FmuApiInstancesRepository : BaseCouchDbRepository<InstanceEntity>, 
         var createResult = await CreateAsync(entity);
 
         if (!createResult)
-            Result.Failure<bool>($"Не удалось создать запись инстанса {entity.Id} в БД");
+            Result.Failure<bool>($"Не удалось создать запись узла с {entity.Id} в БД");
 
         return Result.Success(true);
     }
@@ -109,7 +107,46 @@ public class FmuApiInstancesRepository : BaseCouchDbRepository<InstanceEntity>, 
         if (deleteResult)
             return Result.Success(true);
 
-        return Result.Failure<bool>("Не удалось ужадить запись инстана из БД");
+        return Result.Failure<bool>("Не удалось удалить запись узел из БД");
     }
-    
+
+    public async Task<Result<List<InstanceEntity>>> OfflineInstances(DateTime toDate)
+    {
+        if (!_appState.DbState())
+            return Result.Failure<List<InstanceEntity>>(DatabaseUnavailable);
+
+        try
+        {
+            var offline = await _database.Where(p => p.Data.UpdatedAt < toDate).ToListAsync();
+
+            List<InstanceEntity> answer = [];
+            answer.AddRange(offline.Select(node => node.Data));
+
+            return Result.Success(answer);
+        }
+        catch (Exception ex)
+        {
+            return Result.Failure<List<InstanceEntity>>(ex.Message);
+        }
+    }
+
+    public async Task<Result<List<InstanceEntity>>> All()
+    {
+        if (!_appState.DbState())
+            return Result.Failure<List<InstanceEntity>>(DatabaseUnavailable);
+
+        try
+        {
+            var entities = await _database.ToListAsync();
+            
+            List<InstanceEntity> answer = [];
+            answer.AddRange(entities.Select(node => node.Data));
+
+            return Result.Success(answer);
+        }
+        catch (Exception ex)
+        {
+            return Result.Failure<List<InstanceEntity>>(ex.Message);
+        }
+    }
 }

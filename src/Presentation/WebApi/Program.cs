@@ -6,6 +6,7 @@ using Domain.Configuration;
 using Logger;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Scalar.AspNetCore;
+using TelegramBot.Extensions;
 using WebApi.Workers;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -26,7 +27,7 @@ builder.Services.AddConfigurationServices();
 builder.Services.AddConfigureLogger(appSettings.LoggerSettings);
 builder.Services.AddCouchDb(appSettings.DatabaseConnection);
 builder.Services.AddApplicationServices();
-
+builder.Services.AddTelegramBot();
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
@@ -65,8 +66,6 @@ app.UseSwagger(options =>
     options.RouteTemplate = "/openapi/{documentName}.json";
 });
 app.MapScalarApiReference();
-
-//app.UseHttpsRedirection();
 
 app.UseAuthentication();
 app.UseAuthorization();

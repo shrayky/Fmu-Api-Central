@@ -18,6 +18,9 @@ namespace Domain.Configuration
         [JsonPropertyName("serverSettings")]
         public ServerSettings ServerSettings { get; set; } = new();
 
+        [JsonPropertyName("telegramBotSettings")]
+        public TelegramBotSetting BotSettings { get; set; } = new();
+
         public override string ToString()
         {
             return JsonSerializer.Serialize(this);

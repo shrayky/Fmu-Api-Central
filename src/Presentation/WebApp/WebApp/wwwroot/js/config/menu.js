@@ -14,7 +14,11 @@ export const MENU_ITEMS = {
     },
     COUCHDB: {
         id: "couchDbSettings",
-        value: "Настройки CouchDB"
+        value: "CouchDB"
+    },
+    TELEGRAM_BOT_SETTINGS: {
+        id: "telegramBotSettings",
+        value: "Telegram бот"
     },
     LOGS: {
         id: "logs",

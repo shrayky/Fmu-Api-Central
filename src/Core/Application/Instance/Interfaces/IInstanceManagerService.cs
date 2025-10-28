@@ -14,4 +14,6 @@ public interface IInstanceManagerService
     Task<string> InstanceSettings(string token);
     Task<Result> SettingsUploaded(string token);
     Task<Result<Stream>> FmuApiUpdate(string token);
+    Task<Result<List<InstanceMonitoringInformation>>> OfflineInstance(DateTime toDate);
+    Task<Result<List<InstanceMonitoringInformation>>> All();
 }

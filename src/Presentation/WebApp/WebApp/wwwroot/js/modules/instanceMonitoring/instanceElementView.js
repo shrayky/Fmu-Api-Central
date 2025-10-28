@@ -11,6 +11,8 @@ class InstanceElementView {
             formTitle: "Создание инстанса fmu-api",
             invalidNameMessage: "укажите имя",
             invalidTokenMessage: "укажите токен",
+            createButton: "Создать",
+            cancelButton: "Отмена",
         }
 
         this.NAMES = {
@@ -23,7 +25,7 @@ class InstanceElementView {
         }
     }
 
-    showDialog(editedData = [], onSuccess) {
+    showDialog(editedData = [], onSuccess, onClose) {
         webix.ui({
             view: "window",
             id: this.NAMES.formId,
@@ -49,7 +51,7 @@ class InstanceElementView {
 
                     this._createTokenField(editedData.id || ""),
 
-                    this._createButtons(onSuccess),
+                    this._createButtons(onSuccess, onClose),
                 ]
             }
         }).show();
@@ -69,19 +71,25 @@ class InstanceElementView {
         }, 100);
     }
 
-    _createButtons(onSuccess) {
+    _createButtons(onSuccess, onClose) {
         return {
             cols: [
                 { 
                     view: "button",
-                    value: "Создать",
+                    value: this.LABELS.createButton,
                     click: () => this._sendInstance(onSuccess),
                     hotkey: "alt+enter"
                 },
                 { 
                     view: "button",
-                    value: "Отмена",
-                    click: () => $$(this.NAMES.formId).close(),
+                    value: this.LABELS.cancelButton,
+                    click: () => {
+                        if (onClose) {
+                            onClose();
+                        }
+                        
+                        $$(this.NAMES.formId).close();
+                    },
                     hotkey: "esc"
                 }
             ]
