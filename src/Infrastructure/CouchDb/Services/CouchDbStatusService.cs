@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Shared.Http;
 using System.Net;
+using Domain.Entitys;
 
 namespace CouchDb.Services
 {

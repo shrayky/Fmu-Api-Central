@@ -3,6 +3,7 @@ using CSharpFunctionalExtensions;
 using Domain.Attributes;
 using Domain.Authentication.Interfaces;
 using Domain.Dto;
+using Domain.Entitys;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 

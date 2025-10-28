@@ -1,6 +1,6 @@
-﻿using Domain.Dto.Interfaces;
+﻿using Domain.Entitys.Interfaces;
 
-namespace Domain.Dto
+namespace Domain.Entitys
 {
     public class UserEntity: IHaveStringId
     {

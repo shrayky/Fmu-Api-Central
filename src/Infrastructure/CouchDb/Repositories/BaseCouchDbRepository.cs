@@ -3,7 +3,7 @@ using CouchDB.Driver;
 using Domain.AppState.Interfaces;
 using Domain.Configuration.Interfaces;
 using Domain.Database.Interfaces;
-using Domain.Dto.Interfaces;
+using Domain.Entitys.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 

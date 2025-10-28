@@ -1,5 +1,6 @@
 import instanceMonitoringService from '../../services/instanceMonitoringService.js';
 import instanceElementView from './instanceElementView.js';
+import { pollingManager } from '../../services/PollingManager.js';
 
 const style = document.createElement('style');
 
@@ -8,6 +9,7 @@ style.textContent = `
         white-space: normal !important;
         vertical-align: top !important;
         line-height: normal !important;
+        padding: 10px !important;
     }
 `;
 
@@ -17,8 +19,13 @@ class InstanceListView {
     constructor(id) {
         this.formName = "SoftwareUpdatesView";
         this.id = id;
-        this.pageSize = 50;
-        this.pageNumber = 1;
+        
+        const formSettings = this._loadFormSettings();
+        
+        this.pageSize = formSettings.pageSize;
+        this.autoRefreshEnabled = formSettings.autoRefreshEnabled;
+        this.refreshInterval = formSettings.refreshInterval;
+
 
         this.LABELS = {
             formTitle: "Fmu-Api-Central: Мониторинг инстансов",
@@ -34,7 +41,9 @@ class InstanceListView {
             instanceCreatedAt: "Дата создания",
             instanceUpdatedAt: "Обновлен",
             instanceVersion: "Версия",
-            errorLoad: "Ошибка при загрузке данных"
+            errorLoad: "Ошибка при загрузке данных",
+            autoRefresh: "Автообновление",
+            refreshInterval: "Интервал (сек)"
         };
 
         this.NAMES = {
@@ -51,13 +60,43 @@ class InstanceListView {
             instanceVersion: "version",
             instanceUpdatedAt: "lastUpdated",
             instanceToken: "id",
+            autoRefresh: "autoRefreshCheckbox",
+            refreshInterval: "refreshIntervalInput",
+            formId: "instanceMonitoringListViewForm"
         };
+
+        this.hotkeys = [
+            { key: "insert", buttonId: this.NAMES.addBtn },
+            { key: "delete", buttonId: this.NAMES.deleteBtn },
+            { key: "f5", buttonId: this.NAMES.refreshBtn },
+            { key: "ctrl+left", buttonId: this.NAMES.prevButton },
+            { key: "ctrl+right", buttonId: this.NAMES.nextButton }
+        ]
+    }
+
+    _loadFormSettings() {
+        return {
+            refreshInterval: parseInt(localStorage.getItem('instanceMonitoring_refreshInterval')) || 60,
+            autoRefreshEnabled: JSON.parse(localStorage.getItem('instanceMonitoring_autoRefresh') || true),
+            pageSize: parseInt(localStorage.getItem('instanceMonitoring_pageSize')) || 50
+        };
+    }
+
+    _saveSettings() {
+        localStorage.setItem('instanceMonitoring_refreshInterval', this.refreshInterval.toString());
+        localStorage.setItem('instanceMonitoring_autoRefresh', JSON.stringify(this.autoRefreshEnabled));
+        localStorage.setItem('instanceMonitoring_pageSize', this.pageSize.toString());
     }
 
     delayedDataLoading() {  
 
         setTimeout(() => {
             this._loadData();
+
+            if (this.autoRefreshEnabled) {  
+                this._startAutoRefresh();
+            }
+
         }, 10);
 
         return this;
@@ -68,9 +107,11 @@ class InstanceListView {
 
         const form = {
             view: "form",
+            id: this.NAMES.formId,
             elements: [
                 this._toolbar(),
-                this._dataTable()
+                this._dataTable(),
+                this._footer(),
             ]
         };
 
@@ -99,7 +140,7 @@ class InstanceListView {
                     value: this.LABELS.add,
                     width: 100,
                     click: () => this._showAddDialog(),
-                    hotkey: "insert"
+                    //hotkey: "insert"
                 },
                 {
                     view: "button",
@@ -107,7 +148,7 @@ class InstanceListView {
                     value: this.LABELS.delete,
                     width: 100,
                     click: () => this._deleteInstance(),
-                    hotkey: "delete"
+                    //hotkey: "delete"
                 },
                 {
                     view: "button",
@@ -115,7 +156,7 @@ class InstanceListView {
                     value: this.LABELS.refresh,
                     width: 100,
                     click: () => this._loadData(),
-                    hotkey: "f5"
+                    //hotkey: "f5"
                 },
                 {},
                 {
@@ -125,7 +166,7 @@ class InstanceListView {
                     width: 50,
                     disabled: true,
                     click: () => this._goToPage(this.pageNumber - 1),
-                    hotkey: "ctrl+left"
+                    //hotkey: "ctrl+left"
                 },
                 {
                     view: "label",
@@ -141,10 +182,65 @@ class InstanceListView {
                     width: 50,
                     disabled: true,
                     click: () => this._goToPage(this.pageNumber + 1),
-                    hotkey: "ctrl+right"
+                    //hotkey: "ctrl+right"
                 },
             ]
         };
+    }
+
+    _footer() {
+        return {
+            view: "toolbar",
+            name: "footer",
+            id: "footer",
+            borderless: true,
+            elements: [
+                {
+                    view: "label",
+                    label: "Элементов на странице:",
+                    width: 210
+                },
+                {
+                    view: "select",
+                    id: "pageSizeSelect",
+                    value: this.pageSize,
+                    width: 80,
+                    options: [
+                        { id: 25, value: "25" },
+                        { id: 50, value: "50" },
+                        { id: 100, value: "100" },
+                        { id: 200, value: "200" },
+                        { id: 500, value: "500" }
+                    ],
+                    on: {
+                        onChange: (newValue) => this._changePageSize(newValue)
+                    }
+                },
+                {},
+                {
+                    view: "label",
+                    label: this.LABELS.autoRefresh,
+                    width: 140
+                },
+                {
+                    view: "checkbox",
+                    id: "autoRefreshCheckbox",
+                    value: true,
+                    width: 40,
+                    click: (state) => this._toggleAutoRefresh(state)
+                },
+                {
+                    view: "text",
+                    id: "refreshIntervalInput",
+                    value: this.refreshInterval,
+                    width: 80,
+                    placeholder: "сек",
+                    on: {
+                        onBlur: () => this._updateRefreshInterval()
+                    }
+                },
+            ]
+        }
     }
 
     _dataTable() {
@@ -177,7 +273,7 @@ class InstanceListView {
             ],
             select: "row",
             multiselect: false,
-            rowHeight: 120,
+            fixedRowHeight: false,
             css: "multiline_datatable",
             on: {
                 onItemDblClick: (rowId) => this._editInstance(rowId),
@@ -186,6 +282,8 @@ class InstanceListView {
     }
 
     async _loadData() {
+        this._disableHotkeys();
+
         try {
             const data = await instanceMonitoringService.list(this.pageNumber, this.pageSize);
 
@@ -207,6 +305,8 @@ class InstanceListView {
             table.clearAll();
             table.parse(data.content);
 
+            this._adjustRowHeight(data.content);
+
             $$(this.id).enable();
 
             if (data.content.length > 0) {
@@ -222,6 +322,8 @@ class InstanceListView {
                 type: "error"
             });
         }
+
+        this._enableHotkeys();
     }
 
     async _deleteInstance() {
@@ -287,8 +389,12 @@ class InstanceListView {
     }
 
     _showAddDialog() {
+
+        this._disableHotkeys();
+
         instanceElementView.showDialog([], (createdRecord) => {
             this._addToTable(createdRecord);
+            this._enableHotkeys();
         });
     }
 
@@ -299,9 +405,12 @@ class InstanceListView {
             return;
         }
 
+        this._disableHotkeys();
+
         instanceElementView.showDialog(
             record,
-            (editedRecord) => {this._updateTable(editedRecord);});
+            (editedRecord) => {this._updateTable(editedRecord);},
+            () => this._enableHotkeys());
     }
 
     _updateTable(editedRecord) {
@@ -334,19 +443,19 @@ class InstanceListView {
         return lm;
     }
 
-    _calculateRowHeight(obj) {
-        const baseHeight = 50;
-        const moduleHeight = 20;
-        
-        console.log(2);
-
-        if (!obj.localModules || obj.localModules.length === 0) {
-            return baseHeight;
+    _adjustRowHeight(instances) {
+        if (!instances || instances.length === 0) {
+            return;
         }
 
-        console.log(3);
-        
-        return baseHeight + (obj.localModules.length * moduleHeight);
+        const maxModulesCount = Math.max(...instances.map(instance => 
+            instance.localModules ? instance.localModules.length : 0
+        ));
+
+        const table = $$(this.NAMES.dataTable);
+        if (table) {
+            table.adjustRowHeight("localModules", true);
+        }
     }
 
     _statusColor(status) {
@@ -380,6 +489,78 @@ class InstanceListView {
         }
 
         return formattedDate;
+    }
+
+    _toggleAutoRefresh(enabled) {
+        if (enabled) {
+            this._startAutoRefresh();
+        } else {
+            this._stopAutoRefresh();
+        }
+
+        this._saveSettings();
+    }
+
+    _changePageSize(newSize) {
+        this.pageSize = newSize;
+        this.pageNumber = 1;
+        this._loadData();
+        this._saveSettings();
+    }
+
+    _updateRefreshInterval() {
+        const input = $$("refreshIntervalInput");
+        const seconds = parseInt(input.getValue()) || 60;
+        
+        if (seconds < 10) {
+            webix.message({
+                text: "Минимальный интервал: 10 секунд",
+                type: "warning"
+            });
+            input.setValue(10);
+            this.refreshInterval = 10;
+        } else {
+            this.refreshInterval = seconds;
+        }
+
+        const checkbox = $$("autoRefreshCheckbox");
+        if (checkbox.getValue()) {
+            this._stopAutoRefresh();
+            this._startAutoRefresh();
+        }
+
+        this._saveSettings();
+    }
+
+    _startAutoRefresh() {
+        pollingManager.register(
+            'instanceMonitoring',
+            () => this._loadData(),
+            this.refreshInterval * 1000,
+            {
+                autoStart: true,
+                initialDelay: this.refreshInterval
+            }
+        );
+    }
+
+    _stopAutoRefresh() {
+        pollingManager.unregister('instanceMonitoring');
+    }
+
+    _disableHotkeys() {
+        this.hotkeys.forEach(({ key, buttonId }) => {
+            webix.UIManager.removeHotKey(key, null);
+        });
+    }
+    
+    _enableHotkeys() {
+        this.hotkeys.forEach(({ key, buttonId }) => {
+            const button = $$(buttonId);
+            if (button) {
+                button.define({ hotkey: key });
+            }
+        });
     }
 }
 

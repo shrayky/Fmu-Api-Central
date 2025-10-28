@@ -1,4 +1,4 @@
-﻿namespace Domain.Dto.Interfaces
+﻿namespace Domain.Entitys.Interfaces
 {
     public interface IHaveStringId
     {

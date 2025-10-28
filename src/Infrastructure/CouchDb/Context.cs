@@ -2,7 +2,7 @@
 using CouchDB.Driver;
 using CouchDB.Driver.Options;
 using Domain.Dto;
-using Domain.Dto.Interfaces;
+using Domain.Entitys;
 
 namespace CouchDb
 {

@@ -1,6 +1,6 @@
 using CSharpFunctionalExtensions;
-using Domain.Dto.Interfaces;
 using Domain.Dto.Responces;
+using Domain.Entitys;
 using Microsoft.AspNetCore.Http;
 
 namespace Application.SoftwareUpdates.Interfaces;

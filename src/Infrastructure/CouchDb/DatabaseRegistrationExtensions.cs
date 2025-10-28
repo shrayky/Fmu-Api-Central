@@ -6,7 +6,7 @@ using Domain.Configuration.Options;
 using Microsoft.Extensions.DependencyInjection;
 using System.Net.Http.Headers;
 using System.Reflection;
-using Domain.Dto.Interfaces;
+using Domain.Entitys.Interfaces;
 
 namespace CouchDb
 {

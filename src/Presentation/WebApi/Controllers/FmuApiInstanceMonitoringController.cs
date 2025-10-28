@@ -1,20 +1,17 @@
 using System.Text.Json;
 using Application.Instance.Interfaces;
-using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 
-namespace WebApi.Controllers.Api;
+namespace WebApi.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
 public class FmuApiInstanceMonitoringController : ControllerBase
 {
-    private readonly ILogger<FmuApiInstanceMonitoringController> _logger;
     private readonly IInstanceManagerService  _managerService;
 
-    public FmuApiInstanceMonitoringController(ILogger<FmuApiInstanceMonitoringController> logger, IInstanceManagerService managerService)
+    public FmuApiInstanceMonitoringController(IInstanceManagerService managerService)
     {
-        _logger = logger;
         _managerService = managerService;
     }
     

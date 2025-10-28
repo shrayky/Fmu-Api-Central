@@ -1,7 +1,8 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Domain.Entitys.Interfaces;
 
-namespace Domain.Dto.Interfaces;
+namespace Domain.Entitys;
 
 public class SoftwareUpdateFilesEntity : IHaveStringId
 {

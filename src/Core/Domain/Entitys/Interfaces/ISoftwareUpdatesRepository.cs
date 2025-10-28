@@ -1,7 +1,7 @@
 using CSharpFunctionalExtensions;
 using Domain.Dto.Responces;
 
-namespace Domain.Dto.Interfaces;
+namespace Domain.Entitys.Interfaces;
 
 public interface ISoftwareUpdatesRepository
 {

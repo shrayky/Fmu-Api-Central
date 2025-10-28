@@ -1,7 +1,8 @@
 using CouchDB.Driver.Extensions;
 using CSharpFunctionalExtensions;
-using Domain.Dto.Interfaces;
 using Domain.Dto.Responces;
+using Domain.Entitys;
+using Domain.Entitys.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace CouchDb.Repositories;

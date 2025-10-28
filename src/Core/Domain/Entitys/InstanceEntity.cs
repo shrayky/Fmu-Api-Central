@@ -1,12 +1,13 @@
 using Domain.Dto.FmuApiExchangeData.Request;
-using Domain.Dto.Interfaces;
+using Domain.Entitys.Interfaces;
 
-namespace Domain.Dto;
+namespace Domain.Entitys;
 
 public class InstanceEntity : IHaveStringId
 {
     public string Id { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
+    public string Address { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; } = DateTime.Now;
     public DateTime UpdatedAt { get; set; } = DateTime.Now;
     public string SecretKey { get; set; } = string.Empty;

@@ -1,5 +1,6 @@
 ﻿using CSharpFunctionalExtensions;
 using Domain.Dto;
+using Domain.Entitys;
 
 namespace Domain.Authentication.Interfaces
 {

@@ -1,6 +1,7 @@
 ﻿using CouchDB.Driver.Extensions;
 using CSharpFunctionalExtensions;
 using Domain.Dto;
+using Domain.Entitys;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace CouchDb.Repositories
