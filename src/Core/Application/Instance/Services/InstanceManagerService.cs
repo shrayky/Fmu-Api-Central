@@ -130,9 +130,10 @@ public class InstanceManagerService : IInstanceManagerService
             {
                 Name = entity.Name,
                 Token = entity.Id,
-                Version = $"{entity.Settings.Version}.{entity.Settings.Assembly}",
+                Version = $"{entity.Settings.Version}.{entity.Settings.Assembly} {entity.NodeInformation.Architecture} {entity.NodeInformation.Os}",
                 LastUpdated = entity.UpdatedAt,
                 LocalModules = entity.LocalModules,
+                Address = entity.Address,
             };
 
             content.Add(record);
@@ -156,9 +157,20 @@ public class InstanceManagerService : IInstanceManagerService
             Id = instance.Token,
             Name = instance.Name,
             CreatedAt = DateTime.Now,
-            UpdatedAt = DateTime.Now,
-            SecretKey = instance.SecretKey
+            UpdatedAt = instance.LastUpdated,
+            SecretKey = instance.SecretKey,
+            Address = instance.Address
         };
+        
+        var existInstance = await _instanceRepository.ByToken(instance.Token);
+
+        if (existInstance.IsSuccess)
+        {
+            entity.LocalModules = existInstance.Value.LocalModules;
+            entity.NodeInformation = existInstance.Value.NodeInformation;
+            entity.Settings = existInstance.Value.Settings;
+            entity.Cdn = existInstance.Value.Cdn;
+        }
 
         var createResult = await _instanceRepository.CreateInstance(entity);
 

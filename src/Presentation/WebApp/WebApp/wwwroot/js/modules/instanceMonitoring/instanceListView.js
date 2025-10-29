@@ -140,7 +140,6 @@ class InstanceListView {
                     value: this.LABELS.add,
                     width: 100,
                     click: () => this._showAddDialog(),
-                    //hotkey: "insert"
                 },
                 {
                     view: "button",
@@ -148,7 +147,6 @@ class InstanceListView {
                     value: this.LABELS.delete,
                     width: 100,
                     click: () => this._deleteInstance(),
-                    //hotkey: "delete"
                 },
                 {
                     view: "button",
@@ -156,7 +154,6 @@ class InstanceListView {
                     value: this.LABELS.refresh,
                     width: 100,
                     click: () => this._loadData(),
-                    //hotkey: "f5"
                 },
                 {},
                 {
@@ -166,7 +163,6 @@ class InstanceListView {
                     width: 50,
                     disabled: true,
                     click: () => this._goToPage(this.pageNumber - 1),
-                    //hotkey: "ctrl+left"
                 },
                 {
                     view: "label",
@@ -182,7 +178,6 @@ class InstanceListView {
                     width: 50,
                     disabled: true,
                     click: () => this._goToPage(this.pageNumber + 1),
-                    //hotkey: "ctrl+right"
                 },
             ]
         };
@@ -256,7 +251,7 @@ class InstanceListView {
                 { 
                     id: this.NAMES.instanceVersion,
                     header: this.LABELS.instanceVersion,
-                    width: 100 
+                    width: 120 
                 },
                 {
                     id: "localModules",

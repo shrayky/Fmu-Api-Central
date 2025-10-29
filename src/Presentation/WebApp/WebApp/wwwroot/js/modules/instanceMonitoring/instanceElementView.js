@@ -5,19 +5,21 @@ class InstanceElementView {
     constructor() {
         this.LABELS = {
             instanceName: "Имя инстанса",
+            instanceNetAddress: "Адрес инстанса",
             instanceToken: "Токен инстанса",
             secretKey: "Секретный ключ",
             secretKeyMessage: "если не указан, то пакет бует приниматься без расшифровки",
             formTitle: "Создание инстанса fmu-api",
             invalidNameMessage: "укажите имя",
             invalidTokenMessage: "укажите токен",
-            createButton: "Создать",
+            createButton: "Сохранить",
             cancelButton: "Отмена",
         }
 
         this.NAMES = {
             formId: "instanceForm",
             instanceName: "instanceName",
+            instanceAddress: "instanceAddress",
             instanceToken: "instanceToken",
             copyToken: "copyToken",
             generateToken: "generateToken",
@@ -42,6 +44,15 @@ class InstanceElementView {
                          editedData.name,
                          { required: true, invalidMessage: this.LABELS.invalidNameMessage }
                         ),
+
+                    Text(
+                        this.LABELS.instanceNetAddress,
+                        this.NAMES.instanceAddress,
+                        editedData.address,
+                        {
+                            placeholder: "http://fmu-api-server:2578"
+                        }
+                    ),
 
                     Text(this.LABELS.secretKey,
                          this.NAMES.secretKey,
@@ -146,13 +157,15 @@ class InstanceElementView {
         const instanceName = $$(this.NAMES.instanceName).getValue();
         const instanceToken = $$(this.NAMES.instanceToken).getValue();
         const instanceSecretKey = $$(this.NAMES.secretKey).getValue();
+        const instanceAddress = $$(this.NAMES.instanceAddress).getValue();
 
         const instanceData = {
             name: instanceName,
             id: instanceToken,
             version: "-",
-            lastUpdated: new Date(),
-            secretKey: instanceSecretKey
+            lastUpdated: new Date("2000-01-01T00:00:00.000Z"),
+            secretKey: instanceSecretKey,
+            address: instanceAddress
         };
 
         try {
