@@ -3,19 +3,47 @@ using Authentication;
 using Configuration;
 using CouchDb;
 using Domain.Configuration;
+using Domain.Configuration.Constants;
 using Logger;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Scalar.AspNetCore;
+using Shared.Installer;
 using TelegramBot.Extensions;
 using WebApi.Workers;
 
-var builder = WebApplication.CreateBuilder(args);
-
 var settingsLoadResult = await ParametersLoader.LoadFromAppFolder();
 Parameters appSettings = new();
+const string appType = "api";
+                                                                    
+if (settingsLoadResult.IsSuccess)                                   
+    appSettings = settingsLoadResult.Value;                         
 
-if (settingsLoadResult.IsSuccess)
-    appSettings = settingsLoadResult.Value;
+if (args.Contains("--install"))
+{
+    InstallerFabric.Install(args, 
+        $"{ApplicationInformation.Name}-{appType}",
+        $"{ApplicationInformation.ServiceName}-{appType}",
+        ApplicationInformation.Manufacture,
+        appSettings.ServerSettings.ApiIpPort);
+}
+else if (args.Contains("--uninstall"))
+{
+    InstallerFabric.Uninstall($"{ApplicationInformation.Name}-{appType}",
+        $"{ApplicationInformation.ServiceName}-{appType}", 
+        ApplicationInformation.Manufacture, 
+        appSettings.ServerSettings.ApiIpPort);
+}
+else if (args.Contains("--help"))
+{
+    Console.WriteLine("Использование:");
+    Console.WriteLine("--install - для установки службы (для linux - генерация скриптов установки)");
+    Console.WriteLine("--uninstall - для удаления службы (для linux - генерация скриптов удаления)");
+}
+
+if (args.Length > 0)
+    return;
+
+var builder = WebApplication.CreateBuilder(args);
 
 builder.WebHost.UseUrls($"http://+:{appSettings.ServerSettings.ApiIpPort}");
 
