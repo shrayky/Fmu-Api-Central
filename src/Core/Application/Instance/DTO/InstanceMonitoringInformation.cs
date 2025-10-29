@@ -8,6 +8,9 @@ public record InstanceMonitoringInformation
     [JsonPropertyName("name")]
     public string Name { get; init; } = string.Empty;
     
+    [JsonPropertyName("address")]
+    public string Address { get; init; } = string.Empty;
+    
     [JsonPropertyName("id")]
     public string Token { get; init; } = string.Empty;
     
