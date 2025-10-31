@@ -43,7 +43,8 @@ class InstanceListView {
             instanceVersion: "Версия",
             errorLoad: "Ошибка при загрузке данных",
             autoRefresh: "Автообновление",
-            refreshInterval: "Интервал (сек)"
+            refreshInterval: "Интервал (сек)",
+            hostAddress: "Web-адрес Fmu-Api",
         };
 
         this.NAMES = {
@@ -62,7 +63,8 @@ class InstanceListView {
             instanceToken: "id",
             autoRefresh: "autoRefreshCheckbox",
             refreshInterval: "refreshIntervalInput",
-            formId: "instanceMonitoringListViewForm"
+            formId: "instanceMonitoringListViewForm",
+            hostAddress: "address",
         };
 
         this.hotkeys = [
@@ -248,6 +250,11 @@ class InstanceListView {
                     header: this.LABELS.instanceName,
                     fillspace: true
                 },
+                {
+                    id: this.NAMES.hostAddress,
+                    header: this.LABELS.hostAddress,
+                    fillspace: true
+                },
                 { 
                     id: this.NAMES.instanceVersion,
                     header: this.LABELS.instanceVersion,
@@ -271,7 +278,19 @@ class InstanceListView {
             fixedRowHeight: false,
             css: "multiline_datatable",
             on: {
-                onItemDblClick: (rowId) => this._editInstance(rowId),
+                onItemDblClick: (cell) => {
+                    if (cell.column === this.NAMES.hostAddress) {
+                        const record = $$(this.NAMES.dataTable).getItem(cell.row);
+                        const addr = record ? record[this.NAMES.hostAddress] : "";
+
+                        if (addr && typeof addr === "string" && addr.trim() !== "") {
+                            try { window.open(addr, "_blank"); } catch (_) {}
+                            return;
+                        } 
+                    }
+
+                    this._editInstance(cell.row);
+                },
             }
         };
     }
