@@ -142,12 +142,20 @@ export const AuthService = {
                 return { result: false, error: errorText, value: null };
             }
             
-            try{
+            try {
                 const data = await response.json();
                 return { result: true, error: null, value: data };
             } catch (error) {
-                return { result: true, error: null, value: "" };
             }
+
+            try {
+                const data = await response.blob();
+                return { result: true, error: null, value: data };
+            }
+            catch (error) {
+            }
+
+            return { result: true, error: "нет данных в ответе", value: "" };
             
         } catch (error) {
             if (error.message.includes('обновления токена') || error.message.includes('Refresh токен не найден')) {
