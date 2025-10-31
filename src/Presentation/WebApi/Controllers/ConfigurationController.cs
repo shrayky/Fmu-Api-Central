@@ -10,7 +10,7 @@ namespace WebApi.Controllers.Api
     [Route("api/[controller]")]
     [ApiController]
     [Authorize]
-    public class ConfigurationController: ControllerBase
+    public class ConfigurationController : ControllerBase
     {
         private readonly IConfigurationApplicationService _configurationService;
 

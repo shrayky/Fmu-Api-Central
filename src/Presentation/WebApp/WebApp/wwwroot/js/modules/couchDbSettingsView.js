@@ -165,7 +165,6 @@ class CouchDbSettingsView {
         align: "center",
         click: _ => {
             let netAddress = $$("netAddress").getValue();
-            console.log(netAddress);
             if (netAddress) {
                 const fauxtonUrl = `${netAddress}/_utils/`;
                 window.open(fauxtonUrl, '_blank');
