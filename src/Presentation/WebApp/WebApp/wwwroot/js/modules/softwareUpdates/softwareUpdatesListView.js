@@ -24,7 +24,8 @@ class SoftwareUpdatesListView {
             errorDelete: "Ошибка при удалении записи",
             page: "Страница",
             prevButton: "←",
-            nextButton: "→"
+            nextButton: "→",
+            download: "Скачать"
         };
 
         this.NAMES = {
@@ -43,6 +44,8 @@ class SoftwareUpdatesListView {
             fileSize: "fileSize",
             createdAt: "createdAt",
             comment: "comment",
+            downloadBtn: "downloadBtn",
+            form: "listViewForm",
         };
 
         this.TEMPLATES = {
@@ -63,10 +66,10 @@ class SoftwareUpdatesListView {
 
         const form = {
             view: "form",
+            id: this.NAMES.form,
             elements: [
                 this._toolbar(),
-                this._dataTable(),
-                {}
+                this._dataTable()
             ]
         };
 
@@ -102,6 +105,14 @@ class SoftwareUpdatesListView {
                     width: 100,
                     click: () => this._deleteFile(),
                     hotkey: "delete"
+                },
+                {
+                    view: "button",
+                    id: this.NAMES.downloadBtn,
+                    value: this.LABELS.download,
+                    width: 100,
+                    click: () => this._downloadFile(),
+                    hotkey: "f5"
                 },
                 {
                     view: "button",
@@ -156,7 +167,6 @@ class SoftwareUpdatesListView {
             ],
             select: "row",
             multiselect: false,
-            autoheight: true,
         };
     }
 
@@ -201,6 +211,51 @@ class SoftwareUpdatesListView {
         }
     }
 
+    async _downloadFile() {
+        const record = $$(this.NAMES.dataTable).getSelectedId();
+
+        if (!record) {
+            webix.message({
+                text: "Выберите запись для скачивания",
+                type: "error"
+            });
+
+            return;
+        }
+
+        const form = $$(this.NAMES.form);
+        webix.extend(form, webix.ProgressBar);
+        form.showProgress({ type: "icon" });
+        form.disable();
+
+        const data = await softwareUpdatesService.downloadFile(record.id);
+        
+        form.hideProgress();
+        form.enable();
+        
+        if (!data.result    ) {
+            webix.message({
+                text: data.error,
+                type: "error"
+            });
+
+            return;
+        }
+        const fileName = `fmu-api.zip`;
+
+        const file = new Blob([data.value], { type: 'application/octet-stream'});
+        const url = URL.createObjectURL(file);
+        
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        URL.revokeObjectURL(url);
+    }
+            
     _updatePagination(data) {
         if (!data)
             return;

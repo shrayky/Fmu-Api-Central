@@ -30,6 +30,17 @@ public class SoftwareUpdatesController : ControllerBase
         return BadRequest(result.Error); 
     }
 
+    [HttpGet("{id}/download")]
+    public async Task<IActionResult> Download([FromRoute] string id)
+    {
+        var result = await _softwareUpdatesManagerService.FmuApiUpdateFile(id);
+
+        if (result.IsSuccess)
+            return Ok(result.Value);
+
+        return BadRequest(result.Error);
+    }
+
     [HttpPost]
     public async Task<IActionResult> Add(JsonDocument requestData)
     {

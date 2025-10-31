@@ -110,6 +110,18 @@ public class SoftwareUpdatesManagerService : ISoftwareUpdatesManagerService
         return fileStreamResult.IsSuccess ? Result.Success(fileStreamResult.Value) : Result.Failure<Stream>(fileStreamResult.Error);
     }
 
+    public async Task<Result<Stream>> FmuApiUpdateFile(string id)
+    {
+        var entity = await _repository.ById(id);
+        
+        if (entity.IsFailure)
+            return Result.Failure<Stream>(entity.Error);
+
+        var fileStreamResult = await _repository.FmuApiUpdate(entity.Value.Id);
+        
+        return fileStreamResult.IsSuccess ? Result.Success(fileStreamResult.Value) : Result.Failure<Stream>(fileStreamResult.Error);
+    }
+
     public async Task<Result<bool>> Delete(string id)
     {
         var deleteResult = await _repository.Delete(id);
