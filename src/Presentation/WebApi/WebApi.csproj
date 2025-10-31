@@ -11,7 +11,8 @@
         <DebugSymbols>false</DebugSymbols>
 
         <OptimizationPreference>Size</OptimizationPreference>
-      
+
+        <Version>1.1.0</Version>        
     </PropertyGroup>
 
     <ItemGroup>

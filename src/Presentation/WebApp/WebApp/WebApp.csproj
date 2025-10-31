@@ -12,6 +12,8 @@
 
         <OptimizationPreference>Size</OptimizationPreference>
 
+        <Version>1.1.0</Version>
+        
     </PropertyGroup>
 
     <ItemGroup>
@@ -20,6 +22,11 @@
 
     <ItemGroup>
       <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="9.0.10" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\..\..\Core\Domain\Domain.csproj" />
+      <ProjectReference Include="..\..\..\Core\Shared\Shared.csproj" />
     </ItemGroup>
 
     <Target Name="CleanupPublishFolder" AfterTargets="Publish">
