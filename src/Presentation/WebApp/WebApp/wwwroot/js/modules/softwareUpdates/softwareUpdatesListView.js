@@ -1,5 +1,5 @@
 import softwareUpdatesService from '../../services/softwareUpdatesService.js';
-import softwareUpdatesElementView from '../../services/softwareUpdatesService.js';
+import softwareUpdatesElementView from './softwareUpdatesElementView.js';
 
 class SoftwareUpdatesListView {
     constructor(id) {
