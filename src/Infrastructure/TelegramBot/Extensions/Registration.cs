@@ -10,9 +10,7 @@ public static class Registration
 {
     public static IServiceCollection AddTelegramBot(this IServiceCollection services)
     {
-     //   services.AddAutoRegisteredServices([Assembly.GetExecutingAssembly()]);
-
-        services.AddSingleton<MessageService>();
+        services.AddAutoRegisteredServices([Assembly.GetExecutingAssembly()]);
         
         services.AddHostedService<TelegramMessagingWorker>();
         

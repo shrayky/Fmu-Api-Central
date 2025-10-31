@@ -1,10 +1,14 @@
 using CSharpFunctionalExtensions;
+using Domain.Attributes;
+using Domain.Bot;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Shared.Http;
 
 namespace TelegramBot.Services;
 
-public class MessageService
+[AutoRegisterService(ServiceLifetime.Singleton)]
+public class MessageService : IMessageService
 {
     private readonly ILogger<MessageService> _logger;
     private readonly IHttpClientFactory _httpClientFactory;

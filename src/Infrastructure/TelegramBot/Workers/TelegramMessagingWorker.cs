@@ -1,11 +1,11 @@
 using Application.Instance.DTO;
 using Application.Instance.Interfaces;
+using Domain.Bot;
 using Domain.Configuration.Interfaces;
 using Domain.Configuration.Options;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using TelegramBot.Services;
 
 namespace TelegramBot.Workers;
 
@@ -13,12 +13,12 @@ public class TelegramMessagingWorker : BackgroundService
 {
     private readonly ILogger<TelegramMessagingWorker> _logger;
     private readonly IParametersService _settings;
-    private readonly MessageService _messageService;
+    private readonly IMessageService _messageService;
 
     private readonly IInstanceManagerService  _instanceManager;
     private const int StartDelayMinutes = 1;
 
-    public TelegramMessagingWorker(ILogger<TelegramMessagingWorker> logger, IParametersService settings, MessageService messageService, IServiceProvider serviceProvider)
+    public TelegramMessagingWorker(ILogger<TelegramMessagingWorker> logger, IParametersService settings, IMessageService messageService, IServiceProvider serviceProvider)
     {
         _logger = logger;
         _settings = settings;
