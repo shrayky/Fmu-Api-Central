@@ -1,7 +1,7 @@
-﻿using CouchDb;
-using Domain.Attributes;
+﻿using Domain.Attributes;
 using Domain.Authentication.Interfaces;
 using Domain.Database.Interfaces;
+using Domain.Entitys.Users.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -14,23 +14,26 @@ namespace Authentication.Services
         private readonly Lazy<IRepositoryHealthService> _repositoryHealthService;
         private readonly Lazy<IUserCredentialService> _userCredentialService;
         private readonly Lazy<IAuthenticationPolicyService> _authenticationPolicyService;
+        
         private readonly ILogger<UserAuthenticationService> _logger;
+        private readonly IUserRepository _userRepository;
 
-        public UserAuthenticationService(IServiceProvider serviceProvider, ILogger<UserAuthenticationService> logger)
+        public UserAuthenticationService(IServiceProvider serviceProvider, ILogger<UserAuthenticationService> logger, IUserRepository userRepository)
         {
-            _dbHealthService = new Lazy<IDbHealthService>(() => serviceProvider.GetRequiredService<IDbHealthService>());
-            _repositoryHealthService = new Lazy<IRepositoryHealthService>(() => serviceProvider.GetRequiredService<IRepositoryHealthService>());
-            _userCredentialService = new Lazy<IUserCredentialService>(() => serviceProvider.GetRequiredService<IUserCredentialService>());
-            _authenticationPolicyService = new Lazy<IAuthenticationPolicyService>(() => serviceProvider.GetRequiredService<IAuthenticationPolicyService>());
+            _dbHealthService = new Lazy<IDbHealthService>(serviceProvider.GetRequiredService<IDbHealthService>);
+            _repositoryHealthService = new Lazy<IRepositoryHealthService>(serviceProvider.GetRequiredService<IRepositoryHealthService>);
+            _userCredentialService = new Lazy<IUserCredentialService>(serviceProvider.GetRequiredService<IUserCredentialService>);
+            _authenticationPolicyService = new Lazy<IAuthenticationPolicyService>(serviceProvider.GetRequiredService<IAuthenticationPolicyService>);
             
             _logger = logger;
+            _userRepository = userRepository;
         }
 
         public async Task<bool> ValidateCredentials(string login, string password)
         {
             var dbEnabled = await _dbHealthService.Value.IsDatabaseEnabled();
-            var haseUsers = await _repositoryHealthService.Value.HasRecords(DatabaseNames.Users);
-            var isValid = false;
+            var haseUsers = await _repositoryHealthService.Value.HasRecords(_userRepository.DatabaseName());
+            bool isValid;
 
             if (dbEnabled && haseUsers)
             {

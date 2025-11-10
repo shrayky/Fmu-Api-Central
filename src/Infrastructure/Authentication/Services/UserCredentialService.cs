@@ -1,9 +1,8 @@
-﻿using CouchDb.Repositories;
-using CSharpFunctionalExtensions;
+﻿using CSharpFunctionalExtensions;
 using Domain.Attributes;
 using Domain.Authentication.Interfaces;
-using Domain.Dto;
 using Domain.Entitys;
+using Domain.Entitys.Users.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -12,13 +11,11 @@ namespace Authentication.Services
     [AutoRegisterService(ServiceLifetime.Scoped)]
     public class UserCredentialService : IUserCredentialService
     {
-        private readonly UsersRepository _usersRepository;
-        private readonly ILogger<UserCredentialService> _logger;
+        private readonly IUserRepository _usersRepository;
 
-        public UserCredentialService(UsersRepository usersRepository, ILogger<UserCredentialService> logger)
+        public UserCredentialService(IUserRepository usersRepository)
         {
             _usersRepository = usersRepository;
-            _logger = logger;
         }
 
         public async Task<Result<UserEntity>> GetUserByLogin(string login)

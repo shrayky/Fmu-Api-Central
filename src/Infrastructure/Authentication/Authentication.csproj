@@ -15,7 +15,6 @@
   <ItemGroup>
     <ProjectReference Include="..\..\Core\Domain\Domain.csproj" />
     <ProjectReference Include="..\..\Core\Shared\Shared.csproj" />
-    <ProjectReference Include="..\CouchDb\CouchDb.csproj" />
   </ItemGroup>
 
 </Project>

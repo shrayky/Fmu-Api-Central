@@ -1,17 +1,19 @@
 ﻿using CouchDB.Driver.Extensions;
 using CSharpFunctionalExtensions;
-using Domain.Dto;
 using Domain.Entitys;
+using Domain.Entitys.Users.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace CouchDb.Repositories
 {
     //[AutoRegisterService(ServiceLifetime.Scoped)]
-    public class UsersRepository : BaseCouchDbRepository<UserEntity>
+    public class UsersRepository : BaseCouchDbRepository<UserEntity>, IUserRepository
     {
         public UsersRepository(IServiceProvider services) : base(services.GetRequiredService<Context>().Users, services)
         {
         }
+
+        public string DatabaseName() => DatabaseNames.Users;
 
         public async Task<Result<UserEntity>> ByName(string name)
         {
