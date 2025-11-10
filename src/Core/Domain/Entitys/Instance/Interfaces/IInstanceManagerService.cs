@@ -1,9 +1,9 @@
-using Application.Instance.DTO;
 using CSharpFunctionalExtensions;
 using Domain.Dto.FmuApiExchangeData.Answer;
 using Domain.Dto.Responces;
+using Domain.Entitys.Instance.Dto;
 
-namespace Application.Instance.Interfaces;
+namespace Domain.Entitys.Instance.Interfaces;
 
 public interface IInstanceManagerService
 {

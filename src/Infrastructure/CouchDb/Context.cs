@@ -1,7 +1,6 @@
 ﻿using CouchDb.Dto;
 using CouchDB.Driver;
 using CouchDB.Driver.Options;
-using Domain.Dto;
 using Domain.Entitys;
 
 namespace CouchDb

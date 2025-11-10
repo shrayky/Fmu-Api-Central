@@ -37,8 +37,7 @@ builder.WebHost.UseUrls($"http://+:{ipPort}");
 
 builder.Services.AddRazorPages();
 
-if (
-    OperatingSystem.IsWindows())
+if (OperatingSystem.IsWindows())
 {
     builder.Host.UseWindowsService();
 }

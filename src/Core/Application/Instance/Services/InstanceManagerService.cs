@@ -1,6 +1,4 @@
 using System.Text.Json;
-using Application.Instance.DTO;
-using Application.Instance.Interfaces;
 using Application.SoftwareUpdates.Interfaces;
 using CSharpFunctionalExtensions;
 using Domain.Attributes;
@@ -8,6 +6,8 @@ using Domain.Dto.FmuApiExchangeData.Answer;
 using Domain.Dto.FmuApiExchangeData.Request;
 using Domain.Dto.Responces;
 using Domain.Entitys;
+using Domain.Entitys.Instance.Dto;
+using Domain.Entitys.Instance.Interfaces;
 using Domain.Entitys.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;

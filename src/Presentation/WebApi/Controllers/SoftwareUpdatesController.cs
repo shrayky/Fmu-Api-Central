@@ -3,19 +3,17 @@ using Application.SoftwareUpdates.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
-namespace WebApi.Controllers.Api;
+namespace WebApi.Controllers;
 
 [ApiController]
 [Route("/api/[controller]")]
 [Authorize]
 public class SoftwareUpdatesController : ControllerBase
 {
-    private readonly ILogger<SoftwareUpdatesController> _logger;
     private readonly ISoftwareUpdatesManagerService  _softwareUpdatesManagerService;
 
-    public SoftwareUpdatesController(ILogger<SoftwareUpdatesController> logger,  ISoftwareUpdatesManagerService softwareUpdatesManagerService)
+    public SoftwareUpdatesController(ISoftwareUpdatesManagerService softwareUpdatesManagerService)
     {
-        _logger = logger;
         _softwareUpdatesManagerService = softwareUpdatesManagerService;
     }
     

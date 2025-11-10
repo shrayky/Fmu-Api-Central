@@ -1,5 +1,5 @@
 using System.Text.Json;
-using Application.Instance.Interfaces;
+using Domain.Entitys.Instance.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 
 namespace WebApi.Controllers;

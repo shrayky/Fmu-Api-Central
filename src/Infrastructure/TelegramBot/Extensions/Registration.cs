@@ -1,7 +1,6 @@
 using System.Reflection;
 using Domain.Attributes;
 using Microsoft.Extensions.DependencyInjection;
-using TelegramBot.Services;
 using TelegramBot.Workers;
 
 namespace TelegramBot.Extensions;

@@ -1,6 +1,6 @@
 using System.Text.Json;
-using Application.Instance.DTO;
-using Application.Instance.Interfaces;
+using Domain.Entitys.Instance.Dto;
+using Domain.Entitys.Instance.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -11,12 +11,10 @@ namespace WebApi.Controllers;
 [Authorize]
 public class FmuApiInstanceController : ControllerBase
 {
-    private readonly ILogger<FmuApiInstanceController> _logger;
     private readonly IInstanceManagerService  _managerService;
 
-    public FmuApiInstanceController(ILogger<FmuApiInstanceController> logger, IInstanceManagerService managerService)
+    public FmuApiInstanceController(IInstanceManagerService managerService)
     {
-        _logger = logger;
         _managerService = managerService;
     }
     

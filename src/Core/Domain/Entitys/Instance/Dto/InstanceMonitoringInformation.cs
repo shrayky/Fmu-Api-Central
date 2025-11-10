@@ -1,7 +1,7 @@
 using System.Text.Json.Serialization;
 using Domain.Dto.FmuApiExchangeData.Request;
 
-namespace Application.Instance.DTO;
+namespace Domain.Entitys.Instance.Dto;
 
 public record InstanceMonitoringInformation
 {

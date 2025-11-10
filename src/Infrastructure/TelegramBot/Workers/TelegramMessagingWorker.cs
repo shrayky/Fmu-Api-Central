@@ -1,8 +1,8 @@
-using Application.Instance.DTO;
-using Application.Instance.Interfaces;
 using Domain.Bot;
 using Domain.Configuration.Interfaces;
 using Domain.Configuration.Options;
+using Domain.Entitys.Instance.Dto;
+using Domain.Entitys.Instance.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
