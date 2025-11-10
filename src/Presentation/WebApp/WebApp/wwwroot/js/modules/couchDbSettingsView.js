@@ -17,7 +17,8 @@ class CouchDbSettingsView {
             bulk: "Параметры bulk операций",
             bulkBatchSize: "Размер пакета для bulk операций",
             bulkParallelTasks: "Количество параллельных задач",
-            queryLimit: "Максимальное количество документов для запроса"
+            queryLimit: "Максимальное количество документов для запроса",
+            queryTimeout: "Таймаут запроса (секунд)",
         }
     }
 
@@ -31,13 +32,23 @@ class CouchDbSettingsView {
         }
 
         let configuration = requestResult.value.Content;
-        this.enable = configuration.databaseConnection.enable;
-        this.netAddress = configuration.databaseConnection.netAddress;
-        this.userName = configuration.databaseConnection.userName;
-        this.password = configuration.databaseConnection.password;
-        this.bulkBatchSize = configuration.databaseConnection.bulkBatchSize;
-        this.bulkParallelTasks = configuration.databaseConnection.bulkParallelTasks;
-        this.queryLimit = configuration.databaseConnection.queryLimit;
+        
+        if (!configuration) {
+            console.error(configuration);
+            webix.message({ type: "error", text: "Пустая конфигурация" });
+            return this;
+        }
+        
+        const settings = configuration.databaseConnection;
+        
+        this.enable = settings.enable;
+        this.netAddress = settings.netAddress;
+        this.userName = settings.userName;
+        this.password = settings.password;
+        this.bulkBatchSize = settings.bulkBatchSize;
+        this.bulkParallelTasks = settings.bulkParallelTasks;
+        this.queryLimit = settings.queryLimit;
+        this.queryTimeout = settings.queryTimeout;
         return this;
     }
 
@@ -91,23 +102,26 @@ class CouchDbSettingsView {
             {
                 cols: [
                     Number(this.labels.bulkBatchSize, "bulkBatchSize", this.bulkBatchSize),
-                    Number(this.labels.bulkParallelTasks, "bulkParallelTasks", this.bulkParallelTasks)
+                    Number(this.labels.bulkParallelTasks, "bulkParallelTasks", this.bulkParallelTasks),
+                    Number(this.labels.queryTimeout, "queryTimeout", this.queryTimeout),
                 ]
             },
             
             Number(this.labels.queryLimit, "queryLimit", this.queryLimit),
 
-            {
-                cols: [
-                    this._saveButton,
-                    {}
-                ]
-            }
         )
+        
+        const buttons  = {
+            cols: [
+                this._saveButton,
+                {}
+            ]
+        };
 
         elements.push(
             checkBox,
             settingsFields,
+            buttons,
             {}
         )
 
@@ -143,7 +157,9 @@ class CouchDbSettingsView {
                 userName: values.userName,
                 password: values.password,
                 bulkBatchSize: parseInt(values.bulkBatchSize),
-                bulkParallelTasks: parseInt(values.bulkParallelTasks)
+                bulkParallelTasks: parseInt(values.bulkParallelTasks),
+                queryLimit: values.queryLimit,
+                queryTimeout: values.queryTimeout,
             }));
     
             if (!saveResult.result) {

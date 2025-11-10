@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using System.Net.Http.Headers;
 using System.Reflection;
 using Domain.Entitys.Interfaces;
+using Domain.Entitys.Users.Interfaces;
 
 namespace CouchDb
 {
@@ -26,12 +27,16 @@ namespace CouchDb
                     options.UseEndpoint("http://localhost:59841");
                     options.UseBasicAuthentication("no", "no");
                 }
+
+                options.ConfigureFlurlClient(clientOptions =>
+                    clientOptions.Timeout = TimeSpan.FromSeconds(settings.QueryTimeout));
             });
 
             services.AddAutoRegisteredServices([Assembly.GetExecutingAssembly()]);
             
             services.AddScoped<UsersRepository>();
-            
+            services.AddScoped<IUserRepository, UsersRepository>();
+                
             services.AddScoped<FmuApiInstancesRepository>();
             services.AddScoped<IInstanceRepository, FmuApiInstancesRepository>();
             services.AddScoped<ISoftwareUpdatesRepository, SoftwareUpdateFilesRepository>();

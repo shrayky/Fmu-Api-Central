@@ -23,5 +23,7 @@ namespace Domain.Configuration.Options
         public int BulkParallelTasks { get; set; } = 4;
         [JsonPropertyName("queryLimit")]
         public int QueryLimit { get; set; } = 1000000;
+        [JsonPropertyName("queryTimeout")]
+        public int QueryTimeout { get; set; } = 300;
     }
 }
