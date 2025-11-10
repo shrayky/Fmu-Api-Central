@@ -1,4 +1,5 @@
 ﻿using CSharpFunctionalExtensions;
+using Domain.AppState.Interfaces;
 using Domain.Attributes;
 using Domain.Configuration;
 using Domain.Configuration.Interfaces;
@@ -14,14 +15,16 @@ namespace Configuration.Services
         private readonly Lazy<IConfigurationSerializer> _serializer;
         private readonly Lazy<IConfigurationCacheManager> _cacheManager;
         private readonly Lazy<IConfigurationMigrationService> _migrationService;
+        private readonly Lazy<IApplicationState> _applicationState;
         private readonly ILogger<ConfigurationService> _logger;
 
         public ConfigurationService(IServiceProvider service, ILogger<ConfigurationService> logger) 
         {
-            _fileManager = new Lazy<IConfigurationFileManager>(() => service.GetRequiredService<IConfigurationFileManager>());
-            _serializer = new Lazy<IConfigurationSerializer>(() => service.GetRequiredService<IConfigurationSerializer>());
-            _cacheManager = new Lazy<IConfigurationCacheManager>(() => service.GetRequiredService<IConfigurationCacheManager>());
-            _migrationService = new Lazy<IConfigurationMigrationService>(() => service.GetRequiredService<IConfigurationMigrationService>());
+            _fileManager = new Lazy<IConfigurationFileManager>(service.GetRequiredService<IConfigurationFileManager>);
+            _serializer = new Lazy<IConfigurationSerializer>(service.GetRequiredService<IConfigurationSerializer>);
+            _cacheManager = new Lazy<IConfigurationCacheManager>(service.GetRequiredService<IConfigurationCacheManager>);
+            _migrationService = new Lazy<IConfigurationMigrationService>(service.GetRequiredService<IConfigurationMigrationService>);
+            _applicationState = new Lazy<IApplicationState>(service.GetRequiredService<IApplicationState>);
 
             _logger = logger;
         }
@@ -56,12 +59,37 @@ namespace Configuration.Services
 
             var migratedConfig = await _migrationService.Value.MigrateConfiguration(parameters);
 
+            await NeedRestart(migratedConfig);
+            
             await _fileManager.Value.SaveConfiguration(migratedConfig);
             await _fileManager.Value.CreateBackup(migratedConfig);
             _cacheManager.Value.CacheConfiguration(migratedConfig);
 
             _logger.LogInformation("Конфигурация обновлена");
             return true;
+        }
+        
+        private async Task<bool> NeedRestart(Parameters newParameters)
+        {
+            var currentSettings = await Current();
+
+            var need = false;
+
+            need = (false
+                    || currentSettings.DatabaseConnection.Enable != newParameters.DatabaseConnection.Enable
+                    || currentSettings.DatabaseConnection.NetAddress != newParameters.DatabaseConnection.NetAddress
+                    || currentSettings.DatabaseConnection.UserName != newParameters.DatabaseConnection.UserName
+                    || currentSettings.DatabaseConnection.Password != newParameters.DatabaseConnection.Password
+                    || currentSettings.ServerSettings.ApiIpPort != newParameters.ServerSettings.ApiIpPort
+                    || currentSettings.LoggerSettings.IsEnabled != newParameters.LoggerSettings.IsEnabled
+                    || currentSettings.LoggerSettings.LogLevel != newParameters.LoggerSettings.LogLevel
+                    || currentSettings.LoggerSettings.LogDepth != newParameters.LoggerSettings.LogDepth
+                );
+
+            if (need)
+                _applicationState.Value.UpdateNeedRestart(true);
+            
+            return need;
         }
 
         private async Task<Result<Parameters>> LoadConfiguration()
