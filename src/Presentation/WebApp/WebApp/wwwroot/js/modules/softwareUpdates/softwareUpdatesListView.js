@@ -112,7 +112,6 @@ class SoftwareUpdatesListView {
                     value: this.LABELS.download,
                     width: 100,
                     click: () => this._downloadFile(),
-                    hotkey: "f5"
                 },
                 {
                     view: "button",

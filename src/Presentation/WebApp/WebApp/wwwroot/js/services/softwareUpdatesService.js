@@ -84,6 +84,14 @@ class SoftwareUpdatesService {
             reader.readAsArrayBuffer(file);
         });
     }
+
+    async downloadFile(fileId) {
+        const endpoint = `${this.apiEndpoint}/${fileId}/download`;
+
+        const data = await this.authService.makeAuthenticatedRequest(endpoint);
+
+        return data;
+    }
 }
 
 export default new SoftwareUpdatesService();
