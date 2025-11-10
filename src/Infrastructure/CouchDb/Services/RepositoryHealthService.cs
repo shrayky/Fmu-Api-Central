@@ -57,14 +57,14 @@ namespace CouchDb.Services
         {
             return repositoryName switch
             {
-                DatabaseNames.Users => _serviceProvider.GetRequiredService<UsersRepository>(),
+                DatabaseSchema.Users => _serviceProvider.GetRequiredService<UsersRepository>(),
                 _ => throw new ArgumentException($"Неизвестный репозиторий: {repositoryName}")
             };
         }
 
         public async Task<Dictionary<string, int>> GetAllRepositoriesRecordCount()
         {
-            var repositories = DatabaseNames.All();
+            var repositories = DatabaseSchema.All();
             var counts = new Dictionary<string, int>();
 
             foreach (var repoName in repositories)

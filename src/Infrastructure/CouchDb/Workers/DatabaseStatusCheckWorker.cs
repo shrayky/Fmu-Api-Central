@@ -78,7 +78,7 @@ namespace CouchDb.Workers
             if (!dbOnline)
                 return false;
 
-            var result = await _databaseStatusService.EnsureDatabasesExists(databaseConfig, DatabaseNames.All(), stoppingToken);
+            var result = await _databaseStatusService.EnsureDatabasesExists(databaseConfig, DatabaseSchema.All(), stoppingToken);
             
             if (!result)
                 return false;

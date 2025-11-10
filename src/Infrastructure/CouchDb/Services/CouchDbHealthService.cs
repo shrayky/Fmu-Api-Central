@@ -32,9 +32,9 @@ namespace CouchDb.Services
             {
                 var info = databaseName switch
                 {
-                    DatabaseNames.Users => await _dbContext.Users.GetInfoAsync(),
-                    DatabaseNames.Instance => await _dbContext.FmuApiInstances.GetInfoAsync(),
-                    DatabaseNames.SoftwareUpdateFiles => await _dbContext.SoftwareUpdateFiles.GetInfoAsync(),
+                    DatabaseSchema.Users => await _dbContext.Users.GetInfoAsync(),
+                    DatabaseSchema.Instance => await _dbContext.FmuApiInstances.GetInfoAsync(),
+                    DatabaseSchema.SoftwareUpdateFiles => await _dbContext.SoftwareUpdateFiles.GetInfoAsync(),
                     _ => throw new ArgumentException($"Неизвестная база данных: {databaseName}")
                 };
 
@@ -49,7 +49,7 @@ namespace CouchDb.Services
 
         public async Task<Dictionary<string, bool>> GetAllDatabasesStatus()
         {
-            var databases = DatabaseNames.All();
+            var databases = DatabaseSchema.All();
             var status = new Dictionary<string, bool>();
 
             foreach (var dbName in databases)
@@ -67,7 +67,7 @@ namespace CouchDb.Services
             if (!isOnline)
                 return false;
 
-            return await IsDatabaseAccessible(DatabaseNames.Users);
+            return await IsDatabaseAccessible(DatabaseSchema.Users);
         }
     }
 }

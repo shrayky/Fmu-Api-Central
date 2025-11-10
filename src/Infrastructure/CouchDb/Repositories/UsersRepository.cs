@@ -13,7 +13,7 @@ namespace CouchDb.Repositories
         {
         }
 
-        public string DatabaseName() => DatabaseNames.Users;
+        public string DatabaseName() => DatabaseSchema.Users;
 
         public async Task<Result<UserEntity>> ByName(string name)
         {
