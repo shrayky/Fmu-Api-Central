@@ -45,6 +45,8 @@ class InstanceListView {
             autoRefresh: "Автообновление",
             refreshInterval: "Интервал (сек)",
             hostAddress: "Web-адрес Fmu-Api",
+            printInstancesList: "Печать списка инстансов",
+            exportToCsv: "Экспорт списка в csv"
         };
 
         this.NAMES = {
@@ -156,6 +158,32 @@ class InstanceListView {
                     value: this.LABELS.refresh,
                     width: 100,
                     click: () => this._loadData(),
+                },
+                {
+                    view: "menu",
+                    id: "reportsMenu",
+                    data: [
+                        {
+                            id: "reports",
+                            value: "Отчеты",
+                            submenu: [
+                                { id: "reports:print", value: this.LABELS.printInstancesList },
+                                { id: "reports:csv", value: this.LABELS.exportToCsv },
+                            ]
+                        }
+                    ],
+                    on: {
+                        onMenuItemClick: (id) => {
+                            if (id === "reports:print") {
+                                this._printInstances();
+                                return;
+                            }
+
+                            if (id === "reports:csv") {
+                                this._exportInstancesCsv();
+                            }
+                        }
+                    }
                 },
                 {},
                 {
@@ -575,6 +603,77 @@ class InstanceListView {
                 button.define({ hotkey: key });
             }
         });
+    }
+
+    _getSortedInstancesForExport() {
+        const table = $$(this.NAMES.dataTable);
+        const rows = table.serialize();
+
+        const mapped = rows.map(x => ({
+            name: x.name,
+            token: x.id,
+            address: x.address,
+        }));
+
+        return mapped.sort((a, b) =>
+            a.name.localeCompare(b.name, "ru", { sensitivity: "base" })
+        );
+    }
+
+    _printInstances() {
+        const data = this._getSortedInstancesForExport();
+
+        const printId = "instancesPrintTable";
+        if ($$(printId)) {
+            webix.ui($$(printId).config, $$(printId));
+            $$(printId).destructor();
+        }
+
+        webix.ui({
+            view: "datatable",
+            id: printId,
+            autoheight: true,
+            data,
+            columns: [
+                { id: "name", header: "Название", fillspace: true },
+                { id: "token", header: "Токен", fillspace: true },
+                { id: "address", header: "Адрес", width: 180 }
+            ]
+        });
+
+        webix.print($$(printId), {
+            fit: "page",
+            spans: false
+        });
+
+        $$(printId).destructor();
+    }
+
+    _exportInstancesCsv() {
+        const data = this._getSortedInstancesForExport();
+
+        const exportId = "instancesExportTable";
+        if ($$(exportId)) {
+            $$(exportId).destructor();
+        }
+
+        webix.ui({
+            view: "datatable",
+            id: exportId,
+            data,
+            columns: [
+                { id: "name", header: "Название" },
+                { id: "token", header: "Токен" },
+                { id: "address", header: "Адрес" }
+            ]
+        });
+
+        webix.toCSV($$(exportId), {
+            filename: "instances",
+            name: "Инстансы"
+        });
+
+        $$(exportId).destructor();
     }
 }
 
