@@ -19,7 +19,7 @@
         private static object[] InstanceIndexSchema() =>
         [
             new { name = "name-idx", index = new { fields = new[] { "data.name" } } },
-                new { name = "updatedAt-idx", index = new { fields = new[] { "data.updatedAt" } } }
+            new { name = "updatedAt-idx", index = new { fields = new[] { "data.updatedAt" } } }
         ];
 
         private static object[] SoftwareUpdateFilesSchema() =>
