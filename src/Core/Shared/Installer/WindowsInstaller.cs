@@ -5,7 +5,6 @@ using System.ServiceProcess;
 using Shared.FilesFolders;
 using Shared.Installer.Interface;
 using static System.Console;
-using static System.ServiceProcess.ServiceController;
 
 namespace Shared.Installer;
 
@@ -94,7 +93,7 @@ public class WindowsInstaller : IInstaller
             return;
         
         ServiceController? existingService;
-        existingService = GetServices().FirstOrDefault(ser => ser.ServiceName == _serviceName);
+        existingService = ServiceController.GetServices().FirstOrDefault(ser => ser.ServiceName == _serviceName);
 
         if (existingService == null) 
         {
@@ -124,7 +123,7 @@ public class WindowsInstaller : IInstaller
             return;
         
         ServiceController? existingService;
-        existingService = GetServices().FirstOrDefault(ser => ser.ServiceName == _serviceName);
+        existingService = ServiceController.GetServices().FirstOrDefault(ser => ser.ServiceName == _serviceName);
 
         if (existingService != null)
         {
@@ -168,7 +167,7 @@ public class WindowsInstaller : IInstaller
         
         ServiceController? existingService;
         
-        existingService = GetServices().FirstOrDefault(ser => ser.ServiceName == _serviceName);
+        existingService = ServiceController.GetServices().FirstOrDefault(ser => ser.ServiceName == _serviceName);
 
         if (existingService == null)
         {
@@ -195,7 +194,7 @@ public class WindowsInstaller : IInstaller
         
         ServiceController? existingService;
         
-        existingService = GetServices().FirstOrDefault(ser => ser.ServiceName == _serviceName);
+        existingService = ServiceController.GetServices().FirstOrDefault(ser => ser.ServiceName == _serviceName);
 
         if (existingService == null)
         {

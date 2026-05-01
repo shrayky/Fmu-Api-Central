@@ -5,6 +5,7 @@ using CouchDb;
 using Domain.Configuration;
 using Domain.Configuration.Constants;
 using Logger;
+using Messages.Extensions;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Scalar.AspNetCore;
 using Shared.Installer;
@@ -55,7 +56,7 @@ builder.Services.AddConfigurationServices();
 builder.Services.AddConfigureLogger(appSettings.LoggerSettings);
 builder.Services.AddCouchDb(appSettings.DatabaseConnection);
 builder.Services.AddApplicationServices();
-builder.Services.AddTelegramBot();
+builder.Services.AddBotService(appSettings.BotSettings);
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
