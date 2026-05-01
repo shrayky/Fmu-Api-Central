@@ -28,7 +28,7 @@ public class BotTestController : ControllerBase
             return BadRequest("Бот не подключен");
 
         var sendResult = await _messageService.Send(settings.BotSettings.BotToken, settings.BotSettings.ChatId,
-            "Халло, мир!%0A СЧАСТЬЕ ДЛЯ ВСЕХ, ДАРОМ, И ПУСТЬ НИКТО НЕ УЙДЁТ ОБИЖЕННЫЙ!");
+            "Халло, мир!%0AСЧАСТЬЕ ДЛЯ ВСЕХ, ДАРОМ, И ПУСТЬ НИКТО НЕ УЙДЁТ ОБИЖЕННЫМ!");
         
         if (sendResult.IsSuccess)
             return Ok();

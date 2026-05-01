@@ -13,6 +13,9 @@ public class TelegramBotSetting
     [JsonPropertyName("botToken")]
     public string BotToken { get; set; } = string.Empty;
 
+    [JsonPropertyName("provider")]
+    public BotProvidersEnum Provider { get; set; } = BotProvidersEnum.telegram;
+
     [JsonPropertyName("alertsInterval")] 
     public int AlertIntervalInMinutes { get; set; } = 60;
 
