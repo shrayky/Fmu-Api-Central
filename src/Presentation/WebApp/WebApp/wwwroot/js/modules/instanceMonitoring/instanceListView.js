@@ -46,7 +46,8 @@ class InstanceListView {
             refreshInterval: "Интервал (сек)",
             hostAddress: "Web-адрес Fmu-Api",
             printInstancesList: "Печать списка инстансов",
-            exportToCsv: "Экспорт списка в csv"
+            exportToCsv: "Экспорт списка в csv",
+            token: "Токен"
         };
 
         this.NAMES = {
@@ -67,6 +68,7 @@ class InstanceListView {
             refreshInterval: "refreshIntervalInput",
             formId: "instanceMonitoringListViewForm",
             hostAddress: "address",
+            id: "id"
         };
 
         this.hotkeys = [
@@ -162,10 +164,12 @@ class InstanceListView {
                 {
                     view: "menu",
                     id: "reportsMenu",
+                    autowidth: true,
                     data: [
                         {
                             id: "reports",
                             value: "Отчеты",
+                            autowidth: true,
                             submenu: [
                                 { id: "reports:print", value: this.LABELS.printInstancesList },
                                 { id: "reports:csv", value: this.LABELS.exportToCsv },
@@ -275,17 +279,24 @@ class InstanceListView {
             columns: [
                 { 
                     id: this.NAMES.instanceName,
-                    header: this.LABELS.instanceName,
-                    fillspace: true
+                    header: [this.LABELS.instanceName, { content: "selectFilter" }],
+                    fillspace: true,
+                    sort: "string",
                 },
                 {
                     id: this.NAMES.hostAddress,
                     header: this.LABELS.hostAddress,
                     fillspace: true
                 },
+                {
+                    id: this.NAMES.id,
+                    header: this.LABELS.token,
+                    hidden: true,
+                    fillspace: true
+                },
                 { 
                     id: this.NAMES.instanceVersion,
-                    header: this.LABELS.instanceVersion,
+                    header: [this.LABELS.instanceVersion, { content: "selectFilter"}],
                     width: 120 
                 },
                 {
@@ -294,11 +305,12 @@ class InstanceListView {
                     fillspace: true,
                     template: (obj) => this._formatLocalModules(obj.localModules)
                 },
-                { 
-                    id: this.NAMES.instanceUpdatedAt, 
-                    header: this.LABELS.instanceUpdatedAt, 
+                {
+                    id: this.NAMES.instanceUpdatedAt,
+                    header: [this.LABELS.instanceUpdatedAt, { content: "dateFilter" }], 
                     width: 120,
-                    template: (obj) => this._formatDate(obj.lastUpdated)
+                    template: (obj) => this._formatDate(obj.lastUpdated),
+                    sort: "int",
                 },
             ],
             select: "row",
@@ -621,32 +633,14 @@ class InstanceListView {
     }
 
     _printInstances() {
-        const data = this._getSortedInstancesForExport();
+        const table = $$(this.NAMES.dataTable);
+        table.showColumn(this.NAMES.id);
+        table.hideColumn(this.NAMES.instanceUpdatedAt);
 
-        const printId = "instancesPrintTable";
-        if ($$(printId)) {
-            webix.ui($$(printId).config, $$(printId));
-            $$(printId).destructor();
-        }
+        webix.toPDF(table, { autowidth: true });
 
-        webix.ui({
-            view: "datatable",
-            id: printId,
-            autoheight: true,
-            data,
-            columns: [
-                { id: "name", header: "Название", fillspace: true },
-                { id: "token", header: "Токен", fillspace: true },
-                { id: "address", header: "Адрес", width: 180 }
-            ]
-        });
-
-        webix.print($$(printId), {
-            fit: "page",
-            spans: false
-        });
-
-        $$(printId).destructor();
+        table.hideColumn(this.NAMES.id);
+        table.showColumn(this.NAMES.instanceUpdatedAt);
     }
 
     _exportInstancesCsv() {

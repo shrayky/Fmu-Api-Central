@@ -12,6 +12,7 @@ class TelegramBotSettingsView {
             isEnabled: "Использовать",
             chatId: "ID чата",
             botToken: "Токен бота",
+            botProtocol: "Протокол",
             offlineNodeAlertInterval: "Оповещать о недоступных узлах (часы)",
             localModuleVersionAlert: "Оповещать о версии локального модуля ниже указанной",
             localModuleDaysWithoutSynchronization: "Оповещать, если не было синхронизации локального модуля более чем указанных дней",
@@ -34,6 +35,7 @@ class TelegramBotSettingsView {
             isEnabled: configuration.telegramBotSettings?.isEnabled || false,
             chatId: configuration.telegramBotSettings?.chatId || 0,
             botToken: configuration.telegramBotSettings?.botToken || "",
+            provider: configuration.telegramBotSettings?.provider || "telegram",
             offlineNodeAlertInterval: configuration.telegramBotSettings?.offlineNodeAlertInterval || 0,
             localModuleVersionAlert: configuration.telegramBotSettings?.localModuleVersionAlert || "",
             localModuleDaysWithoutSynchronization: configuration.telegramBotSettings?.localModuleDaysWithoutSynchronization || 3,
@@ -66,6 +68,18 @@ class TelegramBotSettingsView {
         });
 
         telegramBotSettings.rows.push(
+            {
+                view: "richselect",
+                label: this.labels.botProtocol,
+                name: "provider",
+                value: this.telegramBotSettings.provider,
+                options: [
+                    { id: "telegram", value: "telegram" },
+                    { id: "max", value: "max" },
+                    { id: "ntfy", value: "ntfy" }
+                ]
+            },
+
             Number(this.labels.chatId, "chatId", this.telegramBotSettings.chatId),
             
             Text(this.labels.botToken, "botToken", this.telegramBotSettings.botToken),
@@ -156,11 +170,6 @@ class TelegramBotSettingsView {
                     webix.message({ type: "error", text: "ID чата не может быть 0" });
                     return;
                 }
-
-                if (values.botToken == "") {
-                    webix.message({ type: "error", text: "Токен бота не может быть пустым" });
-                    return;
-                }
             }
     
             const saveResult = await saveConfigurationSections({
@@ -168,6 +177,7 @@ class TelegramBotSettingsView {
                     isEnabled: !!values.isEnabled,
                     chatId: parseInt(values.chatId) || 0,
                     botToken: values.botToken || "",
+                    provider: values.provider || "telegram",
                     offlineNodeAlertInterval: parseInt(values.offlineNodeAlertInterval) || 0,
                     localModuleVersionAlert: values.localModuleVersionAlert || "",
                     localModuleDaysWithoutSynchronization: parseInt(values.localModuleDaysWithoutSynchronization) || 3,

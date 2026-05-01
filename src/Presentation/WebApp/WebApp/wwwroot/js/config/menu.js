@@ -18,7 +18,7 @@ export const MENU_ITEMS = {
     },
     TELEGRAM_BOT_SETTINGS: {
         id: "telegramBotSettings",
-        value: "Telegram бот"
+        value: "Оповещения"
     },
     LOGS: {
         id: "logs",
