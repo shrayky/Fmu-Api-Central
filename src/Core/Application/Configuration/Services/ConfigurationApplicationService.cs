@@ -5,66 +5,66 @@ using Domain.Configuration.Constants;
 using Domain.Configuration.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Shared.Json;
 using System.Text.Json;
 
-namespace Application.Configuration.Services
+namespace Application.Configuration.Services;
+
+[AutoRegisterService(ServiceLifetime.Singleton)]
+public class ConfigurationApplicationService : IConfigurationApplicationService
 {
-    [AutoRegisterService(ServiceLifetime.Singleton)]
-    public class ConfigurationApplicationService : IConfigurationApplicationService
+    private readonly IParametersService _parametersService;
+    private readonly ILogger<ConfigurationApplicationService> _logger;
+
+    public ConfigurationApplicationService(IParametersService parametersService, ILogger<ConfigurationApplicationService> logger)
     {
-        private readonly IParametersService _parametersService;
-        private readonly ILogger<ConfigurationApplicationService> _logger;
+        _parametersService = parametersService;
+        _logger = logger;
+    }
 
-        public ConfigurationApplicationService(IParametersService parametersService, ILogger<ConfigurationApplicationService> logger)
+    public object AppInformation() => ApplicationInformation.Information();
+
+    public async Task<string> Current()
+    {
+        var parameters = await _parametersService.Current();
+
+        var packet = new
         {
-            _parametersService = parametersService;
-            _logger = logger;
-        }
+            Content = parameters
+        };
 
-        public object AppInformation() => ApplicationInformation.Information();
+        using var stream = new MemoryStream();
+        await JsonSerializer.SerializeAsync(stream, packet, JsonSerializeOptionsProvider.Default());
 
-        public async Task<string> Current()
+        stream.Position = 0;
+        using var reader = new StreamReader(stream);
+
+        return await reader.ReadToEndAsync();
+    }
+
+    public async Task<bool> Update(string jsonConfiguration)
+    {
+        try
         {
-            var parameters = await _parametersService.Current();
-
-            var packet = new
-            {
-                Content = parameters
-            };
-
             using var stream = new MemoryStream();
-            await JsonSerializer.SerializeAsync(stream, packet, JsonSerializerOptions.Default);
+            await using var writer = new StreamWriter(stream);
+            await writer.WriteAsync(jsonConfiguration);
+            await writer.FlushAsync();
 
             stream.Position = 0;
-            using var reader = new StreamReader(stream);
 
-            return await reader.ReadToEndAsync();
+            var parameters = await JsonSerializer.DeserializeAsync<Parameters>(stream, JsonSerializeOptionsProvider.Default());
+            if (parameters != null) return await _parametersService.Update(parameters);
+            
+            _logger.LogError("Не удалось десериализовать конфигурацию из входящего json");
+            
+            return false;
+
         }
-
-        public async Task<bool> Update(string jsonConfiguration)
+        catch (JsonException ex)
         {
-            try
-            {
-                using var stream = new MemoryStream();
-                await using var writer = new StreamWriter(stream);
-                await writer.WriteAsync(jsonConfiguration);
-                await writer.FlushAsync();
-
-                stream.Position = 0;
-
-                var parameters = await JsonSerializer.DeserializeAsync<Parameters>(stream);
-                if (parameters != null) return await _parametersService.Update(parameters);
-                
-                _logger.LogError("Не удалось десериализовать конфигурацию из входящего json");
-                
-                return false;
-
-            }
-            catch (JsonException ex)
-            {
-                _logger.LogError(ex, "Ошибка разбора входящего JSON конфигурации");
-                return false;
-            }
+            _logger.LogError(ex, "Ошибка разбора входящего JSON конфигурации");
+            return false;
         }
     }
 }
