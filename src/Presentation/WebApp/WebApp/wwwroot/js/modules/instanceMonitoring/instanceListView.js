@@ -637,7 +637,7 @@ class InstanceListView {
         table.showColumn(this.NAMES.id);
         table.hideColumn(this.NAMES.instanceUpdatedAt);
 
-        webix.toPDF(table, { autowidth: true });
+        webix.toPDF(table, { autowidth: true, filterHTML: true });
 
         table.hideColumn(this.NAMES.id);
         table.showColumn(this.NAMES.instanceUpdatedAt);

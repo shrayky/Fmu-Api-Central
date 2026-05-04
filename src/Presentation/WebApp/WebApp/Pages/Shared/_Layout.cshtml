@@ -11,6 +11,9 @@
     <link rel="stylesheet" href="~/lib/webix/skins/dark.min.css" asp-append-version="true" type="text/css">
 
     <script src="~/lib/webix/webix.min.js" asp-append-version="true"></script>
+    <script>
+            webix.env.cdn = "/lib/webix-offline";
+    </script>
 
     @RenderSection("Headers", required: false)
 
