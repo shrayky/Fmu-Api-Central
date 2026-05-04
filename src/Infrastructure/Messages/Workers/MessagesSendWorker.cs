@@ -39,13 +39,60 @@ public class MessagesSendWorker : BackgroundService
             var settings = await _settings.Current().ConfigureAwait(false);
             var bot = settings.BotSettings;
 
-            if (bot.IsEnabled)
+            if (!bot.IsEnabled)
             {
-                await SendNodesStatus(bot);
+                await Task.Delay(TimeSpan.FromMinutes(10), stoppingToken);
+                continue;
             }
 
-            await Task.Delay(TimeSpan.FromHours(bot.AlertIntervalInMinutes), stoppingToken);
+            var delay = GetDelayToNextSchedule(bot);
+            _logger.LogInformation("Следующая отправка сообщений запланирована через {delay}", delay);
+
+            await Task.Delay(delay, stoppingToken);
+
+            if (stoppingToken.IsCancellationRequested)
+                break;
+
+            await SendNodesStatus(bot);
         }
+    }
+
+    private TimeSpan GetDelayToNextSchedule(TelegramBotSetting bot)
+    {
+        var scheduler = bot.Scheduler;
+        
+        if (scheduler.Count == 0)
+        {
+            _logger.LogWarning("Расписание Telegram-бота пустое, повторная проверка через 10 минут");
+            return TimeSpan.FromMinutes(10);
+        }
+
+        var now = DateTime.Now;
+        DateTime? nearestRun = null;
+
+        foreach (var item in scheduler)
+        {
+            var candidateToday = now.Date
+                .AddHours(item.Time.Hour)
+                .AddMinutes(item.Time.Minute)
+                .AddSeconds(item.Time.Second);
+            
+            var candidate = candidateToday > now
+                ? candidateToday
+                : candidateToday.AddDays(1);
+
+            if (nearestRun == null || candidate < nearestRun.Value)
+                nearestRun = candidate;
+        }
+
+        if (nearestRun == null)
+        {
+            _logger.LogWarning("Не удалось вычислить ближайшее время расписания, повторная проверка через 10 минут");
+            return TimeSpan.FromMinutes(10);
+        }
+        var delay = nearestRun.Value - now;
+        
+        return delay > TimeSpan.Zero ? delay : TimeSpan.FromSeconds(10);
     }
 
     private async Task<bool> SendNodesStatus(TelegramBotSetting bot)

@@ -13,11 +13,51 @@ class TelegramBotSettingsView {
             chatId: "ID чата",
             botToken: "Токен бота",
             botProtocol: "Протокол",
+            scheduler: "Расписание оповещений",
+            addScheduleTime: "Добавить время",
+            remove: "Удалить",
             offlineNodeAlertInterval: "Оповещать о недоступных узлах (часы)",
             localModuleVersionAlert: "Оповещать о версии локального модуля ниже указанной",
             localModuleDaysWithoutSynchronization: "Оповещать, если не было синхронизации локального модуля более чем указанных дней",
-            alertInterval: "Интервал оповещений (минуты)",
+        };
+    }
+
+    _prepareScheduler(rawScheduler) {
+        const rows = Array.isArray(rawScheduler) ? rawScheduler : [];
+        const toTimeDate = (value) => {
+            const parsed = webix.Date.strToDate("%H:%i:%s")(String(value || ""));
+            return parsed || webix.Date.strToDate("%H:%i:%s")("09:00:00");
+        };
+    
+        if (rows.length === 0) {
+            return [{
+                id: 1,
+                time: toTimeDate("09:00:00")
+            }];
         }
+    
+        return rows.map((x, index) => ({
+            id: x.id,
+            time: toTimeDate(x.time)
+        }));
+    }
+
+    _getNextScheduleId() {
+        const grid = $$("telegramSchedulerGrid");
+        if (!grid) return 1;
+
+        const rows = grid.serialize();
+        if (!rows.length) return 1;
+
+        let maxId = 0;
+        rows.forEach(row => {
+            const current = row.id || 0;
+            if (current > maxId) {
+                maxId = current;
+            }
+        });
+
+        return maxId + 1;
     }
 
     async loadData() {
@@ -39,7 +79,7 @@ class TelegramBotSettingsView {
             offlineNodeAlertInterval: configuration.telegramBotSettings?.offlineNodeAlertInterval || 0,
             localModuleVersionAlert: configuration.telegramBotSettings?.localModuleVersionAlert || "",
             localModuleDaysWithoutSynchronization: configuration.telegramBotSettings?.localModuleDaysWithoutSynchronization || 3,
-            alertInterval: configuration.telegramBotSettings?.alertsInterval || 0
+            scheduler: this._prepareScheduler(configuration.telegramBotSettings?.scheduler)
         };
 
         return this;
@@ -52,7 +92,7 @@ class TelegramBotSettingsView {
             id: this.telegramBotSettingsElementsId,
             disabled: !this.telegramBotSettings.isEnabled,
             rows: [],
-        }
+        };
 
         const enaledCheckBox = CheckBox(this.labels.isEnabled, "isEnabled", {
             value: this.telegramBotSettings.isEnabled,
@@ -81,10 +121,55 @@ class TelegramBotSettingsView {
             },
 
             Number(this.labels.chatId, "chatId", this.telegramBotSettings.chatId),
-            
+
             Text(this.labels.botToken, "botToken", this.telegramBotSettings.botToken),
 
-            Number(this.labels.alertInterval, "alertInterval", this.telegramBotSettings.alertInterval),
+            {
+                rows: [
+                    { template: this.labels.scheduler, type: "section" },
+                    {
+                        view: "datatable",
+                        id: "telegramSchedulerGrid",
+                        height: 220,
+                        editable: true,
+                        editaction: "click",
+                        select: "row",
+                        data: this.telegramBotSettings.scheduler,
+                        columns: [
+                            { id: "id", header: "№", hidden: false, width: 80 },
+                            { 
+                                id: "time",
+                                header: "Время (HH:mm:ss)", 
+                                fillspace: true, 
+                                editor: "dateTime",
+                                format:webix.Date.dateToStr("%H:%i:%s") }
+                        ],
+                        onClick: {
+                            "remove-schedule-row": function (e, cell) {
+                                this.remove(cell.row);
+                                return false;
+                            }
+                        },
+                    },
+                    {
+                        cols: [
+                            {
+                                view: "button",
+                                value: this.labels.addScheduleTime,
+                                width: 180,
+                                click: () => {
+                                    const grid = $$("telegramSchedulerGrid");
+                                    grid.add({
+                                        id: this._getNextScheduleId(),
+                                        time: "09:00:00"
+                                    });
+                                }
+                            },
+                            {}
+                        ]
+                    }
+                ]
+            },
 
             Number(this.labels.offlineNodeAlertInterval, "offlineNodeAlertInterval", this.telegramBotSettings.offlineNodeAlertInterval),
 
@@ -140,14 +225,33 @@ class TelegramBotSettingsView {
         width: 120,
         click: async function () {
             const form = this.getFormView();
-    
+
             if (!form.validate()) return;
 
             const values = form.getValues();
+            console.log(values);
+            const schedulerGrid = $$("telegramSchedulerGrid");
+            const schedulerRows = [];
+
+            const toTimeString = webix.Date.dateToStr("%H:%i:%s");
+            schedulerGrid.data.each((item) => {
+                schedulerRows.push({
+                    id: item.id,
+                    time: toTimeString(item.time)
+                });
+            });
+
+            const timeRegex = /^([01]\d|2[0-3]):([0-5]\d):([0-5]\d)$/;
 
             if (values.isEnabled) {
-                if (values.alertInterval <= 0) {
-                    webix.message({ type: "error", text: "Интервал оповещений должен быть больше 0" });
+                if (schedulerRows.length === 0) {
+                    webix.message({ type: "error", text: "Добавьте хотя бы одно время в расписание" });
+                    return;
+                }
+
+                const invalidRow = schedulerRows.find(r => !timeRegex.test(String(r.time || "").trim()));
+                if (invalidRow) {
+                    webix.message({ type: "error", text: `Некорректное время в строке №${invalidRow.scheduleId}` });
                     return;
                 }
 
@@ -155,12 +259,12 @@ class TelegramBotSettingsView {
                     webix.message({ type: "error", text: "Интервал оповещений о недоступных узлах должен быть больше 0" });
                     return;
                 }
-                
+
                 if (values.localModuleDaysWithoutSynchronization <= 0) {
                     webix.message({ type: "error", text: "Дни без синхронизации локального модуля должны быть больше 0" });
                     return;
                 }
-                
+
                 if (values.localModuleVersionAlert <= 0) {
                     webix.message({ type: "error", text: "Версия локального модуля должна быть больше 0" });
                     return;
@@ -171,7 +275,7 @@ class TelegramBotSettingsView {
                     return;
                 }
             }
-    
+
             const saveResult = await saveConfigurationSections({
                 telegramBotSettings: _ => ({
                     isEnabled: !!values.isEnabled,
@@ -181,15 +285,18 @@ class TelegramBotSettingsView {
                     offlineNodeAlertInterval: parseInt(values.offlineNodeAlertInterval) || 0,
                     localModuleVersionAlert: values.localModuleVersionAlert || "",
                     localModuleDaysWithoutSynchronization: parseInt(values.localModuleDaysWithoutSynchronization) || 3,
-                    alertsInterval: parseInt(values.alertInterval) || 0
+                    scheduler: schedulerRows.map((row, index) => ({
+                        id: row.id,
+                        time: String(row.time || "").trim()
+                    }))
                 })
             });
-    
+
             if (!saveResult.result) {
                 webix.message({ type: "error", text: saveResult.error });
                 return;
             }
-    
+
             webix.message({
                 type: "success",
                 text: "Настройки Telegram бота сохранены. Необходимо перезапустить службу для применения изменений."
@@ -204,15 +311,15 @@ class TelegramBotSettingsView {
         click: async function () {
             let answer = await AuthService.makeAuthenticatedRequest('/api/BotTest', {
                 method: 'GET'
-              });
+            });
 
             if (!answer.result) {
                 webix.message({
                     type: "error",
                     text: answer.value
-                })
+                });
             }
-        } 
+        }
     }
 }
 

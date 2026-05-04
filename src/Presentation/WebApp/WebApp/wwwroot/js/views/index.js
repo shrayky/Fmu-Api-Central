@@ -5,6 +5,7 @@ import { AuthService } from '../services/AuthService.js';
 import { RouterService } from '../services/RouterService.js';
 import { createLayout, createToolbarWithLogout, createSidebar } from '../components/Layout.js';
 import { MENU_ITEMS } from '../config/menu.js';
+import { registerWebixEditors } from "../utils/webixEditors.js";
 
 import informationView from '../modules/informationView.js';
 import createAuthView from '../modules/authView.js';
@@ -14,6 +15,8 @@ import createLogsView from '../modules/logsView.js';
 import createSoftwareUpdatesListView from '../modules/softwareUpdates/softwareUpdatesListView.js';
 import createInstanceListView from '../modules/instanceMonitoring/instanceListView.js';
 import createTelegramBotSettingsView from '../modules/telegramBotSettingsView.js';
+
+registerWebixEditors();
 
 class App {
     constructor() {
