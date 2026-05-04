@@ -52,14 +52,20 @@ public class SoftwareUpdateFilesRepository : BaseCouchDbRepository<SoftwareUpdat
         if (!_appState.DbState())
             return Result.Failure<SoftwareUpdateFilesEntity>(DatabaseUnavailable);
 
-        var candidates = await _database.Where(p =>
+        var newerVersions = await _database.Where(p =>
                 p.Data.Os == os &&
                 p.Data.Architecture == architecture &&
-                (
-                    p.Data.Version > version ||
-                    (p.Data.Version == version && p.Data.Assembly >= assembly)
-                ))
+                p.Data.Version > version)
             .ToListAsync();
+
+        var sameVersionAssembly = await _database.Where(p =>
+                p.Data.Os == os &&
+                p.Data.Architecture == architecture &&
+                p.Data.Version == version &&
+                p.Data.Assembly > assembly)
+            .ToListAsync();
+
+        var candidates = newerVersions.Concat(sameVersionAssembly).ToList();
 
         if (candidates.Count == 0)
             return Result.Failure<SoftwareUpdateFilesEntity>($"Не найдено обновление для {version}_{assembly}_{os}_{architecture}");

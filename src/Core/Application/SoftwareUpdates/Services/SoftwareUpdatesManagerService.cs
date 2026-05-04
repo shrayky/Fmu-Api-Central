@@ -92,10 +92,11 @@ public class SoftwareUpdatesManagerService : ISoftwareUpdatesManagerService
 
         if (softwareUpdate.IsFailure)
             return (false, string.Empty);
-        
-        var need = softwareUpdate.Value.Version >= version && softwareUpdate.Value.Assembly > assembly;
 
-        return (need, softwareUpdate.Value.Sha256);
+        var u = softwareUpdate.Value;
+        var need = u.Version > version || (u.Version == version && u.Assembly > assembly);
+
+        return (need, u.Sha256);
     }
 
     public async Task<Result<Stream>> FmuApiUpdateData(string os, string architecture, int version, int assembly)

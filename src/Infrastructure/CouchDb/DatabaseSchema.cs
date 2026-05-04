@@ -37,6 +37,17 @@
                     }
                 }
             },
+            new {
+                name = "max-update-idx", index = new
+                {
+                    fields = new[]
+                    {
+                        "data.os",
+                        "data.architecture",
+                        "data.version",
+                    }
+                }
+            },
         ];
     }
 }
