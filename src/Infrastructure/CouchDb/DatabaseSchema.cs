@@ -26,7 +26,7 @@
         [
             new { name = "updatedAt-idx", index = new { fields = new[] { "data.updatedAt" } } },
             new {
-                name = "max-update-idx", index = new
+                name = "max-update-by-version-assemly-idx", index = new
                 {
                     fields = new[]
                     {
@@ -38,7 +38,7 @@
                 }
             },
             new {
-                name = "max-update-idx", index = new
+                name = "max-update-by-version-idx", index = new
                 {
                     fields = new[]
                     {
