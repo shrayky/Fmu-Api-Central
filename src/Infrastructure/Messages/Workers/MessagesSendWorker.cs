@@ -63,7 +63,7 @@ public class MessagesSendWorker : BackgroundService
         
         if (scheduler.Count == 0)
         {
-            _logger.LogWarning("Расписание Telegram-бота пустое, повторная проверка через 10 минут");
+            _logger.LogWarning("Расписание бота пустое, повторная проверка через 10 минут");
             return TimeSpan.FromMinutes(10);
         }
 
@@ -165,7 +165,7 @@ public class MessagesSendWorker : BackgroundService
         foreach (var lm in lmWithBadStatus)
         {
             var status = lm.ModuleStatus == "" ? "не готов" : lm.ModuleStatus;
-            var messageToChat = $"🚨<b>{lm.NodeName} {lm.ModuleAddress}</b> в не рабочем состоянии!%0A статус: <u>{status}</u>!";
+            var messageToChat = $"🚨<b>Локальный модуль в {lm.NodeName} {lm.ModuleAddress}</b>%0A в не рабочем состоянии!%0A статус: <u>{status}</u>!";
 
             messages.Add(messageToChat);
         }
@@ -198,7 +198,7 @@ public class MessagesSendWorker : BackgroundService
             if (!isVersionOutdated)
                 continue;
 
-            var messageToChat = $"🚨<b>{lm.NodeName} {lm.ModuleAddress}</b> устарел!%0A текущая версия: <u>{lm.ModuleVersion}</u>!";
+            var messageToChat = $"🚨<b>Локальный модуль в {lm.NodeName} {lm.ModuleAddress}</b> устарел!%0A текущая версия: <u>{lm.ModuleVersion}</u>!";
 
             messages.Add(messageToChat);
 
@@ -224,7 +224,7 @@ public class MessagesSendWorker : BackgroundService
 
         foreach (var lm in lmSyncDateTime)
         {
-            var messageToChat = $"🚨<b>{lm.NodeName} {lm.ModuleAddress}</b> давно не обновлялся!%0A последнее обновление: <u>{DateTimeOffset.FromUnixTimeMilliseconds(lm.ModuleLastSync).ToLocalTime()}</u>!";
+            var messageToChat = $"🚨<b>Локальный модуль в {lm.NodeName} {lm.ModuleAddress}</b> давно не обновлялся!%0A последнее обновление: <u>{DateTimeOffset.FromUnixTimeMilliseconds(lm.ModuleLastSync).ToLocalTime()}</u>%0AПроведите инициализацию!";
             messages.Add(messageToChat);
         }
 
