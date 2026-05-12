@@ -279,7 +279,7 @@ class InstanceListView {
             columns: [
                 { 
                     id: this.NAMES.instanceName,
-                    header: [this.LABELS.instanceName, { content: "selectFilter" }],
+                    header: [this.LABELS.instanceName, { content: "textFilter" }],
                     fillspace: true,
                     sort: "string",
                 },

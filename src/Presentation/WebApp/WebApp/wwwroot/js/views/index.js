@@ -1,4 +1,3 @@
-// js/views/index.js
 import "../utils/customComponents.js";
 import { InitProxy } from '../utils/proxy.js';
 import { AuthService } from '../services/AuthService.js';
