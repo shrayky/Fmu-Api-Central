@@ -12,11 +12,13 @@ public class BotTestController : ControllerBase
 {
     private readonly IParametersService _parametersService;
     private readonly IMessageService _messageService;
+    private readonly IAlertMessageConstructor _alertMessageConstructor;
 
-    public BotTestController(IParametersService parametersService, IMessageService messageService)
+    public BotTestController(IParametersService parametersService, IMessageService messageService, IAlertMessageConstructor alertMessageConstructor)
     {
         _parametersService = parametersService;
         _messageService = messageService;
+        _alertMessageConstructor = alertMessageConstructor;
     }
 
     [HttpGet]
@@ -35,7 +37,17 @@ public class BotTestController : ControllerBase
         
         return BadRequest(sendResult.Error);
     }
-    
-    
-    
+
+    [HttpGet("sendAllerts")]
+    public async Task<IActionResult> SendAllerts()
+    {
+        var settings = await _parametersService.Current();
+
+        if (!settings.BotSettings.IsEnabled)
+            return BadRequest("Бот не подключен");
+
+        await _alertMessageConstructor.SendNodesStatus(settings.BotSettings);
+
+        return Ok();
+    }
 }

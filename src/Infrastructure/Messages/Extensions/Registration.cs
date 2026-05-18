@@ -19,6 +19,8 @@ public static class Registration
         else if (settings.Provider == BotProvidersEnum.ntfy)
             services.AddSingleton<IMessageService, NtfyBotService>();
 
+        services.AddSingleton<IAlertMessageConstructor, AlertsConstuctor>();
+
         services.AddHostedService<MessagesSendWorker>();
 
         return services;

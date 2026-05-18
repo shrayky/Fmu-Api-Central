@@ -135,9 +135,12 @@ public class FmuApiInstancesRepository : BaseCouchDbRepository<InstanceEntity>, 
         if (!_appState.DbState())
             return Result.Failure<List<InstanceEntity>>(DatabaseUnavailable);
 
+        var appConfig = await _parameters.Current();
+        var queryLimit = appConfig.DatabaseConnection.QueryLimit;
+
         try
         {
-            var entities = await _database.ToListAsync();
+            var entities = await _database.Take(queryLimit).ToListAsync();
             
             List<InstanceEntity> answer = [];
             answer.AddRange(entities.Select(node => node.Data));
