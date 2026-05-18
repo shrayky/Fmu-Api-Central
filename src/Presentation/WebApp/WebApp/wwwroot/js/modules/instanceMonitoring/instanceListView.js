@@ -273,11 +273,11 @@ class InstanceListView {
                 {
                     view: "checkbox",
                     id: "autoRefreshCheckbox",
-                    value: true,
+                    value: this.autoRefreshEnabled,
                     width: 40,
                     click: (elementId) => {
-                        const state = $$(elementId).getValue();
-                        this._toggleAutoRefresh(state)
+                        this.autoRefreshEnabled = $$(elementId).getValue();
+                        this._toggleAutoRefresh(this.autoRefreshEnabled)
                     }
                 },
                 {
