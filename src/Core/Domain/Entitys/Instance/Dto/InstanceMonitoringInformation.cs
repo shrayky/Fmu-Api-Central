@@ -25,4 +25,7 @@ public record InstanceMonitoringInformation
 
     [JsonPropertyName("localModules")]
     public List<LocalModuleInformation> LocalModules { get; init; } = [];
+
+    [JsonPropertyName("TsPiots")]
+    public List<TsPiotInformation> TsPiots { get; init; } = [];
 }

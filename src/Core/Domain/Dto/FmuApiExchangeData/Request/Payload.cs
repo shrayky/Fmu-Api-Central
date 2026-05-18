@@ -15,4 +15,7 @@ public record Payload
 
     [JsonPropertyName("localModules")]
     public List<LocalModuleInformation> LocalModuleInformation { get; init; } = [];
+
+    [JsonPropertyName("tsPiots")]
+    public List<TsPiotInformation> TsPiotsInforamtion { get; init; } = [];
 }

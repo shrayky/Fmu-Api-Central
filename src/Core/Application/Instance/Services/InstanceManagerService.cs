@@ -79,6 +79,7 @@ public class InstanceManagerService : IInstanceManagerService
 
         instanceEntity.Cdn = fmuApiState.CdnInformation;
         instanceEntity.LocalModules = fmuApiState.LocalModuleInformation;
+        instanceEntity.TsPiots = fmuApiState.TsPiotsInforamtion;
         instanceEntity.NodeInformation = fmuApiState.NodeInformation;
 
         if (!instanceEntity.SettingsModified)
@@ -133,6 +134,7 @@ public class InstanceManagerService : IInstanceManagerService
                 Version = $"{entity.Settings.Version}.{entity.Settings.Assembly} {entity.NodeInformation.Architecture} {entity.NodeInformation.Os}",
                 LastUpdated = entity.UpdatedAt,
                 LocalModules = entity.LocalModules,
+                TsPiots = entity.TsPiots,
                 Address = entity.Address,
             };
 
@@ -170,6 +172,7 @@ public class InstanceManagerService : IInstanceManagerService
             entity.NodeInformation = existInstance.Value.NodeInformation;
             entity.Settings = existInstance.Value.Settings;
             entity.Cdn = existInstance.Value.Cdn;
+            entity.TsPiots = existInstance.Value.TsPiots;
         }
 
         var createResult = await _instanceRepository.CreateInstance(entity);

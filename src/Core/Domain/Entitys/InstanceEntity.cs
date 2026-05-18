@@ -15,5 +15,6 @@ public class InstanceEntity : IHaveStringId
     public FmuApiSetting Settings { get; set; } = new();
     public List<CdnInformation> Cdn { get; set; } = [];
     public List<LocalModuleInformation> LocalModules { get; set; } = [];
+    public List<TsPiotInformation> TsPiots { get; set; } = [];
     public bool SettingsModified { get; set; } = false;
 }
