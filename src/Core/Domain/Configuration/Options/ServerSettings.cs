@@ -6,5 +6,7 @@ namespace Domain.Configuration.Options
     {
         [JsonPropertyName("apiIpPort")]
         public int ApiIpPort { get; set; } = 2579;
+        public bool TsPiotEnabled { get; set; } = false;
+        public int LocalModuleVersion { get; set; } = 0;
     }
 }
