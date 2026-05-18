@@ -28,14 +28,14 @@ class TelegramBotSettingsView {
             const parsed = webix.Date.strToDate("%H:%i:%s")(String(value || ""));
             return parsed || webix.Date.strToDate("%H:%i:%s")("09:00:00");
         };
-    
+
         if (rows.length === 0) {
             return [{
                 id: 1,
                 time: toTimeDate("09:00:00")
             }];
         }
-    
+
         return rows.map((x, index) => ({
             id: x.id,
             time: toTimeDate(x.time)
@@ -137,12 +137,13 @@ class TelegramBotSettingsView {
                         data: this.telegramBotSettings.scheduler,
                         columns: [
                             { id: "id", header: "№", hidden: false, width: 80 },
-                            { 
+                            {
                                 id: "time",
-                                header: "Время (HH:mm:ss)", 
-                                fillspace: true, 
+                                header: "Время (HH:mm:ss)",
+                                fillspace: true,
                                 editor: "dateTime",
-                                format:webix.Date.dateToStr("%H:%i:%s") }
+                                format: webix.Date.dateToStr("%H:%i:%s")
+                            }
                         ],
                         onClick: {
                             "remove-schedule-row": function (e, cell) {
@@ -198,6 +199,7 @@ class TelegramBotSettingsView {
                 cols: [
                     this._saveButton,
                     this._testButton,
+                    this._sendAllertsButton,
                     {}
                 ]
             },
@@ -310,6 +312,24 @@ class TelegramBotSettingsView {
         width: 120,
         click: async function () {
             let answer = await AuthService.makeAuthenticatedRequest('/api/BotTest', {
+                method: 'GET'
+            });
+
+            if (!answer.result) {
+                webix.message({
+                    type: "error",
+                    text: answer.value
+                });
+            }
+        }
+    }
+
+    _sendAllertsButton = {
+        view: "button",
+        value: "Отправить уведомления",
+        width: 120,
+        click: async function () {
+            let answer = await AuthService.makeAuthenticatedRequest('/api/BotTest/sendAllerts', {
                 method: 'GET'
             });
 
