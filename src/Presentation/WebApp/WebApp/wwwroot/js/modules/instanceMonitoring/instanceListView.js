@@ -8,8 +8,26 @@ style.textContent = `
     .multiline_datatable .webix_cell {
         white-space: normal !important;
         vertical-align: top !important;
-        line-height: normal !important;
-        padding: 10px !important;
+        line-height: 1.35 !important;
+        padding: 8px 10px !important;
+        overflow: visible !important;
+        box-sizing: border-box !important;
+    }
+
+    .multiline_datatable .instance-module-item {
+        margin-bottom: 8px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid rgba(128, 128, 128, 0.35);
+    }
+
+    .multiline_datatable .instance-module-item:last-child {
+        margin-bottom: 0;
+        padding-bottom: 0;
+        border-bottom: none;
+    }
+
+    .multiline_datatable .instance-module-empty {
+        color: #888;
     }
 `;
 
@@ -19,13 +37,12 @@ class InstanceListView {
     constructor(id) {
         this.formName = "SoftwareUpdatesView";
         this.id = id;
-        
+
         const formSettings = this._loadFormSettings();
-        
+
         this.pageSize = formSettings.pageSize;
         this.autoRefreshEnabled = formSettings.autoRefreshEnabled;
         this.refreshInterval = formSettings.refreshInterval;
-
 
         this.LABELS = {
             formTitle: "Fmu-Api-Central: Мониторинг инстансов",
@@ -47,7 +64,8 @@ class InstanceListView {
             hostAddress: "Web-адрес Fmu-Api",
             printInstancesList: "Печать списка инстансов",
             exportToCsv: "Экспорт списка в csv",
-            token: "Токен"
+            token: "Токен",
+            tsPiotsModules: "Модули ТСПИоТ"
         };
 
         this.NAMES = {
@@ -68,7 +86,8 @@ class InstanceListView {
             refreshInterval: "refreshIntervalInput",
             formId: "instanceMonitoringListViewForm",
             hostAddress: "address",
-            id: "id"
+            id: "id",
+            tsPiots: "tsPiots"
         };
 
         this.hotkeys = [
@@ -84,7 +103,7 @@ class InstanceListView {
         return {
             refreshInterval: parseInt(localStorage.getItem('instanceMonitoring_refreshInterval')) || 60,
             autoRefreshEnabled: JSON.parse(localStorage.getItem('instanceMonitoring_autoRefresh') || true),
-            pageSize: parseInt(localStorage.getItem('instanceMonitoring_pageSize')) || 50
+            pageSize: parseInt(localStorage.getItem('instanceMonitoring_pageSize')) || 50,
         };
     }
 
@@ -94,12 +113,12 @@ class InstanceListView {
         localStorage.setItem('instanceMonitoring_pageSize', this.pageSize.toString());
     }
 
-    delayedDataLoading() {  
+    delayedDataLoading() {
 
         setTimeout(() => {
             this._loadData();
 
-            if (this.autoRefreshEnabled) {  
+            if (this.autoRefreshEnabled) {
                 this._startAutoRefresh();
             }
 
@@ -256,7 +275,10 @@ class InstanceListView {
                     id: "autoRefreshCheckbox",
                     value: true,
                     width: 40,
-                    click: (state) => this._toggleAutoRefresh(state)
+                    click: (elementId) => {
+                        const state = $$(elementId).getValue();
+                        this._toggleAutoRefresh(state)
+                    }
                 },
                 {
                     view: "text",
@@ -277,7 +299,7 @@ class InstanceListView {
             view: "datatable",
             id: this.NAMES.dataTable,
             columns: [
-                { 
+                {
                     id: this.NAMES.instanceName,
                     header: [this.LABELS.instanceName, { content: "textFilter" }],
                     fillspace: true,
@@ -294,10 +316,10 @@ class InstanceListView {
                     hidden: true,
                     fillspace: true
                 },
-                { 
+                {
                     id: this.NAMES.instanceVersion,
-                    header: [this.LABELS.instanceVersion, { content: "selectFilter"}],
-                    width: 120 
+                    header: [this.LABELS.instanceVersion, { content: "selectFilter" }],
+                    width: 120
                 },
                 {
                     id: "localModules",
@@ -306,8 +328,14 @@ class InstanceListView {
                     template: (obj) => this._formatLocalModules(obj.localModules)
                 },
                 {
+                    id: this.NAMES.tsPiots,
+                    header: this.LABELS.tsPiotsModules,
+                    fillspace: true,
+                    template: (obj) => this._formatTsPiots(obj.TsPiots)
+                },
+                {
                     id: this.NAMES.instanceUpdatedAt,
-                    header: [this.LABELS.instanceUpdatedAt, { content: "dateFilter" }], 
+                    header: [this.LABELS.instanceUpdatedAt],
                     width: 120,
                     template: (obj) => this._formatDate(obj.lastUpdated),
                     sort: "int",
@@ -316,21 +344,35 @@ class InstanceListView {
             select: "row",
             multiselect: false,
             fixedRowHeight: false,
+            rowHeight: 36,
             css: "multiline_datatable",
             on: {
+                onResize: () => this._scheduleRowHeightAdjust(),
                 onItemDblClick: (cell) => {
                     if (cell.column === this.NAMES.hostAddress) {
                         const record = $$(this.NAMES.dataTable).getItem(cell.row);
                         const addr = record ? record[this.NAMES.hostAddress] : "";
 
                         if (addr && typeof addr === "string" && addr.trim() !== "") {
-                            try { window.open(addr, "_blank"); } catch (_) {}
+                            try { window.open(addr, "_blank"); } catch (_) { }
                             return;
-                        } 
+                        }
                     }
 
                     this._editInstance(cell.row);
                 },
+                onAfterFilter: () => {
+                    const table = $$(this.NAMES.dataTable);
+                    const name = table.getFilter(this.NAMES.instanceName).value;
+                    const version = table.getFilter(this.NAMES.instanceVersion).value;
+
+                    const autoRefreshEnabled = (name === "" && version === "");
+                    
+                    this._toggleAutoRefresh(autoRefreshEnabled);
+
+                    const autoRefreshCheckbox = $$("autoRefreshCheckbox");
+                    autoRefreshCheckbox.setValue(autoRefreshEnabled);
+                }
             }
         };
     }
@@ -356,18 +398,22 @@ class InstanceListView {
             }
 
             const table = $$(this.NAMES.dataTable);
+            const selectedId = table.getSelectedId();
+            this._assignRowHeightsToRecords(data.content);
+
             table.clearAll();
             table.parse(data.content);
-
-            this._adjustRowHeight(data.content);
 
             $$(this.id).enable();
 
             if (data.content.length > 0) {
-                table.select(data.content[0].id);
-                webix.UIManager.setFocus(this.NAMES.dataTable); 
+                const rowToSelect = selectedId && table.exists(selectedId)
+                    ? selectedId
+                    : data.content[0].id;
+                table.select(rowToSelect);
+                webix.UIManager.setFocus(this.NAMES.dataTable);
             }
-            
+
             this._updatePagination(data);
         } catch (error) {
             console.error(this.LABELS.errorLoad, error);
@@ -463,52 +509,106 @@ class InstanceListView {
 
         instanceElementView.showDialog(
             record,
-            (editedRecord) => {this._updateTable(editedRecord);},
+            (editedRecord) => { this._updateTable(editedRecord); },
             () => this._enableHotkeys());
     }
 
     _updateTable(editedRecord) {
         const table = $$(this.NAMES.dataTable);
 
+        this._assignRowHeightsToRecords([editedRecord]);
         table.updateItem(editedRecord.id, editedRecord);
     }
 
     _addToTable(createdRecord) {
         const table = $$(this.NAMES.dataTable);
 
+        this._assignRowHeightsToRecords([createdRecord]);
         table.add(createdRecord);
     }
 
     _formatLocalModules(localModules) {
         if (!localModules || localModules.length === 0) {
-            return 'Нет модулей';
+            return '<span class="instance-module-empty">Нет модулей</span>';
         }
 
-        let lm = localModules.map(module => {
+        return localModules.map((module) => {
             const lastSyncDate = new Date(module.lastSync);
             const formattedSyncDate = this._formatDate(lastSyncDate.toISOString());
+            const status = module.status === "" ? "нет данных" : module.status;
+            const version = module.version === "" ? "нет данных" : module.version;
 
-            const status = module.status == "" ? "нет данных" : module.status;
-            const version = module.version == "" ? "нет данных" : module.version;
-            
-            return `<strong>${module.address}</strong><br>статус: ${status} | версия: ${version} | ${formattedSyncDate}`;
-        }).join('<br>');
-
-        return lm;
+            return `<div class="instance-module-item"><strong>${module.address}</strong><br>статус: ${status} | версия: ${version} | ${formattedSyncDate}</div>`;
+        }).join("");
     }
 
-    _adjustRowHeight(instances) {
-        if (!instances || instances.length === 0) {
+    _formatTsPiots(tsPiots) {
+        if (!tsPiots || tsPiots.length === 0) {
+            return '<span class="instance-module-empty">Нет модулей</span>';
+        }
+
+        return tsPiots.map((item) => {
+            const name = item.name == null || String(item.name).trim() === "" ? "нет данных" : item.name;
+            const address = item.address == null || String(item.address).trim() === "" ? "нет данных" : item.address;
+            const version = item.version == null || String(item.version).trim() === "" ? "нет данных" : item.version;
+
+            return `<div class="instance-module-item"><strong>${name}</strong><br>${address} | версия: ${version}</div>`;
+        }).join("");
+    }
+
+    _scheduleRowHeightAdjust() {
+        if (this._rowHeightAdjustTimer) {
+            clearTimeout(this._rowHeightAdjustTimer);
+        }
+
+        this._rowHeightAdjustTimer = setTimeout(() => {
+            this._rowHeightAdjustTimer = null;
+            this._applyRowHeights(true);
+        }, 200);
+    }
+
+    _assignRowHeightsToRecords(records) {
+        const table = $$(this.NAMES.dataTable);
+        const minHeight = table?.config?.rowHeight || 36;
+
+        records.forEach((record) => {
+            record.$height = this._estimateRowHeight(record, minHeight);
+        });
+    }
+
+    _estimateRowHeight(record, minHeight) {
+        const localCount = record.localModules?.length ?? 0;
+        const tsCount = record.TsPiots?.length ?? 0;
+        const blocks = Math.max(localCount || 1, tsCount || 1);
+        const blockHeight = 53;
+        const cellPadding = 16;
+
+        return Math.max(minHeight, blocks * blockHeight + cellPadding);
+    }
+
+    _applyRowHeights(preserveState) {
+        const table = $$(this.NAMES.dataTable);
+        if (!table || !table.count()) {
             return;
         }
 
-        const maxModulesCount = Math.max(...instances.map(instance => 
-            instance.localModules ? instance.localModules.length : 0
-        ));
+        const selectedId = preserveState ? table.getSelectedId() : null;
+        const scroll = preserveState ? table.getScrollState() : null;
+        const minHeight = table.config.rowHeight || 36;
 
-        const table = $$(this.NAMES.dataTable);
-        if (table) {
-            table.adjustRowHeight("localModules", true);
+        table.eachRow((rowId) => {
+            const record = table.getItem(rowId);
+            record.$height = this._estimateRowHeight(record, minHeight);
+        });
+
+        table.refresh();
+
+        if (scroll) {
+            table.scrollTo(scroll.x, scroll.y);
+        }
+
+        if (selectedId && table.exists(selectedId)) {
+            table.select(selectedId);
         }
     }
 
@@ -523,21 +623,21 @@ class InstanceListView {
 
     _formatDate(dateString) {
         if (!dateString) return '';
-        
+
         const date = new Date(dateString);
         if (isNaN(date.getTime())) return dateString;
-        
+
         const day = date.getDate().toString().padStart(2, '0');
         const month = (date.getMonth() + 1).toString().padStart(2, '0');
         const year = date.getFullYear().toString().slice(-2);
         const hours = date.getHours().toString().padStart(2, '0');
         const minutes = date.getMinutes().toString().padStart(2, '0');
-        
+
         const now = new Date();
         const diffInHours = (now - date) / (1000 * 60 * 60);
 
         const formattedDate = `${day}.${month}.${year} ${hours}:${minutes}`;
-        
+
         if (diffInHours > 24) {
             return `<span style="color: red; font-weight: bold;">${formattedDate}</span>`;
         }
@@ -565,7 +665,7 @@ class InstanceListView {
     _updateRefreshInterval() {
         const input = $$("refreshIntervalInput");
         const seconds = parseInt(input.getValue()) || 60;
-        
+
         if (seconds < 10) {
             webix.message({
                 text: "Минимальный интервал: 10 секунд",
@@ -603,13 +703,47 @@ class InstanceListView {
     }
 
     _disableHotkeys() {
-        this.hotkeys.forEach(({ key, buttonId }) => {
+        if (this._deleteHotkeyHandler) {
+            webix.UIManager.removeHotKey("delete", this._deleteHotkeyHandler);
+            this._deleteHotkeyHandler = null;
+        }
+
+        this.hotkeys.forEach(({ key }) => {
+            if (key === "delete") {
+                return;
+            }
             webix.UIManager.removeHotKey(key, null);
         });
     }
-    
+
+    _registerDeleteHotkey() {
+        const table = $$(this.NAMES.dataTable);
+
+        this._deleteHotkeyHandler = (view, e) => {
+            const tag = e?.target?.tagName;
+            if (tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA") {
+                return;
+            }
+            if (webix.UIManager.getFocus() !== table) {
+                return;
+            }
+
+            const button = $$(this.NAMES.deleteBtn);
+            if (button?.isVisible()) {
+                button.config.click();
+            }
+        };
+
+        webix.UIManager.addHotKey("delete", this._deleteHotkeyHandler);
+    }
+
     _enableHotkeys() {
+        this._registerDeleteHotkey();
+
         this.hotkeys.forEach(({ key, buttonId }) => {
+            if (key === "delete") {
+                return;
+            }
             const button = $$(buttonId);
             if (button) {
                 button.define({ hotkey: key });
@@ -673,8 +807,8 @@ class InstanceListView {
 
 export default async function createInstanceListView(id) {
     const view = new InstanceListView(id)
-                    .delayedDataLoading()
-                    .render();
+        .delayedDataLoading()
+        .render();
 
     return view;
 }
