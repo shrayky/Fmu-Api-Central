@@ -7,7 +7,7 @@
         public const string Description = "Служба для мониторинга состояния установленных клиентов fmu-api";
         public const string ServiceName = "DS:Fmu-Api-Central";
         public const int Version = 1;
-        public const int Assembly = 4;
+        public const int Assembly = 5;
 
         public static object Information() => new { Name, Version, Assembly, Description};
     }
