@@ -16,8 +16,16 @@
         
     </PropertyGroup>
 
+    <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+      <DebugType>full</DebugType>
+    </PropertyGroup>
+
+    <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
+      <DebugType>full</DebugType>
+    </PropertyGroup>
+
     <ItemGroup>
-        <FrameworkReference Include="Microsoft.AspNetCore.App"/>
+        <FrameworkReference Include="Microsoft.AspNetCore.App" />
     </ItemGroup>
 
     <ItemGroup>
@@ -31,12 +39,12 @@
 
     <Target Name="CleanupPublishFolder" AfterTargets="Publish">
         <ItemGroup>
-            <FilesToDelete Include="$(PublishDir)**\*.pdb"/>
-            <FilesToDelete Include="$(PublishDir)**\*.json"/>
-            <FilesToDelete Include="$(PublishDir)**\*.config"/>
+            <FilesToDelete Include="$(PublishDir)**\*.pdb" />
+            <FilesToDelete Include="$(PublishDir)**\*.json" />
+            <FilesToDelete Include="$(PublishDir)**\*.config" />
         </ItemGroup>
-        <Delete Files="@(FilesToDelete)"/>
-        <Message Text="Удалены .pdb и .json файлы из папки публикации" Importance="high"/>
+        <Delete Files="@(FilesToDelete)" />
+        <Message Text="Удалены .pdb и .json файлы из папки публикации" Importance="high" />
     </Target>
 
 </Project>
