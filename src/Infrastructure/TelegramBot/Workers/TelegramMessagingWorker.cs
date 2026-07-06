@@ -69,7 +69,7 @@ public class TelegramMessagingWorker : BackgroundService
                 }
             }
             
-            await Task.Delay(TimeSpan.FromHours(bot.AlertIntervalInMinutes), stoppingToken);
+            await Task.Delay(TimeSpan.FromHours(bot.AlertIntervalInMinutes ?? 1), stoppingToken);
         }
     }
 
