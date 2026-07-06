@@ -26,15 +26,15 @@ public class TelegramBotSetting
     public int LocalModuleDaysWithoutSynchronization { get; set; } = 3;
 
     [JsonPropertyName("scheduler")]
-    public List<Schedule> Scheduler { get; set; } = new();
+    public List<ScheduleTime> Scheduler { get; set; } = new();
 
     [JsonPropertyName("alertsInterval")]
     [Obsolete("Устарело: используйте Scheduler. Поле оставлено только для обратной совместимости в коде.")]
-    [JsonIgnore]
-    public int AlertIntervalInMinutes { get; set; } = 60;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? AlertIntervalInMinutes { get; set; } = 60;
 }
 
-public record Schedule
+public record ScheduleTime
 {
     [JsonPropertyName("id")]
     public int Id { get; set; }
