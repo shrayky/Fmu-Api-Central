@@ -1,7 +1,11 @@
 ﻿using CouchDb.Dto;
+using CouchDb.Repositories;
 using CouchDB.Driver;
 using CouchDB.Driver.Options;
 using Domain.Entitys;
+using Domain.Entitys.Instance;
+using Domain.Entitys.MarksCheckStatistic;
+using Domain.Entitys.SoftwareUpdateFiles;
 
 namespace CouchDb
 {
@@ -10,6 +14,7 @@ namespace CouchDb
         public required CouchDatabase<UniversalDocument<UserEntity>> Users { get; set; }
         public required CouchDatabase<UniversalDocument<InstanceEntity>> FmuApiInstances { get; set; }
         public required CouchDatabase<UniversalDocument<SoftwareUpdateFilesEntity>> SoftwareUpdateFiles { get; set; }
+        public required CouchDatabase<UniversalDocument<MarkCheckStatisticsEntity>> MarkCheckStatistics { get; set; }
 
         public Context(CouchOptions<Context> options) : base(options)
         {
@@ -24,6 +29,7 @@ namespace CouchDb
             databaseBuilder.Document<UniversalDocument<UserEntity>>().ToDatabase(DatabaseSchema.Users);
             databaseBuilder.Document<UniversalDocument<InstanceEntity>>().ToDatabase(DatabaseSchema.Instance);
             databaseBuilder.Document<UniversalDocument<SoftwareUpdateFilesEntity>>().ToDatabase(DatabaseSchema.SoftwareUpdateFiles);
+            databaseBuilder.Document<UniversalDocument<MarkCheckStatisticsEntity>>().ToDatabase(DatabaseSchema.MarkCheckingStatistic);
         }
 
     }

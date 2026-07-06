@@ -20,23 +20,24 @@ public class DataBaseMaintenanceService : IDataBaseMaintenanceService
           _dbContext = dbContext;
      }
 
-     public async Task<bool> CompactDatabase()
-     {
-          if (!_appState.DbState())
-               return false;
+    public async Task<bool> CompactDatabase()
+    {
+        if (!_appState.DbState())
+            return false;
 
-          try
-          {
-               await _dbContext.Users.CompactAsync();
-               await _dbContext.FmuApiInstances.CompactAsync();
-               await _dbContext.SoftwareUpdateFiles.CompactAsync();
-          }
-          catch (Exception e)
-          {
-               _logger.LogError("Ошибка сжатия БД: {err}", e.Message);
-               return false;
-          }
+        try
+        {
+            await _dbContext.Users.CompactAsync();
+            await _dbContext.FmuApiInstances.CompactAsync();
+            await _dbContext.SoftwareUpdateFiles.CompactAsync();
+            await _dbContext.MarkCheckStatistics.CompactAsync();
+        }
+        catch (Exception e)
+        {
+            _logger.LogError("Ошибка сжатия БД: {err}", e.Message);
+            return false;
+        }
 
-          return true;
-     }
+        return true;
+    }
 }
