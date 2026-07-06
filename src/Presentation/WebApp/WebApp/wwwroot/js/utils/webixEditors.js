@@ -52,7 +52,7 @@ export function registerWebixEditors() {
         popupInit: function (popup) {
             const editor = this;
             popup.getBody().elements.ok.attachEvent("onItemClick", function () {
-                webix.callEvent("onEditEnd", []);
+                if (editor.master) editor.master.editStop();
             });
             popup.getBody().elements.cancel.attachEvent("onItemClick", function () {
                 if (editor.master) editor.master.editCancel();

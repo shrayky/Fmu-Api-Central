@@ -60,6 +60,19 @@ class TelegramBotSettingsView {
         return maxId + 1;
     }
 
+    _cancelSchedulerEdit(grid) {
+        if (grid.getEditor && grid.getEditor()) {
+            grid.editCancel();
+        }
+    }
+
+    _removeSchedulerRow(grid, rowId) {
+        if (!rowId) return;
+
+        this._cancelSchedulerEdit(grid);
+        grid.remove(rowId);
+    }
+
     async loadData() {
         const requestResult = await loadConfiguration();
 
@@ -126,7 +139,7 @@ class TelegramBotSettingsView {
 
             {
                 rows: [
-                    { template: this.labels.scheduler, type: "section" },
+                    { view: "label", label: this.labels.scheduler },
                     {
                         view: "datatable",
                         id: "telegramSchedulerGrid",
@@ -145,6 +158,14 @@ class TelegramBotSettingsView {
                                 format: webix.Date.dateToStr("%H:%i:%s")
                             }
                         ],
+                        on: {
+                            onBeforeDelete: function () {
+                                if (this.getEditor && this.getEditor()) {
+                                    this.editCancel();
+                                }
+                                return true;
+                            }
+                        },
                         onClick: {
                             "remove-schedule-row": function (e, cell) {
                                 this.remove(cell.row);
@@ -164,6 +185,15 @@ class TelegramBotSettingsView {
                                         id: this._getNextScheduleId(),
                                         time: "09:00:00"
                                     });
+                                }
+                            },
+                            {
+                                view: "button",
+                                value: this.labels.remove,
+                                width: 180,
+                                click: () => {
+                                    const grid = $$("telegramSchedulerGrid");
+                                    this._removeSchedulerRow(grid, grid.getSelectedId());
                                 }
                             },
                             {}

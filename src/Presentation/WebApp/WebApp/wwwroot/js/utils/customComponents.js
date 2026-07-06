@@ -1,4 +1,3 @@
-// Создаем файл для/home/arseniiz/c_sharp_prj/FrontolConfigurator кастомных компонентов
 webix.protoUI({
     name: "formtable",
     $allowsClear: true,
