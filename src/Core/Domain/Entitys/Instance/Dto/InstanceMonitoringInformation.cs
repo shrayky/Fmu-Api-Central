@@ -1,5 +1,5 @@
 using System.Text.Json.Serialization;
-using Domain.Dto.FmuApiExchangeData.Request;
+using Domain.Dto.FmuApiExchangeData.DataPacket.FmuApiState;
 
 namespace Domain.Entitys.Instance.Dto;
 

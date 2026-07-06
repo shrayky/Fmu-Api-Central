@@ -1,5 +1,6 @@
 using CSharpFunctionalExtensions;
 using Domain.Dto.Responces;
+using Domain.Entitys.SoftwareUpdateFiles;
 
 namespace Domain.Entitys.Interfaces;
 

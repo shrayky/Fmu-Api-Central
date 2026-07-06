@@ -1,16 +1,14 @@
 using CouchDB.Driver.Extensions;
 using CSharpFunctionalExtensions;
 using Domain.Dto.Responces;
-using Domain.Entitys;
 using Domain.Entitys.Interfaces;
+using Domain.Entitys.SoftwareUpdateFiles;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace CouchDb.Repositories;
 
 public class SoftwareUpdateFilesRepository : BaseCouchDbRepository<SoftwareUpdateFilesEntity>, ISoftwareUpdatesRepository
 {
-    private const string DatabaseUnavailable = "БД недоступна сейчас";
-    
     public SoftwareUpdateFilesRepository(IServiceProvider services) : base(
         services.GetRequiredService<Context>().SoftwareUpdateFiles, services)
     {

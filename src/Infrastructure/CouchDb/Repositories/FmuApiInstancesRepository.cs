@@ -1,7 +1,7 @@
 using CouchDB.Driver.Extensions;
 using CSharpFunctionalExtensions;
 using Domain.Dto.Responces;
-using Domain.Entitys;
+using Domain.Entitys.Instance;
 using Domain.Entitys.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
 

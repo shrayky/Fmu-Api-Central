@@ -1,5 +1,6 @@
 using CSharpFunctionalExtensions;
 using Domain.Dto.Responces;
+using Domain.Entitys.Instance;
 
 namespace Domain.Entitys.Interfaces;
 

@@ -1,7 +1,8 @@
-using Domain.Dto.FmuApiExchangeData.Request;
+using Domain.Dto.FmuApiExchangeData;
+using Domain.Dto.FmuApiExchangeData.DataPacket.FmuApiState;
 using Domain.Entitys.Interfaces;
 
-namespace Domain.Entitys;
+namespace Domain.Entitys.Instance;
 
 public class InstanceEntity : IHaveStringId
 {

@@ -2,7 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Domain.Entitys.Interfaces;
 
-namespace Domain.Entitys;
+namespace Domain.Entitys.SoftwareUpdateFiles;
 
 public class SoftwareUpdateFilesEntity : IHaveStringId
 {
