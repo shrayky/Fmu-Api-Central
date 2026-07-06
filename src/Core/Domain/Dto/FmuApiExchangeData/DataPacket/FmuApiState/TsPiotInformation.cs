@@ -1,4 +1,4 @@
-﻿namespace Domain.Dto.FmuApiExchangeData.Request;
+﻿namespace Domain.Dto.FmuApiExchangeData.DataPacket.FmuApiState;
 
 public record TsPiotInformation
 {

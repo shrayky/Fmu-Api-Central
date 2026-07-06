@@ -1,3 +1,4 @@
+using Domain.Dto.FmuApiExchangeData.DataPacket.FmuApiState;
 using System.Text.Json.Serialization;
 
 namespace Domain.Dto.FmuApiExchangeData.Request;
@@ -18,4 +19,7 @@ public record Payload
 
     [JsonPropertyName("tsPiots")]
     public List<TsPiotInformation> TsPiotsInforamtion { get; init; } = [];
+
+    [JsonPropertyName("statistics")]
+    public List<CheckMarkStatisticInformation> CheckMarkStatisticInformation { get; init; } = [];
 }
