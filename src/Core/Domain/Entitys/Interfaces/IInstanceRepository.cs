@@ -1,6 +1,7 @@
 using CSharpFunctionalExtensions;
 using Domain.Dto.Responces;
 using Domain.Entitys.Instance;
+using Domain.Entitys.Instance.Dto;
 
 namespace Domain.Entitys.Interfaces;
 
@@ -8,7 +9,7 @@ public interface IInstanceRepository
 {
     Task<Result> Update(InstanceEntity instance);
     Task<Result<InstanceEntity>> ByToken(string token);
-    Task<Result<PaginatedResponse<InstanceEntity>>> List(int pageNumber, int pageSize, string filter = "");
+    Task<Result<PaginatedResponse<InstanceEntity>>> List(int pageNumber, int pageSize, InstanceListFilter filter);
     Task<Result<bool>> CreateInstance(InstanceEntity instance);
     Task<Result<bool>> DeleteInstance(InstanceEntity instance);
     Task<Result<List<InstanceEntity>>> OfflineInstances(DateTime toDate);

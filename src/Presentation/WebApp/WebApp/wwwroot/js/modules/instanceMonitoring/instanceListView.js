@@ -1,5 +1,6 @@
 import instanceMonitoringService from '../../services/instanceMonitoringService.js';
 import instanceElementView from './instanceElementView.js';
+import instanceFilterView from './instanceFilterView.js';
 import { pollingManager } from '../../services/PollingManager.js';
 
 const style = document.createElement('style');
@@ -43,6 +44,10 @@ class InstanceListView {
         this.pageSize = formSettings.pageSize;
         this.autoRefreshEnabled = formSettings.autoRefreshEnabled;
         this.refreshInterval = formSettings.refreshInterval;
+        this.pageNumber = 1;
+        this.filters = this._loadFilters();
+        this.lastTotalCount = 0;
+        this.filterOptions = this._createEmptyFilterOptions();
 
         this.LABELS = {
             formTitle: "Fmu-Api-Central: Мониторинг инстансов",
@@ -64,6 +69,13 @@ class InstanceListView {
             hostAddress: "Web-адрес Fmu-Api",
             printInstancesList: "Печать списка инстансов",
             exportToCsv: "Экспорт списка в csv",
+            filter: "Фильтр",
+            filterActive: "Фильтр *",
+            filterSummaryPrefix: "Установлены фильтры:",
+            filterName: "имя инстанса",
+            filterLocalModuleVersion: "версия ЛМ ЧЗ",
+            filterTsPiotVersion: "версия ТС ПИоТ",
+            filterTsPiotLicense: "лицензия ТС ПИоТ до",
             token: "Токен",
             tsPiotsModules: "Модули ТСПИоТ"
         };
@@ -71,6 +83,7 @@ class InstanceListView {
         this.NAMES = {
             toolbarLabel: "toolbarLabel",
             refreshBtn: "refreshBtn",
+            filterBtn: "filterBtn",
             addBtn: "addBtn",
             editBtn: "editBtn",
             deleteBtn: "deleteBtn",
@@ -78,6 +91,7 @@ class InstanceListView {
             nextButton: "nextButton",
             paginationInfo: "paginationInfo",
             dataTable: "dataTable",
+            filterSummaryLabel: "filterSummaryLabel",
             instanceName: "name",
             instanceVersion: "version",
             instanceUpdatedAt: "lastUpdated",
@@ -107,6 +121,18 @@ class InstanceListView {
         };
     }
 
+    _loadFilters() {
+        try {
+            return JSON.parse(localStorage.getItem('instanceMonitoring_filters') || '{}');
+        } catch {
+            return {};
+        }
+    }
+
+    _saveFilters() {
+        localStorage.setItem('instanceMonitoring_filters', JSON.stringify(this.filters));
+    }
+
     _saveSettings() {
         localStorage.setItem('instanceMonitoring_refreshInterval', this.refreshInterval.toString());
         localStorage.setItem('instanceMonitoring_autoRefresh', JSON.stringify(this.autoRefreshEnabled));
@@ -117,11 +143,6 @@ class InstanceListView {
 
         setTimeout(() => {
             this._loadData();
-
-            if (this.autoRefreshEnabled) {
-                this._startAutoRefresh();
-            }
-
         }, 10);
 
         return this;
@@ -136,6 +157,7 @@ class InstanceListView {
             elements: [
                 this._toolbar(),
                 this._dataTable(),
+                this._filterSummary(),
                 this._footer(),
             ]
         };
@@ -179,6 +201,13 @@ class InstanceListView {
                     value: this.LABELS.refresh,
                     width: 100,
                     click: () => this._loadData(),
+                },
+                {
+                    view: "button",
+                    id: this.NAMES.filterBtn,
+                    value: this._hasServerFilters() ? this.LABELS.filterActive : this.LABELS.filter,
+                    width: 100,
+                    click: () => this._showFilterDialog(),
                 },
                 {
                     view: "menu",
@@ -233,6 +262,18 @@ class InstanceListView {
                     click: () => this._goToPage(this.pageNumber + 1),
                 },
             ]
+        };
+    }
+
+    _filterSummary() {
+        return {
+            view: "label",
+            id: this.NAMES.filterSummaryLabel,
+            label: "",
+            hidden: true,
+            height: 28,
+            css: "instance-filter-summary",
+            align: "left"
         };
     }
 
@@ -301,7 +342,7 @@ class InstanceListView {
             columns: [
                 {
                     id: this.NAMES.instanceName,
-                    header: [this.LABELS.instanceName, { content: "textFilter" }],
+                    header: [this.LABELS.instanceName],
                     fillspace: true,
                     sort: "string",
                 },
@@ -318,7 +359,7 @@ class InstanceListView {
                 },
                 {
                     id: this.NAMES.instanceVersion,
-                    header: [this.LABELS.instanceVersion, { content: "selectFilter" }],
+                    header: [this.LABELS.instanceVersion],
                     width: 120
                 },
                 {
@@ -362,16 +403,7 @@ class InstanceListView {
                     this._editInstance(cell.row);
                 },
                 onAfterFilter: () => {
-                    const table = $$(this.NAMES.dataTable);
-                    const name = table.getFilter(this.NAMES.instanceName).value;
-                    const version = table.getFilter(this.NAMES.instanceVersion).value;
-
-                    const autoRefreshEnabled = (name === "" && version === "");
-                    
-                    this._toggleAutoRefresh(autoRefreshEnabled);
-
-                    const autoRefreshCheckbox = $$("autoRefreshCheckbox");
-                    autoRefreshCheckbox.setValue(autoRefreshEnabled);
+                    this._syncAutoRefreshState();
                 }
             }
         };
@@ -381,7 +413,7 @@ class InstanceListView {
         this._disableHotkeys();
 
         try {
-            const data = await instanceMonitoringService.list(this.pageNumber, this.pageSize);
+            const data = await instanceMonitoringService.list(this.pageNumber, this.pageSize, this.filters);
 
             if (!data.content) {
                 console.warn("no data");
@@ -396,6 +428,10 @@ class InstanceListView {
                 });
                 return;
             }
+
+            this.lastTotalCount = data.totalCount || data.content.length;
+            const resetFilterOptions = this.pageNumber === 1 && !this._hasServerFilters();
+            this._updateFilterOptionsFromPacket(data, resetFilterOptions);
 
             const table = $$(this.NAMES.dataTable);
             const selectedId = table.getSelectedId();
@@ -415,6 +451,10 @@ class InstanceListView {
             }
 
             this._updatePagination(data);
+            this.pageNumber = data.currentPage || this.pageNumber;
+            this._updateFilterButtonState();
+            this._updateFilterSummary();
+            this._syncAutoRefreshState();
         } catch (error) {
             console.error(this.LABELS.errorLoad, error);
             webix.message({
@@ -488,6 +528,218 @@ class InstanceListView {
         }
     }
 
+    _showFilterDialog() {
+        this._disableHotkeys();
+
+        instanceFilterView.showDialog(
+            this._getFilterOptionsDto(),
+            this.filters,
+            (filters) => {
+                this.filters = filters;
+                this._saveFilters();
+                this.pageNumber = 1;
+                this._updateFilterButtonState();
+                this._updateFilterSummary();
+                this._syncAutoRefreshState();
+                this._loadData();
+                this._enableHotkeys();
+            },
+            () => this._enableHotkeys()
+        );
+    }
+
+    _hasServerFilters() {
+        return !!(
+            this.filters?.name ||
+            this.filters?.localModuleVersion ||
+            this.filters?.tsPiotVersion ||
+            this.filters?.tsPiotLicense
+        );
+    }
+
+    _createEmptyFilterOptions() {
+        return {
+            localModuleVersions: new Set(),
+            tsPiotVersions: new Set()
+        };
+    }
+
+    _updateFilterOptionsFromPacket(data, reset = false) {
+        if (reset) {
+            this.filterOptions = this._createEmptyFilterOptions();
+        }
+
+        this._updateFilterOptionsFromContent(data.content);
+
+        const packetOptions = data.filterOptions ?? data.FilterOptions;
+        if (packetOptions) {
+            this._mergeFilterOptionsFromPacket(packetOptions);
+        }
+
+        this._ensureSelectedFiltersInOptions();
+    }
+
+    _updateFilterOptionsFromContent(content) {
+        if (!content || !this.filterOptions) {
+            return;
+        }
+
+        content.forEach((record) => {
+            (record.localModules || []).forEach((module) => {
+                const version = module.version ?? module.Version;
+                if (version) {
+                    this.filterOptions.localModuleVersions.add(String(version).trim());
+                }
+            });
+
+            const tsPiots = record.TsPiots || record.tsPiots || [];
+            tsPiots.forEach((item) => {
+                const version = item.version ?? item.Version;
+                if (version) {
+                    this.filterOptions.tsPiotVersions.add(String(version).trim());
+                }
+            });
+        });
+    }
+
+    _mergeFilterOptionsFromPacket(packetOptions) {
+        const addValues = (set, values) => {
+            (values || []).forEach((value) => {
+                if (value != null && String(value).trim() !== "") {
+                    set.add(String(value));
+                }
+            });
+        };
+
+        addValues(
+            this.filterOptions.localModuleVersions,
+            packetOptions.localModuleVersions ?? packetOptions.LocalModuleVersions
+        );
+        addValues(
+            this.filterOptions.tsPiotVersions,
+            packetOptions.tsPiotVersions ?? packetOptions.TsPiotVersions
+        );
+    }
+
+    _ensureSelectedFiltersInOptions() {
+        if (this.filters?.localModuleVersion) {
+            this.filterOptions.localModuleVersions.add(this.filters.localModuleVersion);
+        }
+
+        if (this.filters?.tsPiotVersion) {
+            this.filterOptions.tsPiotVersions.add(this.filters.tsPiotVersion);
+        }
+    }
+
+    _getFilterOptionsDto() {
+        const sortValues = (values) => [...values].sort((a, b) =>
+            a.localeCompare(b, "ru", { sensitivity: "base" })
+        );
+
+        return {
+            localModuleVersions: sortValues(this.filterOptions.localModuleVersions),
+            tsPiotVersions: sortValues(this.filterOptions.tsPiotVersions)
+        };
+    }
+
+    _updateFilterButtonState() {
+        const button = $$(this.NAMES.filterBtn);
+        if (!button) {
+            return;
+        }
+
+        button.setValue(this._hasServerFilters() ? this.LABELS.filterActive : this.LABELS.filter);
+    }
+
+    // Формирует текстовое описание активных серверных фильтров.
+    _buildFilterSummaryText() {
+        const parts = [];
+
+        if (this.filters?.name) {
+            parts.push(`${this.LABELS.filterName} = ${this.filters.name}`);
+        }
+
+        if (this.filters?.localModuleVersion) {
+            parts.push(`${this.LABELS.filterLocalModuleVersion} = ${this.filters.localModuleVersion}`);
+        }
+
+        if (this.filters?.tsPiotVersion) {
+            parts.push(`${this.LABELS.filterTsPiotVersion} = ${this.filters.tsPiotVersion}`);
+        }
+
+        if (this.filters?.tsPiotLicense) {
+            parts.push(`${this.LABELS.filterTsPiotLicense} = ${this._formatFilterDate(this.filters.tsPiotLicense)}`);
+        }
+
+        if (parts.length === 0) {
+            return "";
+        }
+
+        return `${this.LABELS.filterSummaryPrefix} ${parts.join(", ")}`;
+    }
+
+    // Форматирует дату фильтра в виде дд.мм.гггг.
+    _formatFilterDate(value) {
+        const isoMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value).trim());
+        if (isoMatch) {
+            return `${isoMatch[3]}.${isoMatch[2]}.${isoMatch[1]}`;
+        }
+
+        const date = new Date(value);
+        if (isNaN(date.getTime())) {
+            return String(value);
+        }
+
+        const day = date.getDate().toString().padStart(2, "0");
+        const month = (date.getMonth() + 1).toString().padStart(2, "0");
+        const year = date.getFullYear().toString();
+
+        return `${day}.${month}.${year}`;
+    }
+
+    // Обновляет отображение строки с активными фильтрами под таблицей.
+    _updateFilterSummary() {
+        const label = $$(this.NAMES.filterSummaryLabel);
+        if (!label) {
+            return;
+        }
+
+        const summaryText = this._buildFilterSummaryText();
+        if (!summaryText) {
+            label.hide();
+            return;
+        }
+
+        label.setValue(summaryText);
+        label.show();
+    }
+
+    _syncAutoRefreshState() {
+        const table = $$(this.NAMES.dataTable);
+        const name = table?.getFilter(this.NAMES.instanceName)?.value || "";
+        const version = table?.getFilter(this.NAMES.instanceVersion)?.value || "";
+        const filtersClear = name === "" && version === "" && !this._hasServerFilters();
+        const shouldRunPolling = filtersClear && this.autoRefreshEnabled;
+
+        this._toggleAutoRefresh(shouldRunPolling);
+
+        const autoRefreshCheckbox = $$("autoRefreshCheckbox");
+        if (autoRefreshCheckbox) {
+            autoRefreshCheckbox.setValue(shouldRunPolling);
+        }
+    }
+
+    _isPollingActive() {
+        return pollingManager.getInfo("instanceMonitoring")?.isRunning ?? false;
+    }
+
+    _goToPage(page) {
+        if (page >= 1) {
+            this.pageNumber = page;
+            this._loadData();
+        }
+    }
+
     _showAddDialog() {
 
         this._disableHotkeys();
@@ -551,9 +803,43 @@ class InstanceListView {
             const name = item.name == null || String(item.name).trim() === "" ? "нет данных" : item.name;
             const address = item.address == null || String(item.address).trim() === "" ? "нет данных" : item.address;
             const version = item.version == null || String(item.version).trim() === "" ? "нет данных" : item.version;
+            const licenseTill = item.licenseActiveTill ?? item.LicenseActiveTill;
+            const licenseText = this._formatLicenseActiveTill(licenseTill);
 
-            return `<div class="instance-module-item"><strong>${name}</strong><br>${address} | версия: ${version}</div>`;
+            return `<div class="instance-module-item"><strong>${name}</strong><br>${address} | версия: ${version}<br>лицензия до: ${licenseText}</div>`;
         }).join("");
+    }
+
+    _formatLicenseActiveTill(licenseActiveTill) {
+        if (!licenseActiveTill) {
+            return "нет данных";
+        }
+
+        const date = new Date(licenseActiveTill);
+        if (isNaN(date.getTime())) {
+            return "нет данных";
+        }
+
+        const day = date.getDate().toString().padStart(2, "0");
+        const month = (date.getMonth() + 1).toString().padStart(2, "0");
+        const year = date.getFullYear().toString().slice(-2);
+        const formattedDate = `${day}.${month}.${year}`;
+
+        const now = new Date();
+        now.setHours(0, 0, 0, 0);
+        const licenseDate = new Date(date);
+        licenseDate.setHours(0, 0, 0, 0);
+
+        if (licenseDate < now) {
+            return `<span style="color: red; font-weight: bold;">${formattedDate}</span>`;
+        }
+
+        const diffInDays = (licenseDate - now) / (1000 * 60 * 60 * 24);
+        if (diffInDays <= 30) {
+            return `<span style="color: #ffc107; font-weight: bold;">${formattedDate}</span>`;
+        }
+
+        return formattedDate;
     }
 
     _scheduleRowHeightAdjust() {
@@ -580,7 +866,7 @@ class InstanceListView {
         const localCount = record.localModules?.length ?? 0;
         const tsCount = record.TsPiots?.length ?? 0;
         const blocks = Math.max(localCount || 1, tsCount || 1);
-        const blockHeight = 53;
+        const blockHeight = 68;
         const cellPadding = 16;
 
         return Math.max(minHeight, blocks * blockHeight + cellPadding);
@@ -646,6 +932,10 @@ class InstanceListView {
     }
 
     _toggleAutoRefresh(enabled) {
+        if (enabled === this._isPollingActive()) {
+            return;
+        }
+
         if (enabled) {
             this._startAutoRefresh();
         } else {
@@ -687,19 +977,30 @@ class InstanceListView {
     }
 
     _startAutoRefresh() {
+        const intervalMs = this.refreshInterval * 1000;
+        const info = pollingManager.getInfo("instanceMonitoring");
+
+        if (info?.isRunning && info.interval === intervalMs) {
+            return;
+        }
+
         pollingManager.register(
-            'instanceMonitoring',
+            "instanceMonitoring",
             () => this._loadData(),
-            this.refreshInterval * 1000,
+            intervalMs,
             {
                 autoStart: true,
-                initialDelay: this.refreshInterval
+                initialDelay: intervalMs
             }
         );
     }
 
     _stopAutoRefresh() {
-        pollingManager.unregister('instanceMonitoring');
+        if (!pollingManager.getInfo("instanceMonitoring")) {
+            return;
+        }
+
+        pollingManager.unregister("instanceMonitoring");
     }
 
     _disableHotkeys() {

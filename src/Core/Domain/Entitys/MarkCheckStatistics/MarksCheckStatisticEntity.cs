@@ -23,7 +23,6 @@ public class MarkCheckStatisticsEntity : IHaveStringId
     [JsonPropertyName("successfulOfflineChecks")]
     public int SuccessfulOfflineChecks { get; init; }
 
-
     [JsonPropertyName("successCheckRatePercentage")]
     public double SuccessRatePercentage => Total > 0
         ? Math.Round((double)(SuccessfulOnlineChecks + SuccessfulOfflineChecks) / Total * 100, 2)

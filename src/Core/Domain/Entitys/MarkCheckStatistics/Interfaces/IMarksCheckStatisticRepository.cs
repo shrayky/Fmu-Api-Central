@@ -1,7 +1,11 @@
-﻿namespace Domain.Entitys.MarksCheckStatistic.Interfaces;
+﻿using CSharpFunctionalExtensions;
+using Domain.Entitys.MarksCheckStatistic;
+
+namespace Domain.Entitys.MarkCheckStatistics.Interfaces;
 
 public interface IMarksCheckStatisticRepository
 {
-    Task<bool> CreateNew(MarkCheckStatisticsEntity instanceInformation);
-    Task<bool> Delete(string entityId);
+    Task<Result> CreateNew(MarkCheckStatisticsEntity statisticsEntity);
+    Task<Result> AddRange(List<MarkCheckStatisticsEntity> markCheckStatisticsEntities);
+    Task<Result> Delete(string entityId);
 }

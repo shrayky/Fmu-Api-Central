@@ -6,8 +6,29 @@ class InstanceMonitoringService {
         this.authService = AuthService;
     }
 
-    async list(pageNumber = 1, pageSize = 50) {
-        const endpoint = `${this.apiEndpoint}?page=${pageNumber}&pageSize=${pageSize}`;
+    async list(pageNumber = 1, pageSize = 50, filters = {}) {
+        const params = new URLSearchParams({
+            page: pageNumber,
+            pageSize: pageSize
+        });
+
+        if (filters.name) {
+            params.append("name", filters.name);
+        }
+
+        if (filters.localModuleVersion) {
+            params.append("localModuleVersion", filters.localModuleVersion);
+        }
+
+        if (filters.tsPiotVersion) {
+            params.append("tsPiotVersion", filters.tsPiotVersion);
+        }
+
+        if (filters.tsPiotLicense) {
+            params.append("tsPiotLicense", filters.tsPiotLicense);
+        }
+
+        const endpoint = `${this.apiEndpoint}?${params.toString()}`;
         
         const data = await this.authService.makeAuthenticatedRequest(endpoint);
 

@@ -1,19 +1,22 @@
-using System.Text.Json;
 using Application.SoftwareUpdates.Interfaces;
 using CSharpFunctionalExtensions;
 using Domain.Attributes;
 using Domain.Dto.FmuApiExchangeData.Answer;
 using Domain.Dto.FmuApiExchangeData.DataPacket;
+using Domain.Dto.FmuApiExchangeData.DataPacket.FmuApiState;
 using Domain.Dto.FmuApiExchangeData.Request;
 using Domain.Dto.Responces;
 using Domain.Entitys.Instance;
 using Domain.Entitys.Instance.Dto;
 using Domain.Entitys.Instance.Interfaces;
 using Domain.Entitys.Interfaces;
+using Domain.Entitys.MarkCheckStatistics.Interfaces;
+using Domain.Entitys.MarksCheckStatistic;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Shared.Json;
 using Shared.Strings;
+using System.Text.Json;
 
 namespace Application.Instance.Services;
 
@@ -23,15 +26,19 @@ public class InstanceManagerService : IInstanceManagerService
     private readonly ILogger<IInstanceManagerService> _logger;
     private readonly IInstanceRepository _instanceRepository;
     private readonly Lazy<ISoftwareUpdatesManagerService> _softwareVersionsManager;
+    private readonly IMarksCheckStatisticRepository _marksCheckStatisticRepository;
 
     public InstanceManagerService(ILogger<IInstanceManagerService> logger, IInstanceRepository instanceRepository,
-        IServiceProvider serviceProvider)
+        IServiceProvider serviceProvider, IMarksCheckStatisticRepository marksCheckStatisticRepository)
     {
         _logger = logger;
         _instanceRepository = instanceRepository;
+        
         _softwareVersionsManager =
             new Lazy<ISoftwareUpdatesManagerService>(serviceProvider
                 .GetRequiredService<ISoftwareUpdatesManagerService>);
+
+        _marksCheckStatisticRepository = marksCheckStatisticRepository;
     }
 
     public async Task<Result<FmuApiCentralResponse>> UpdateFmuApiInstanceInformation(string instanceData)
@@ -83,6 +90,11 @@ public class InstanceManagerService : IInstanceManagerService
         instanceEntity.TsPiots = fmuApiState.TsPiotsInforamtion;
         instanceEntity.NodeInformation = fmuApiState.NodeInformation;
 
+        var loadStatisticResult = await UpdateNodeStatistics(instanceEntity, fmuApiState.CheckMarkStatisticInformation);
+
+        if (loadStatisticResult.IsFailure)
+            return Result.Failure<FmuApiCentralResponse>(loadStatisticResult.Error);
+
         if (!instanceEntity.SettingsModified)
             instanceEntity.Settings = fmuApiState.FmuApiSetting;
 
@@ -106,8 +118,32 @@ public class InstanceManagerService : IInstanceManagerService
             : Result.Failure<FmuApiCentralResponse>(updateResult.Error);
     }
 
-    public async Task<PaginatedResponse<InstanceMonitoringInformation>> InstancesList(int pageNumber, int pageSize,
-        string filter = "")
+    private async Task<Result> UpdateNodeStatistics(InstanceEntity instanceEntity, List<CheckMarkStatisticInformation> checkMarkStatistics)
+    {
+        var statisticsEntity = new List<MarkCheckStatisticsEntity>();
+
+        foreach (var statistic in checkMarkStatistics)
+        {
+            MarkCheckStatisticsEntity checkStatisticsEntity = new()
+            {
+                NodeId = instanceEntity.Id,
+                Date = statistic.Date,
+                Total = statistic.MarkCheckStatistics.Total,
+                SuccessfulOnlineChecks = statistic.MarkCheckStatistics.SuccessfulOfflineChecks,
+                SuccessfulOfflineChecks = statistic.MarkCheckStatistics.SuccessfulOfflineChecks,
+                Id = $"{instanceEntity.Id}_{statistic.Date}",
+            };
+
+            statisticsEntity.Add(checkStatisticsEntity);
+        }
+
+        return await _marksCheckStatisticRepository.AddRange(statisticsEntity);
+    }
+
+    public async Task<PaginatedResponse<InstanceMonitoringInformation>> InstancesList(
+        int pageNumber,
+        int pageSize,
+        InstanceListFilter filter)
     {
         var answer = await _instanceRepository.List(pageNumber, pageSize, filter);
 
@@ -116,7 +152,7 @@ public class InstanceManagerService : IInstanceManagerService
             return new PaginatedResponse<InstanceMonitoringInformation>()
             {
                 ListEnabled = false,
-                Description = answer.Value.Description,
+                Description = answer.Error,
                 Content = [],
                 CurrentPage = 1,
                 PageSize = pageSize,

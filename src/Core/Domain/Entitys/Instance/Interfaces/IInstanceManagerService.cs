@@ -8,7 +8,7 @@ namespace Domain.Entitys.Instance.Interfaces;
 public interface IInstanceManagerService
 {
     Task<Result<FmuApiCentralResponse>> UpdateFmuApiInstanceInformation(string instanceData);
-    Task<PaginatedResponse<InstanceMonitoringInformation>> InstancesList(int pageNumber, int pageSize, string filter = "");
+    Task<PaginatedResponse<InstanceMonitoringInformation>> InstancesList(int pageNumber, int pageSize, InstanceListFilter filter);
     Task<bool> CreateNew(InstanceMonitoringInformation instanceInformation);
     Task<bool> Delete(string instance);
     Task<string> InstanceSettings(string token);

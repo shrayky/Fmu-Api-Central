@@ -1,7 +1,11 @@
+using CouchDb.Dto;
 using CouchDB.Driver.Extensions;
+using CouchDB.Driver.Query.Extensions;
 using CSharpFunctionalExtensions;
+using System.Text.RegularExpressions;
 using Domain.Dto.Responces;
 using Domain.Entitys.Instance;
+using Domain.Entitys.Instance.Dto;
 using Domain.Entitys.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -37,7 +41,7 @@ public class FmuApiInstancesRepository : BaseCouchDbRepository<InstanceEntity>, 
         return Result.Success(entity);
     }
 
-    public async Task<Result<PaginatedResponse<InstanceEntity>>> List(int pageNumber, int pageSize, string filter = "")
+    public async Task<Result<PaginatedResponse<InstanceEntity>>> List(int pageNumber, int pageSize, InstanceListFilter filter)
     {
         if (!_appState.DbState())
         {
@@ -56,23 +60,24 @@ public class FmuApiInstancesRepository : BaseCouchDbRepository<InstanceEntity>, 
         
         try
         {
-            var query = _database.AsQueryable();
-            
-            if (!string.IsNullOrEmpty(filter))
-                query = query.Where(p => p.Data.Name.Contains(filter, StringComparison.OrdinalIgnoreCase));
-            
+            var query = ApplyListFilter(_database.AsQueryable(), filter);
+
             var entities = await query
                 .OrderByDescending(p => p.Data.UpdatedAt)
                 .Skip((pageNumber - 1) * pageSize)
                 .Take(pageSize)
                 .ToListAsync();
+
+            var totalCount = HasActiveFilter(filter)
+                ? await GetFilteredCountAsync(query)
+                : await RecordCount();
             
             var answer = new PaginatedResponse<InstanceEntity>()
             {
                 Content = entities.Select(r => r.Data),
                 CurrentPage = pageNumber,
                 PageSize = pageSize,
-                TotalCount = string.IsNullOrEmpty(filter) ? await RecordCount() : query.Count(), 
+                TotalCount = totalCount,
                 SearchTerm = filter
             };
             
@@ -151,5 +156,49 @@ public class FmuApiInstancesRepository : BaseCouchDbRepository<InstanceEntity>, 
         {
             return Result.Failure<List<InstanceEntity>>(ex.Message);
         }
+    }
+
+    private static bool HasActiveFilter(InstanceListFilter filter) =>
+        !string.IsNullOrEmpty(filter.Name) ||
+        !string.IsNullOrEmpty(filter.LocalModuleVersion) ||
+        !string.IsNullOrEmpty(filter.TsPiotVersion) ||
+        filter.TsPiotLicense.HasValue;
+
+    private static IQueryable<UniversalDocument<InstanceEntity>> ApplyListFilter(
+        IQueryable<UniversalDocument<InstanceEntity>> query,
+        InstanceListFilter filter)
+    {
+        if (!string.IsNullOrEmpty(filter.Name))
+        {
+            var namePattern = $"(?i).*{Regex.Escape(filter.Name)}.*";
+            query = query.Where(p => p.Data.Name.IsMatch(namePattern));
+        }
+
+        if (!string.IsNullOrEmpty(filter.LocalModuleVersion))
+            query = query.Where(p => p.Data.LocalModules.Any(lm => lm.Version == filter.LocalModuleVersion));
+
+        if (!string.IsNullOrEmpty(filter.TsPiotVersion))
+            query = query.Where(p => p.Data.TsPiots.Any(t => t.Version == filter.TsPiotVersion));
+
+        if (filter.TsPiotLicense.HasValue)
+        {
+            var licenseTimestampLimit = GetLicenseTimestampLimit(filter.TsPiotLicense.Value);
+            query = query.Where(p => p.Data.TsPiots.Any(t =>
+                t.LicenseActiveTillTimeStamp != null &&
+                t.LicenseActiveTillTimeStamp <= licenseTimestampLimit));
+        }
+
+        return query;
+    }
+
+    private static int GetLicenseTimestampLimit(DateTime licenseDate) =>
+        (int)new DateTimeOffset(licenseDate.Date.AddDays(1).AddSeconds(-1)).ToUnixTimeSeconds();
+
+    private async Task<int> GetFilteredCountAsync(IQueryable<UniversalDocument<InstanceEntity>> query)
+    {
+        var queryLimit = (await _parameters.Current()).DatabaseConnection.QueryLimit;
+        var filtered = await query.Take(queryLimit).ToListAsync();
+
+        return filtered.Count;
     }
 }

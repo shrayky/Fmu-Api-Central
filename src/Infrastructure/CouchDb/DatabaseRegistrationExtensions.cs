@@ -8,6 +8,7 @@ using System.Net.Http.Headers;
 using System.Reflection;
 using Domain.Entitys.Interfaces;
 using Domain.Entitys.Users.Interfaces;
+using Domain.Entitys.MarkCheckStatistics.Interfaces;
 
 namespace CouchDb
 {
@@ -40,6 +41,7 @@ namespace CouchDb
             services.AddScoped<FmuApiInstancesRepository>();
             services.AddScoped<IInstanceRepository, FmuApiInstancesRepository>();
             services.AddScoped<ISoftwareUpdatesRepository, SoftwareUpdateFilesRepository>();
+            services.AddScoped<IMarksCheckStatisticRepository, MarkCheckStatisticsRepository>();
                 
             services.AddHttpClient("CouchDbState", client =>
             {

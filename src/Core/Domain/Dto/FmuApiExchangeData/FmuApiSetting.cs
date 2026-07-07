@@ -129,11 +129,12 @@ public record SaleControl
     [JsonPropertyName("sendLocalModuleInformationalInRequestId")]
     public bool SendLocalModuleInformationalInRequestId { get; init; }
 
-    [JsonPropertyName("rejectSalesWithoutCheckInformationFrom")]
-    public DateTime RejectSalesWithoutCheckInformationFrom { get; init; }
-
     [JsonPropertyName("resetSoldStatusForReturn")]
     public bool ResetSoldStatusForReturn { get; init; }
+
+    [Obsolete]
+    [JsonPropertyName("rejectSalesWithoutCheckInformationFrom")]
+    public DateTime? RejectSalesWithoutCheckInformationFrom { get; init; }
 }
 
 public record StringValue

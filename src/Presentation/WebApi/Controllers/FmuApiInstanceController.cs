@@ -45,9 +45,15 @@ public class FmuApiInstanceController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> List([FromQuery] int page = 1, [FromQuery] int pageSize = 50)
+    public async Task<IActionResult> List(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 50,
+        [FromQuery, Bind(Prefix = "")] InstanceListFilter? filter = null)
     {
-        var result = await _managerService.InstancesList(page, pageSize);
+        if (filter == null)
+            filter = new InstanceListFilter();
+
+        var result = await _managerService.InstancesList(page, pageSize, filter);
 
         return Ok(result);
     }
