@@ -1,5 +1,5 @@
-﻿using CouchDb.Dto;
-using CouchDb.Repositories;
+﻿using CouchDb.DatabaseScheme;
+using CouchDb.Dto;
 using CouchDB.Driver;
 using CouchDB.Driver.Options;
 using Domain.Entitys;
@@ -26,10 +26,10 @@ namespace CouchDb
 
         protected override void OnDatabaseCreating(CouchDatabaseBuilder databaseBuilder)
         {
-            databaseBuilder.Document<UniversalDocument<UserEntity>>().ToDatabase(DatabaseSchema.Users);
-            databaseBuilder.Document<UniversalDocument<InstanceEntity>>().ToDatabase(DatabaseSchema.Instance);
-            databaseBuilder.Document<UniversalDocument<SoftwareUpdateFilesEntity>>().ToDatabase(DatabaseSchema.SoftwareUpdateFiles);
-            databaseBuilder.Document<UniversalDocument<MarkCheckStatisticsEntity>>().ToDatabase(DatabaseSchema.MarkCheckingStatistic);
+            databaseBuilder.Document<UniversalDocument<UserEntity>>().ToDatabase(DatabaseNames.Users);
+            databaseBuilder.Document<UniversalDocument<InstanceEntity>>().ToDatabase(DatabaseNames.Instance);
+            databaseBuilder.Document<UniversalDocument<SoftwareUpdateFilesEntity>>().ToDatabase(DatabaseNames.SoftwareUpdateFiles);
+            databaseBuilder.Document<UniversalDocument<MarkCheckStatisticsEntity>>().ToDatabase(DatabaseNames.MarkCheckingStatistic);
         }
 
     }

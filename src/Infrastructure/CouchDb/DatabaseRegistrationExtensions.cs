@@ -56,6 +56,19 @@ namespace CouchDb
             })
             .SetHandlerLifetime(TimeSpan.FromMinutes(5));
 
+            services.AddHttpClient("CouchDbCompact", client =>
+            {
+                client.Timeout = TimeSpan.FromMinutes(10);
+                client.DefaultRequestHeaders.Accept.Add(
+                    new MediaTypeWithQualityHeaderValue("application/json"));
+            })
+            .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+            {
+                ServerCertificateCustomValidationCallback =
+                    HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+             })
+            .SetHandlerLifetime(TimeSpan.FromMinutes(10));
+
             if (settings.Enable)
             {
                 services.AddHostedService<DatabaseStatusCheckWorker>();

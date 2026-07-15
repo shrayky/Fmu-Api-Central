@@ -1,4 +1,6 @@
-﻿using Domain.AppState.Interfaces;
+﻿using CouchDb.DatabaseScheme;
+using CouchDb.Interfaces;
+using Domain.AppState.Interfaces;
 using Domain.Configuration.Interfaces;
 using Domain.Configuration.Options;
 using Domain.Database.Interfaces;
@@ -7,28 +9,26 @@ using Microsoft.Extensions.Logging;
 
 namespace CouchDb.Workers
 {
-    public class DatabaseStatusCheckWorker : BackgroundService
+    public class DatabaseStatusCheckWorker(
+        ILogger<DatabaseStatusCheckWorker> logger,
+        IParametersService parameters,
+        IApplicationState applicationState,
+        IDbStatusService databaseStatusService,
+        IIndexingService indexingService) : BackgroundService
     {
-        private readonly ILogger<DatabaseStatusCheckWorker> _logger;
-        private readonly IParametersService _parametersService;
-        private readonly IApplicationState _applicationState;
-        private readonly IDbStatusService _databaseStatusService;
-        private readonly IIndexingService _indexingService;
+        private readonly ILogger<DatabaseStatusCheckWorker> _logger = logger;
+        private readonly IParametersService _parametersService = parameters;
+        private readonly IApplicationState _applicationState = applicationState;
+        private readonly IDbStatusService _databaseStatusService = databaseStatusService;
+        private readonly IIndexingService _indexingService = indexingService;
 
         private readonly TimeSpan _checkInterval = TimeSpan.FromSeconds(10);
-
-        public DatabaseStatusCheckWorker(ILogger<DatabaseStatusCheckWorker> logger, IParametersService parameters, IApplicationState applicationState, IDbStatusService databaseStatusService, IIndexingService indexingService)
-        {
-            _logger = logger;
-            _parametersService = parameters;
-            _applicationState = applicationState;
-            _databaseStatusService = databaseStatusService;
-            _indexingService = indexingService;
-        }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             var needToEnsureDatabaseExist = true;
+            var needToEnsureDatabaseIndex = true;
+
             var needToEnsureDefaultUser = true;
 
             while (!stoppingToken.IsCancellationRequested)
@@ -40,11 +40,17 @@ namespace CouchDb.Workers
 
                 await CheckCouchOnlineState(databaseConfig, stoppingToken);
 
-                if (needToEnsureDatabaseExist)
-                    needToEnsureDatabaseExist = !await EnsureDatabasesExists(databaseConfig, stoppingToken);
+                if (_applicationState.DbState())
+                {
+                    if (needToEnsureDatabaseExist)
+                        needToEnsureDatabaseExist = !await EnsureDatabasesExists(databaseConfig, stoppingToken);
 
-                if (needToEnsureDefaultUser)
-                    needToEnsureDefaultUser = !await EnsureDefaultUserExists(stoppingToken);
+                    if (needToEnsureDatabaseIndex)
+                        needToEnsureDatabaseIndex = !await EnsureDatabaseIndexes(databaseConfig, stoppingToken);
+
+                    if (needToEnsureDefaultUser)
+                        needToEnsureDefaultUser = !await EnsureDefaultUserExists(stoppingToken);
+                }
             }
         }
 
@@ -73,19 +79,32 @@ namespace CouchDb.Workers
 
         private async Task<bool> EnsureDatabasesExists(DatabaseConnection databaseConfig, CancellationToken stoppingToken)
         {
-            var dbOnline = _applicationState.DbState();
-
-            if (!dbOnline)
-                return false;
-
-            var result = await _databaseStatusService.EnsureDatabasesExists(databaseConfig, DatabaseSchema.All(), stoppingToken);
+            var result = await _databaseStatusService.EnsureDatabasesExists(databaseConfig, DatabaseNames.All(), stoppingToken);
             
             if (!result)
                 return false;
-            
-            var indexingResult = await _indexingService.EnsureIndexesExist(databaseConfig, stoppingToken);
-            
-            return indexingResult;
+
+            return true;
+        }
+
+        private async Task<bool> EnsureDatabaseIndexes(DatabaseConnection databaseConfig, CancellationToken stoppingToken)
+        {
+            _logger.LogInformation("Проверка наличия индексов для баз данных CouchDB.");
+
+            var indexEnsureResult = await _indexingService.EnsureIndexesExist(databaseConfig, stoppingToken);
+
+            if (indexEnsureResult.IsSuccess)
+            {
+                _logger.LogInformation("Индексы для баз данных CouchDB созданы успешно");
+            }
+            else
+            {
+                _logger.LogError("Ошибка проверки индексов базы данных CouchDb: {err}", indexEnsureResult.Error);
+
+                return false;
+            }
+
+            return true;
         }
 
         private async Task<bool> EnsureDefaultUserExists(CancellationToken cancellationToken)

@@ -1,4 +1,5 @@
-﻿using CouchDB.Driver.Extensions;
+﻿using CouchDb.DatabaseScheme;
+using CouchDB.Driver.Extensions;
 using CSharpFunctionalExtensions;
 using Domain.Entitys;
 using Domain.Entitys.Users.Interfaces;
@@ -13,7 +14,7 @@ namespace CouchDb.Repositories
         {
         }
 
-        public string DatabaseName() => DatabaseSchema.Users;
+        public string DatabaseName() => DatabaseNames.Users;
 
         public async Task<Result<UserEntity>> ByName(string name)
         {
