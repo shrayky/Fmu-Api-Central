@@ -4,6 +4,10 @@ export const MENU_ITEMS = {
         id: "instanceMonitoring",
         value: "Мониторинг fmu-api"
     },
+    MARK_CHECK_STATISTICS: {
+        id: "markCheckStatistics",
+        value: "Статистика проверок"
+    },
     SOFTWARE_UPDATES: {
         id: "softwareUpdates",
         value: "Обновления fmu-api"

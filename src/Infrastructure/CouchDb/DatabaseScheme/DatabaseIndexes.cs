@@ -9,7 +9,8 @@ public class DatabaseIndexes
         return new Dictionary<string, CouchDbIndexDefinition[]>
             {
                 { DatabaseNames.Instance, InstanceIndexSchema() },
-                { DatabaseNames.SoftwareUpdateFiles, SoftwareUpdateFilesSchema() }
+                { DatabaseNames.SoftwareUpdateFiles, SoftwareUpdateFilesSchema() },
+                { DatabaseNames.MarkCheckingStatistic, MarkCheckingStatisticIndexSchema() }
             };
     }
 
@@ -26,5 +27,10 @@ public class DatabaseIndexes
             new("max-update-by-version-assemly-idx", new(["data.os", "data.architecture", "data.version", "data.assembly"])),
 
             new("max-update-by-version-idx", new(["data.os", "data.architecture", "data.version"]))
+        ];
+
+    private static CouchDbIndexDefinition[] MarkCheckingStatisticIndexSchema() =>
+        [
+            new("date-idx", new(["data.date"])),
         ];
 }

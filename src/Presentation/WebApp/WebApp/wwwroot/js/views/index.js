@@ -13,6 +13,7 @@ import createServerSettingsView from '../modules/serverSettingsView.js';
 import createLogsView from '../modules/logsView.js';
 import createSoftwareUpdatesListView from '../modules/softwareUpdates/softwareUpdatesListView.js';
 import createInstanceListView from '../modules/instanceMonitoring/instanceListView.js';
+import createMarkCheckStatisticsListView from '../modules/markCheckStatistics/markCheckStatisticsListView.js';
 import createTelegramBotSettingsView from '../modules/telegramBotSettingsView.js';
 
 registerWebixEditors();
@@ -31,6 +32,7 @@ class App {
         this.router.register("logs", async (id) => await createLogsView(id));
         this.router.register("softwareUpdates", async (id) => await createSoftwareUpdatesListView(id));
         this.router.register("instanceMonitoring", async (id) => await createInstanceListView(id));
+        this.router.register("markCheckStatistics", async (id) => await createMarkCheckStatisticsListView(id));
         this.router.register("telegramBotSettings", async (id) => await createTelegramBotSettingsView(id));
     }
 
