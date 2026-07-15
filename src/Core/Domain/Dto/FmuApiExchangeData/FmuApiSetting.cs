@@ -92,6 +92,9 @@ public record TimeOutConfiguration
     
     [JsonPropertyName("internetConnectionCheck")]
     public int InternetConnectionCheck { get; init; } = 15;
+
+    [JsonPropertyName("syncWithTsPiot")]
+    public bool SyncWithTsPiot { get; init; } = true;
 }
 
 public record Logging
@@ -131,6 +134,9 @@ public record SaleControl
 
     [JsonPropertyName("resetSoldStatusForReturn")]
     public bool ResetSoldStatusForReturn { get; init; }
+
+    [JsonPropertyName("useBeerTaps")]
+    public bool UseBeUseBeerTaps { get; init; }
 
     [Obsolete]
     [JsonPropertyName("rejectSalesWithoutCheckInformationFrom")]
