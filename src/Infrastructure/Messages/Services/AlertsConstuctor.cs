@@ -32,18 +32,20 @@ public class AlertsConstuctor : IAlertMessageConstructor
             _logger.LogError("Сообщения в бот: ошибка получения узлов fmu-api: {ex}", nodesResult.Error);
 
         var nodes = nodesResult.Value;
+        var offlineThreshold = DateTime.Now.AddHours(bot.OfflineNodeAlertInterval * -1);
+        var offlineNodes = nodes.Where(p => p.LastUpdated < offlineThreshold).ToList();
+        var onlineNodes = nodes.Where(p => p.LastUpdated >= offlineThreshold).ToList();
 
         List<string> messages = [];
 
-        var offlineNodes = CheckOnlineNodes(nodes, bot);
-        var lmWithBadStatus = CheckLmStatus(nodes);
-        var lmBadVersions = CheckLmVersions(nodes, bot);
-        var lmBadSyncDate = CheckLmSyncDate(nodes, bot);
-
-        messages.AddRange(offlineNodes);
-        messages.AddRange(lmWithBadStatus);
-        messages.AddRange(lmBadVersions);
-        messages.AddRange(lmBadSyncDate);
+        // Для offline-узлов отправляем только уведомление о недоступности
+        messages.AddRange(CheckOnlineNodes(offlineNodes));
+        messages.AddRange(CheckLmStatus(onlineNodes));
+        messages.AddRange(CheckLmVersions(onlineNodes, bot));
+        messages.AddRange(CheckLmSyncDate(onlineNodes, bot));
+        messages.AddRange(CheckTsPiotStatus(onlineNodes, bot));
+        messages.AddRange(CheckTsPiotLicense(onlineNodes, bot));
+        messages.AddRange(CheckTsPiotVersions(onlineNodes, bot));
 
         foreach (var message in messages)
         {
@@ -57,12 +59,12 @@ public class AlertsConstuctor : IAlertMessageConstructor
         return true;
     }
 
-    private static List<string> CheckOnlineNodes(List<InstanceMonitoringInformation> nodes, TelegramBotSetting bot)
+    /// <summary>
+    /// Формирует сообщения о недоступных узлах.
+    /// </summary>
+    private static List<string> CheckOnlineNodes(List<InstanceMonitoringInformation> offlineNodes)
     {
-        var toDate = DateTime.Now.AddHours(bot.OfflineNodeAlertInterval * -1);
         List<string> messages = [];
-
-        var offlineNodes = nodes.Where(p => p.LastUpdated < toDate);
 
         foreach (var node in offlineNodes)
         {
@@ -73,6 +75,9 @@ public class AlertsConstuctor : IAlertMessageConstructor
         return messages;
     }
 
+    /// <summary>
+    /// Формирует сообщения о локальных модулях в нерабочем статусе.
+    /// </summary>
     private static List<string> CheckLmStatus(List<InstanceMonitoringInformation> nodes)
     {
         List<string> messages = [];
@@ -97,9 +102,17 @@ public class AlertsConstuctor : IAlertMessageConstructor
 
         return messages;
     }
-    private List<string> CheckLmVersions(List<InstanceMonitoringInformation> nodes, TelegramBotSetting bot)
+
+    /// <summary>
+    /// Формирует сообщения об устаревших версиях локальных модулей.
+    /// </summary>
+    private static List<string> CheckLmVersions(List<InstanceMonitoringInformation> nodes, TelegramBotSetting bot)
     {
         List<string> messages = [];
+
+        var versionAlert = bot.LocalModuleAlerts.VersionAlert;
+        if (string.IsNullOrEmpty(versionAlert))
+            return messages;
 
         var lmVersion = nodes
             .SelectMany(n => n.LocalModules
@@ -113,28 +126,23 @@ public class AlertsConstuctor : IAlertMessageConstructor
 
         foreach (var lm in lmVersion)
         {
-            var currentVersion = lm.ModuleVersion.Split('-');
-            var cleanCurrentVersion = currentVersion[0];
-
-            var isVersionOutdated = !string.IsNullOrEmpty(lm.ModuleVersion) &&
-                                    !string.IsNullOrEmpty(bot.LocalModuleVersionAlert) &&
-                                    new Version(cleanCurrentVersion) < new Version(bot.LocalModuleVersionAlert);
-
-            if (!isVersionOutdated)
+            if (!IsVersionBelowThreshold(lm.ModuleVersion, versionAlert))
                 continue;
 
             var messageToChat = $"🚨<b>Локальный модуль в {lm.NodeName} {lm.ModuleAddress}</b> устарел!%0A текущая версия: <u>{lm.ModuleVersion}</u>!";
 
             messages.Add(messageToChat);
-
         }
 
         return messages;
     }
 
+    /// <summary>
+    /// Формирует сообщения о давно не синхронизированных локальных модулях.
+    /// </summary>
     private static List<string> CheckLmSyncDate(List<InstanceMonitoringInformation> nodes, TelegramBotSetting bot)
     {
-        var toDateTimestamp = DateTimeOffset.Now.AddDays(bot.LocalModuleDaysWithoutSynchronization * -1).ToUnixTimeMilliseconds();
+        var toDateTimestamp = DateTimeOffset.Now.AddDays(bot.LocalModuleAlerts.DaysWithoutSynchronization * -1).ToUnixTimeMilliseconds();
         List<string> messages = [];
 
         var lmSyncDateTime = nodes
@@ -154,5 +162,125 @@ public class AlertsConstuctor : IAlertMessageConstructor
         }
 
         return messages;
+    }
+
+    /// <summary>
+    /// Формирует сообщения о ТС ПИоТ в состоянии offline.
+    /// </summary>
+    private static List<string> CheckTsPiotStatus(List<InstanceMonitoringInformation> nodes, TelegramBotSetting bot)
+    {
+        List<string> messages = [];
+
+        if (!bot.TsPiotAlerts.StatusAlertEnabled)
+            return messages;
+
+        var offlineTsPiots = nodes
+            .SelectMany(n => n.TsPiots
+                .Where(ts => !ts.Online)
+                .Select(ts => new {
+                    NodeName = n.Name,
+                    TsName = ts.Name,
+                    TsAddress = ts.Address,
+                }))
+            .ToList();
+
+        foreach (var ts in offlineTsPiots)
+        {
+            var messageToChat = $"🚨<b>ТС ПИоТ {ts.TsName} в {ts.NodeName} {ts.TsAddress}</b>%0A не в сети!";
+            messages.Add(messageToChat);
+        }
+
+        return messages;
+    }
+
+    /// <summary>
+    /// Формирует сообщения об истекающих или истёкших лицензиях ТС ПИоТ.
+    /// </summary>
+    private static List<string> CheckTsPiotLicense(List<InstanceMonitoringInformation> nodes, TelegramBotSetting bot)
+    {
+        List<string> messages = [];
+
+        if (!bot.TsPiotAlerts.LicenseAlertEnabled)
+            return messages;
+
+        var today = DateTime.Today;
+        var alertUntil = today.AddDays(bot.TsPiotAlerts.LicenseAlertDays);
+
+        var licenses = nodes
+            .SelectMany(n => n.TsPiots
+                .Where(ts => ts.LicenseActiveTill.HasValue)
+                .Select(ts => new {
+                    NodeName = n.Name,
+                    TsName = ts.Name,
+                    TsAddress = ts.Address,
+                    LicenseDate = ts.LicenseActiveTill!.Value.Date,
+                }))
+            .ToList();
+
+        foreach (var ts in licenses)
+        {
+            if (ts.LicenseDate < today)
+            {
+                var messageToChat = $"🚨<b>ТС ПИоТ {ts.TsName} в {ts.NodeName} {ts.TsAddress}</b>%0A Лицензия истекла!%0A дата: <u>{ts.LicenseDate:dd.MM.yyyy}</u>!";
+                messages.Add(messageToChat);
+                continue;
+            }
+
+            if (ts.LicenseDate > alertUntil)
+                continue;
+
+            var daysLeft = (ts.LicenseDate - today).Days;
+            var messageExpiring = $"🚨<b>ТС ПИоТ {ts.TsName} в {ts.NodeName} {ts.TsAddress}</b>%0A Лицензия истекает через {daysLeft} дней!%0A дата: <u>{ts.LicenseDate:dd.MM.yyyy}</u>!";
+            messages.Add(messageExpiring);
+        }
+
+        return messages;
+    }
+
+    /// <summary>
+    /// Формирует сообщения об устаревших версиях ТС ПИоТ.
+    /// </summary>
+    private static List<string> CheckTsPiotVersions(List<InstanceMonitoringInformation> nodes, TelegramBotSetting bot)
+    {
+        List<string> messages = [];
+
+        var versionAlert = bot.TsPiotAlerts.VersionAlert;
+        if (string.IsNullOrEmpty(versionAlert))
+            return messages;
+
+        var versions = nodes
+            .SelectMany(n => n.TsPiots
+                .Select(ts => new {
+                    NodeName = n.Name,
+                    TsName = ts.Name,
+                    TsAddress = ts.Address,
+                    TsVersion = ts.Version,
+                }))
+            .ToList();
+
+        foreach (var ts in versions)
+        {
+            if (!IsVersionBelowThreshold(ts.TsVersion, versionAlert))
+                continue;
+
+            var messageToChat = $"🚨<b>ТС ПИоТ {ts.TsName} в {ts.NodeName} {ts.TsAddress}</b> устарел!%0A текущая версия: <u>{ts.TsVersion}</u>!";
+            messages.Add(messageToChat);
+        }
+
+        return messages;
+    }
+
+    /// <summary>
+    /// Проверяет, что текущая версия ниже пороговой (суффикс после '-' игнорируется).
+    /// </summary>
+    private static bool IsVersionBelowThreshold(string currentVersion, string thresholdVersion)
+    {
+        if (string.IsNullOrEmpty(currentVersion) || string.IsNullOrEmpty(thresholdVersion))
+            return false;
+
+        var cleanCurrent = currentVersion.Split('-')[0];
+        var cleanThreshold = thresholdVersion.Split('-')[0];
+
+        return new Version(cleanCurrent) < new Version(cleanThreshold);
     }
 }

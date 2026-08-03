@@ -306,6 +306,7 @@ public class InstanceManagerService : IInstanceManagerService
                 Version = $"{entity.Settings.Version}.{entity.Settings.Assembly}",
                 LastUpdated = entity.UpdatedAt,
                 LocalModules = entity.LocalModules,
+                TsPiots = entity.TsPiots,
             };
 
             content.Add(record);
@@ -332,6 +333,7 @@ public class InstanceManagerService : IInstanceManagerService
                 Version = $"{entity.Settings.Version}.{entity.Settings.Assembly}",
                 LastUpdated = entity.UpdatedAt,
                 LocalModules = entity.LocalModules,
+                TsPiots = entity.TsPiots,
             };
 
             content.Add(record);

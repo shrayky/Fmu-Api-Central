@@ -2,13 +2,13 @@ import { loadConfiguration, saveConfigurationSections } from '../services/Config
 import { Number, CheckBox, Text } from '../utils/ui.js';
 import { AuthService } from '../services/AuthService.js';
 
-class TelegramBotSettingsView {
+class AlertSettingsView {
     constructor(id) {
         this.id = id;
-        this.telegramBotSettingsElementsId = "telegramBotSettingsView";
+        this.alertSettingsElementsId = "alertSettingsView";
         this.labels = {
-            title: "Fmu-Api-Central: Настройки Telegram бота",
-            telegramBotSettings: "Настройки Telegram бота",
+            title: "Fmu-Api-Central: Настройки оповещений",
+            alertSettings: "Настройки оповещений",
             isEnabled: "Использовать",
             chatId: "ID чата",
             botToken: "Токен бота",
@@ -19,6 +19,10 @@ class TelegramBotSettingsView {
             offlineNodeAlertInterval: "Оповещать о недоступных узлах (часы)",
             localModuleVersionAlert: "Оповещать о версии локального модуля ниже указанной",
             localModuleDaysWithoutSynchronization: "Оповещать, если не было синхронизации локального модуля более чем указанных дней",
+            tsPiotStatusAlertEnabled: "Оповещать о состоянии ТС ПИоТ",
+            tsPiotLicenseAlertEnabled: "Оповещать об истечении лицензии ТС ПИоТ",
+            tsPiotLicenseAlertDays: "За сколько дней оповещать об истечении лицензии ТС ПИоТ",
+            tsPiotVersionAlert: "Оповещать о версии ТС ПИоТ ниже указанной",
         };
     }
 
@@ -36,14 +40,14 @@ class TelegramBotSettingsView {
             }];
         }
 
-        return rows.map((x, index) => ({
+        return rows.map((x) => ({
             id: x.id,
             time: toTimeDate(x.time)
         }));
     }
 
     _getNextScheduleId() {
-        const grid = $$("telegramSchedulerGrid");
+        const grid = $$("alertSchedulerGrid");
         if (!grid) return 1;
 
         const rows = grid.serialize();
@@ -83,16 +87,35 @@ class TelegramBotSettingsView {
         }
 
         let configuration = requestResult.value.Content;
+        const bot = configuration.telegramBotSettings || {};
+        const localModuleAlerts = bot.localModuleAlerts || {};
+        const tsPiotAlerts = bot.tsPiotAlerts || {};
 
-        this.telegramBotSettings = {
-            isEnabled: configuration.telegramBotSettings?.isEnabled || false,
-            chatId: configuration.telegramBotSettings?.chatId || 0,
-            botToken: configuration.telegramBotSettings?.botToken || "",
-            provider: configuration.telegramBotSettings?.provider || "telegram",
-            offlineNodeAlertInterval: configuration.telegramBotSettings?.offlineNodeAlertInterval || 0,
-            localModuleVersionAlert: configuration.telegramBotSettings?.localModuleVersionAlert || "",
-            localModuleDaysWithoutSynchronization: configuration.telegramBotSettings?.localModuleDaysWithoutSynchronization || 3,
-            scheduler: this._prepareScheduler(configuration.telegramBotSettings?.scheduler)
+        this.alertSettings = {
+            isEnabled: bot.isEnabled || false,
+            chatId: bot.chatId || 0,
+            botToken: bot.botToken || "",
+            provider: bot.provider || "telegram",
+            offlineNodeAlertInterval: bot.offlineNodeAlertInterval || 0,
+            localModuleVersionAlert: localModuleAlerts.versionAlert
+                ?? bot.localModuleVersionAlert
+                ?? "",
+            localModuleDaysWithoutSynchronization: localModuleAlerts.daysWithoutSynchronization
+                ?? bot.localModuleDaysWithoutSynchronization
+                ?? 3,
+            tsPiotStatusAlertEnabled: tsPiotAlerts.statusAlertEnabled
+                ?? bot.tsPiotStatusAlertEnabled
+                ?? false,
+            tsPiotLicenseAlertEnabled: tsPiotAlerts.licenseAlertEnabled
+                ?? bot.tsPiotLicenseAlertEnabled
+                ?? false,
+            tsPiotLicenseAlertDays: tsPiotAlerts.licenseAlertDays
+                ?? bot.tsPiotLicenseAlertDays
+                ?? 7,
+            tsPiotVersionAlert: tsPiotAlerts.versionAlert
+                ?? bot.tsPiotVersionAlert
+                ?? "",
+            scheduler: this._prepareScheduler(bot.scheduler)
         };
 
         return this;
@@ -101,31 +124,31 @@ class TelegramBotSettingsView {
     renderView() {
         $$("toolbarLabel").setValue(this.labels.title);
 
-        const telegramBotSettings = {
-            id: this.telegramBotSettingsElementsId,
-            disabled: !this.telegramBotSettings.isEnabled,
+        const alertSettings = {
+            id: this.alertSettingsElementsId,
+            disabled: !this.alertSettings.isEnabled,
             rows: [],
         };
 
         const enaledCheckBox = CheckBox(this.labels.isEnabled, "isEnabled", {
-            value: this.telegramBotSettings.isEnabled,
+            value: this.alertSettings.isEnabled,
             on: {
                 onChange: (enabled) => {
                     if (enabled) {
-                        $$(this.telegramBotSettingsElementsId).enable();
+                        $$(this.alertSettingsElementsId).enable();
                     } else {
-                        $$(this.telegramBotSettingsElementsId).disable();
+                        $$(this.alertSettingsElementsId).disable();
                     }
                 }
             }
         });
 
-        telegramBotSettings.rows.push(
+        alertSettings.rows.push(
             {
                 view: "richselect",
                 label: this.labels.botProtocol,
                 name: "provider",
-                value: this.telegramBotSettings.provider,
+                value: this.alertSettings.provider,
                 options: [
                     { id: "telegram", value: "telegram" },
                     { id: "max", value: "max" },
@@ -133,21 +156,21 @@ class TelegramBotSettingsView {
                 ]
             },
 
-            Number(this.labels.chatId, "chatId", this.telegramBotSettings.chatId),
+            Number(this.labels.chatId, "chatId", this.alertSettings.chatId),
 
-            Text(this.labels.botToken, "botToken", this.telegramBotSettings.botToken),
+            Text(this.labels.botToken, "botToken", this.alertSettings.botToken),
 
             {
                 rows: [
                     { view: "label", label: this.labels.scheduler },
                     {
                         view: "datatable",
-                        id: "telegramSchedulerGrid",
+                        id: "alertSchedulerGrid",
                         height: 220,
                         editable: true,
                         editaction: "click",
                         select: "row",
-                        data: this.telegramBotSettings.scheduler,
+                        data: this.alertSettings.scheduler,
                         columns: [
                             { id: "id", header: "№", hidden: false, width: 80 },
                             {
@@ -180,7 +203,7 @@ class TelegramBotSettingsView {
                                 value: this.labels.addScheduleTime,
                                 width: 180,
                                 click: () => {
-                                    const grid = $$("telegramSchedulerGrid");
+                                    const grid = $$("alertSchedulerGrid");
                                     grid.add({
                                         id: this._getNextScheduleId(),
                                         time: "09:00:00"
@@ -192,7 +215,7 @@ class TelegramBotSettingsView {
                                 value: this.labels.remove,
                                 width: 180,
                                 click: () => {
-                                    const grid = $$("telegramSchedulerGrid");
+                                    const grid = $$("alertSchedulerGrid");
                                     this._removeSchedulerRow(grid, grid.getSelectedId());
                                 }
                             },
@@ -202,29 +225,44 @@ class TelegramBotSettingsView {
                 ]
             },
 
-            Number(this.labels.offlineNodeAlertInterval, "offlineNodeAlertInterval", this.telegramBotSettings.offlineNodeAlertInterval),
+            Number(this.labels.offlineNodeAlertInterval, "offlineNodeAlertInterval", this.alertSettings.offlineNodeAlertInterval),
 
-            Text(this.labels.localModuleVersionAlert, "localModuleVersionAlert", this.telegramBotSettings.localModuleVersionAlert),
+            Text(this.labels.localModuleVersionAlert, "localModuleVersionAlert", this.alertSettings.localModuleVersionAlert),
 
-            Number(this.labels.localModuleDaysWithoutSynchronization, "localModuleDaysWithoutSynchronization", this.telegramBotSettings.localModuleDaysWithoutSynchronization)
+            Number(this.labels.localModuleDaysWithoutSynchronization, "localModuleDaysWithoutSynchronization", this.alertSettings.localModuleDaysWithoutSynchronization),
+
+            CheckBox(this.labels.tsPiotStatusAlertEnabled, "tsPiotStatusAlertEnabled", {
+                value: this.alertSettings.tsPiotStatusAlertEnabled
+            }),
+
+            CheckBox(this.labels.tsPiotLicenseAlertEnabled, "tsPiotLicenseAlertEnabled", {
+                value: this.alertSettings.tsPiotLicenseAlertEnabled
+            }),
+
+            Number(this.labels.tsPiotLicenseAlertDays, "tsPiotLicenseAlertDays", this.alertSettings.tsPiotLicenseAlertDays),
+
+            Text(this.labels.tsPiotVersionAlert, "tsPiotVersionAlert", this.alertSettings.tsPiotVersionAlert)
         );
 
         const info = {
             view: "template",
-            template: `<div
-                <strong>Бот проверяет следующие параметры:</strong><br>
+            template: `<div>
+                <strong>Проверяются следующие параметры:</strong><br>
                  - связь с нодами<br>
                  - статус локальных модулей нод (если не ready)<br>
                  - версия локальных модулей нод<br>
-                 - дата-время синхронизации локальных ноды
+                 - дата-время синхронизации локальных модулей<br>
+                 - состояние ТС ПИоТ (offline)<br>
+                 - истечение лицензии ТС ПИоТ<br>
+                 - версия ТС ПИоТ
             </div>`,
-            height: 100,
+            height: 160,
             borderless: true,
         };
 
         let elements = [
             enaledCheckBox,
-            telegramBotSettings,
+            alertSettings,
             {
                 cols: [
                     this._saveButton,
@@ -237,7 +275,7 @@ class TelegramBotSettingsView {
             {}
         ];
 
-        const telegramBotSettingsForm = {
+        const alertSettingsForm = {
             view: "form",
             elements: elements
         };
@@ -245,7 +283,7 @@ class TelegramBotSettingsView {
         return {
             id: this.id,
             rows: [
-                telegramBotSettingsForm,
+                alertSettingsForm,
             ],
         };
     }
@@ -261,8 +299,7 @@ class TelegramBotSettingsView {
             if (!form.validate()) return;
 
             const values = form.getValues();
-            console.log(values);
-            const schedulerGrid = $$("telegramSchedulerGrid");
+            const schedulerGrid = $$("alertSchedulerGrid");
             const schedulerRows = [];
 
             const toTimeString = webix.Date.dateToStr("%H:%i:%s");
@@ -283,7 +320,7 @@ class TelegramBotSettingsView {
 
                 const invalidRow = schedulerRows.find(r => !timeRegex.test(String(r.time || "").trim()));
                 if (invalidRow) {
-                    webix.message({ type: "error", text: `Некорректное время в строке №${invalidRow.scheduleId}` });
+                    webix.message({ type: "error", text: `Некорректное время в строке №${invalidRow.id}` });
                     return;
                 }
 
@@ -302,6 +339,11 @@ class TelegramBotSettingsView {
                     return;
                 }
 
+                if (values.tsPiotLicenseAlertEnabled && values.tsPiotLicenseAlertDays <= 0) {
+                    webix.message({ type: "error", text: "Количество дней до оповещения о лицензии ТС ПИоТ должно быть больше 0" });
+                    return;
+                }
+
                 if (values.chatId == 0) {
                     webix.message({ type: "error", text: "ID чата не может быть 0" });
                     return;
@@ -315,9 +357,17 @@ class TelegramBotSettingsView {
                     botToken: values.botToken || "",
                     provider: values.provider || "telegram",
                     offlineNodeAlertInterval: parseInt(values.offlineNodeAlertInterval) || 0,
-                    localModuleVersionAlert: values.localModuleVersionAlert || "",
-                    localModuleDaysWithoutSynchronization: parseInt(values.localModuleDaysWithoutSynchronization) || 3,
-                    scheduler: schedulerRows.map((row, index) => ({
+                    localModuleAlerts: {
+                        versionAlert: values.localModuleVersionAlert || "",
+                        daysWithoutSynchronization: parseInt(values.localModuleDaysWithoutSynchronization) || 3
+                    },
+                    tsPiotAlerts: {
+                        statusAlertEnabled: !!values.tsPiotStatusAlertEnabled,
+                        licenseAlertEnabled: !!values.tsPiotLicenseAlertEnabled,
+                        licenseAlertDays: parseInt(values.tsPiotLicenseAlertDays) || 7,
+                        versionAlert: values.tsPiotVersionAlert || ""
+                    },
+                    scheduler: schedulerRows.map((row) => ({
                         id: row.id,
                         time: String(row.time || "").trim()
                     }))
@@ -331,7 +381,7 @@ class TelegramBotSettingsView {
 
             webix.message({
                 type: "success",
-                text: "Настройки Telegram бота сохранены. Необходимо перезапустить службу для применения изменений."
+                text: "Настройки оповещений сохранены. Необходимо перезапустить службу для применения изменений."
             });
         }
     };
@@ -373,8 +423,8 @@ class TelegramBotSettingsView {
     }
 }
 
-export default async function createTelegramBotSettingsView(id) {
-    const view = new TelegramBotSettingsView(id);
+export default async function createAlertSettingsView(id) {
+    const view = new AlertSettingsView(id);
     await view.loadData();
     return view.renderView();
 }

@@ -133,8 +133,8 @@ public class TelegramMessagingWorker : BackgroundService
             var cleanCurrentVersion = currentVersion[0];
                     
             var isVersionOutdated = !string.IsNullOrEmpty(lm.ModuleVersion) && 
-                                    !string.IsNullOrEmpty(bot.LocalModuleVersionAlert) &&
-                                    new Version(cleanCurrentVersion) < new Version(bot.LocalModuleVersionAlert);
+                                    !string.IsNullOrEmpty(bot.LocalModuleAlerts.VersionAlert) &&
+                                    new Version(cleanCurrentVersion) < new Version(bot.LocalModuleAlerts.VersionAlert);
     
             if (!isVersionOutdated)
                 continue;
@@ -150,7 +150,7 @@ public class TelegramMessagingWorker : BackgroundService
 
     private static List<string> CheckLmSyncDate(List<InstanceMonitoringInformation> nodes, TelegramBotSetting bot)
     {
-        var toDateTimestamp = DateTimeOffset.Now.AddDays(bot.LocalModuleDaysWithoutSynchronization * -1).ToUnixTimeMilliseconds();
+        var toDateTimestamp = DateTimeOffset.Now.AddDays(bot.LocalModuleAlerts.DaysWithoutSynchronization * -1).ToUnixTimeMilliseconds();
         List<string> messages = [];
         
         var lmSyncDateTime = nodes
