@@ -1,6 +1,8 @@
 using Application.SoftwareUpdates.Interfaces;
 using CSharpFunctionalExtensions;
 using Domain.Attributes;
+using Domain.Configuration.Interfaces;
+using Domain.Configuration.Options;
 using Domain.Dto.FmuApiExchangeData.Answer;
 using Domain.Dto.FmuApiExchangeData.DataPacket;
 using Domain.Dto.FmuApiExchangeData.DataPacket.FmuApiState;
@@ -27,9 +29,11 @@ public class InstanceManagerService : IInstanceManagerService
     private readonly IInstanceRepository _instanceRepository;
     private readonly Lazy<ISoftwareUpdatesManagerService> _softwareVersionsManager;
     private readonly IMarksCheckStatisticRepository _marksCheckStatisticRepository;
+    private readonly IParametersService _parametersService;
 
     public InstanceManagerService(ILogger<IInstanceManagerService> logger, IInstanceRepository instanceRepository,
-        IServiceProvider serviceProvider, IMarksCheckStatisticRepository marksCheckStatisticRepository)
+        IServiceProvider serviceProvider, IMarksCheckStatisticRepository marksCheckStatisticRepository,
+        IParametersService parametersService)
     {
         _logger = logger;
         _instanceRepository = instanceRepository;
@@ -39,6 +43,7 @@ public class InstanceManagerService : IInstanceManagerService
                 .GetRequiredService<ISoftwareUpdatesManagerService>);
 
         _marksCheckStatisticRepository = marksCheckStatisticRepository;
+        _parametersService = parametersService;
     }
 
     public async Task<Result<FmuApiCentralResponse>> UpdateFmuApiInstanceInformation(string instanceData)
@@ -105,12 +110,24 @@ public class InstanceManagerService : IInstanceManagerService
             fmuApiState.FmuApiSetting.Version,
             fmuApiState.FmuApiSetting.Assembly);
 
+        var softwareUpdateSettings = (await _parametersService.Current()).SoftwareUpdateSettings;
+
+        if (needUpdate && !softwareUpdateSettings.IsDownloadAllowedNow())
+        {
+            _logger.LogInformation(
+                "Обновление для узла {Token} скрыто: текущее время вне разрешённых интервалов загрузки",
+                instanceEntity.Id);
+            needUpdate = false;
+            updateHash = string.Empty;
+        }
+
         var answer = new FmuApiCentralResponse()
         {
             SettingsUpdateAvailable = instanceEntity.SettingsModified,
             SoftwareUpdateAvailable = needUpdate,
             UpdateHash = updateHash,
             Success = true,
+            CentralServerProperties = CreateCentralServerProperties(softwareUpdateSettings),
         };
 
         return updateResult.IsSuccess
@@ -272,6 +289,11 @@ public class InstanceManagerService : IInstanceManagerService
 
         var entity = entitySearch.Value;
 
+        var softwareUpdateSettings = (await _parametersService.Current()).SoftwareUpdateSettings;
+
+        if (!softwareUpdateSettings.IsDownloadAllowedNow())
+            return Result.Failure<Stream>("Загрузка обновления недоступна вне разрешённых интервалов");
+
         var (needUpdate, _) = await _softwareVersionsManager.Value.NeedUpdate(entity.NodeInformation.Os,
             entity.NodeInformation.Architecture,
             entity.Settings.Version,
@@ -287,6 +309,17 @@ public class InstanceManagerService : IInstanceManagerService
 
         return updateStream.IsSuccess ? Result.Success(updateStream.Value) : Result.Failure<Stream>(updateStream.Error);
     }
+
+    /// <summary>
+    /// Формирует свойства центрального сервера для пакета обмена с инстансом.
+    /// </summary>
+    private static CentralServerProperties CreateCentralServerProperties(SoftwareUpdateSettings settings) =>
+        new()
+        {
+            ExchangeServerAddresses = settings.ExchangeServerAddresses,
+            ExchangeRequestInterval = settings.ExchangeRequestInterval,
+            SchedulerUpdateDownload = settings.SchedulerUpdateDownload,
+        };
 
     public async Task<Result<List<InstanceMonitoringInformation>>> OfflineInstance(DateTime toDate)
     {

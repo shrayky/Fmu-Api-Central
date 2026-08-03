@@ -1,15 +1,19 @@
 import softwareUpdatesService from '../../services/softwareUpdatesService.js';
 import softwareUpdatesElementView from './softwareUpdatesElementView.js';
+import createSoftwareUpdateSettingsView from './softwareUpdateSettingsView.js';
 
 class SoftwareUpdatesListView {
-    constructor(id) {
+    constructor(id, settingsView) {
         this.formName = "SoftwareUpdatesView";
         this.id = id;
+        this.settingsView = settingsView;
         this.pageSize = 50;
         this.pageNumber = 1;
 
         this.LABELS = {
             formTitle: "Fmu-Api-Central: Обновления ПО",
+            filesTab: "Файлы обновлений",
+            settingsTab: "Настройки распространения",
             refresh: "Обновить",
             upload: "Загрузить",
             delete: "Удалить",
@@ -64,7 +68,7 @@ class SoftwareUpdatesListView {
     render() {
         $$("toolbarLabel").setValue(this.LABELS.formTitle);
 
-        const form = {
+        const filesForm = {
             view: "form",
             id: this.NAMES.form,
             elements: [
@@ -78,8 +82,16 @@ class SoftwareUpdatesListView {
             disabled: true,
             rows: [
                 {
-                    rows: [
-                        form,
+                    view: "tabview",
+                    cells: [
+                        {
+                            header: this.LABELS.filesTab,
+                            body: filesForm
+                        },
+                        {
+                            header: this.LABELS.settingsTab,
+                            body: this.settingsView.render()
+                        }
                     ]
                 }
             ]
@@ -347,7 +359,8 @@ class SoftwareUpdatesListView {
 }
 
 export default async function createSoftwareUpdatesListView(id) {
-    const view = new SoftwareUpdatesListView(id)
+    const settingsView = await createSoftwareUpdateSettingsView();
+    const view = new SoftwareUpdatesListView(id, settingsView)
                     .delayedDataLoading()
                     .render();
 
