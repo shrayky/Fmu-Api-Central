@@ -189,7 +189,7 @@ class AlertSettingsView {
                             },
                             {}
                         ]
-                    }
+                    },
 
                     {
                         view: "datatable",

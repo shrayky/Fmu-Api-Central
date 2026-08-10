@@ -146,7 +146,7 @@ public class InstanceManagerService : IInstanceManagerService
                 NodeId = instanceEntity.Id,
                 Date = statistic.Date,
                 Total = statistic.MarkCheckStatistics.Total,
-                SuccessfulOnlineChecks = statistic.MarkCheckStatistics.SuccessfulOfflineChecks,
+                SuccessfulOnlineChecks = statistic.MarkCheckStatistics.SuccessfulOnlineChecks,
                 SuccessfulOfflineChecks = statistic.MarkCheckStatistics.SuccessfulOfflineChecks,
                 Id = $"{instanceEntity.Id}_{statistic.Date}",
             };
