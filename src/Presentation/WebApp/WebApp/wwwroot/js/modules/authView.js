@@ -1,5 +1,3 @@
-// js/modules/authView.js
-
 import { AuthService } from '../services/AuthService.js';
 
 export default function createAuthView(onLoginSuccess) {

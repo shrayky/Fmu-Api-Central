@@ -163,6 +163,34 @@ class AlertSettingsView {
             {
                 rows: [
                     { view: "label", label: this.labels.scheduler },
+
+                    {
+                        cols: [
+                            {
+                                view: "button",
+                                value: this.labels.addScheduleTime,
+                                width: 180,
+                                click: () => {
+                                    const grid = $$("alertSchedulerGrid");
+                                    grid.add({
+                                        id: this._getNextScheduleId(),
+                                        time: "09:00:00"
+                                    });
+                                }
+                            },
+                            {
+                                view: "button",
+                                value: this.labels.remove,
+                                width: 180,
+                                click: () => {
+                                    const grid = $$("alertSchedulerGrid");
+                                    this._removeSchedulerRow(grid, grid.getSelectedId());
+                                }
+                            },
+                            {}
+                        ]
+                    }
+
                     {
                         view: "datatable",
                         id: "alertSchedulerGrid",
@@ -196,32 +224,7 @@ class AlertSettingsView {
                             }
                         },
                     },
-                    {
-                        cols: [
-                            {
-                                view: "button",
-                                value: this.labels.addScheduleTime,
-                                width: 180,
-                                click: () => {
-                                    const grid = $$("alertSchedulerGrid");
-                                    grid.add({
-                                        id: this._getNextScheduleId(),
-                                        time: "09:00:00"
-                                    });
-                                }
-                            },
-                            {
-                                view: "button",
-                                value: this.labels.remove,
-                                width: 180,
-                                click: () => {
-                                    const grid = $$("alertSchedulerGrid");
-                                    this._removeSchedulerRow(grid, grid.getSelectedId());
-                                }
-                            },
-                            {}
-                        ]
-                    }
+
                 ]
             },
 
