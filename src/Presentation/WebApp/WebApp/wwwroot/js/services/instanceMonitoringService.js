@@ -28,6 +28,10 @@ class InstanceMonitoringService {
             params.append("tsPiotLicense", filters.tsPiotLicense);
         }
 
+        if (filters.updatedBefore) {
+            params.append("updatedBefore", filters.updatedBefore);
+        }
+
         const endpoint = `${this.apiEndpoint}?${params.toString()}`;
         
         const data = await this.authService.makeAuthenticatedRequest(endpoint);

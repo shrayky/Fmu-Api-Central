@@ -6,6 +6,7 @@ class InstanceFilterView {
             localModuleVersion: "Версия ЛМ ЧЗ",
             tsPiotVersion: "Версия ТС ПИоТ",
             tsPiotLicense: "Дата окончания лицензии",
+            updatedBefore: "Последнее обновление до",
             applyButton: "Применить",
             resetButton: "Сбросить",
             cancelButton: "Отмена",
@@ -19,6 +20,7 @@ class InstanceFilterView {
             localModuleVersion: "filterLocalModuleVersion",
             tsPiotVersion: "filterTsPiotVersion",
             tsPiotLicense: "filterTsPiotLicense",
+            updatedBefore: "filterUpdatedBefore",
             allValue: "__all__"
         };
     }
@@ -60,6 +62,11 @@ class InstanceFilterView {
                         this.LABELS.tsPiotLicense,
                         this.NAMES.tsPiotLicense,
                         currentFilters.tsPiotLicense
+                    ),
+                    this._createDateInput(
+                        this.LABELS.updatedBefore,
+                        this.NAMES.updatedBefore,
+                        currentFilters.updatedBefore
                     ),
                     this._createButtons(onApply, onClose)
                 ]
@@ -184,7 +191,8 @@ class InstanceFilterView {
             name: (values[this.NAMES.name] || "").trim(),
             localModuleVersion: this._fromSelectValue(values[this.NAMES.localModuleVersion]),
             tsPiotVersion: this._fromSelectValue(values[this.NAMES.tsPiotVersion]),
-            tsPiotLicense: this._formatLicenseFilterValue(values[this.NAMES.tsPiotLicense])
+            tsPiotLicense: this._formatLicenseFilterValue(values[this.NAMES.tsPiotLicense]),
+            updatedBefore: this._formatLicenseFilterValue(values[this.NAMES.updatedBefore])
         };
     }
 
@@ -203,7 +211,8 @@ class InstanceFilterView {
             [this.NAMES.name]: "",
             [this.NAMES.localModuleVersion]: this.NAMES.allValue,
             [this.NAMES.tsPiotVersion]: this.NAMES.allValue,
-            [this.NAMES.tsPiotLicense]: ""
+            [this.NAMES.tsPiotLicense]: "",
+            [this.NAMES.updatedBefore]: ""
         });
 
         this._closeWindow();
@@ -213,7 +222,8 @@ class InstanceFilterView {
                 name: "",
                 localModuleVersion: "",
                 tsPiotVersion: "",
-                tsPiotLicense: ""
+                tsPiotLicense: "",
+                updatedBefore: ""
             });
         }
     }

@@ -162,7 +162,8 @@ public class FmuApiInstancesRepository : BaseCouchDbRepository<InstanceEntity>, 
         !string.IsNullOrEmpty(filter.Name) ||
         !string.IsNullOrEmpty(filter.LocalModuleVersion) ||
         !string.IsNullOrEmpty(filter.TsPiotVersion) ||
-        filter.TsPiotLicense.HasValue;
+        filter.TsPiotLicense.HasValue ||
+        filter.UpdatedBefore.HasValue;
 
     private static IQueryable<UniversalDocument<InstanceEntity>> ApplyListFilter(
         IQueryable<UniversalDocument<InstanceEntity>> query,
@@ -186,6 +187,12 @@ public class FmuApiInstancesRepository : BaseCouchDbRepository<InstanceEntity>, 
             query = query.Where(p => p.Data.TsPiots.Any(t =>
                 t.LicenseActiveTillTimeStamp != null &&
                 t.LicenseActiveTillTimeStamp <= licenseTimestampLimit));
+        }
+
+        if (filter.UpdatedBefore.HasValue)
+        {
+            var updatedBefore = filter.UpdatedBefore.Value.Date;
+            query = query.Where(p => p.Data.UpdatedAt < updatedBefore);
         }
 
         return query;

@@ -76,6 +76,7 @@ class InstanceListView {
             filterLocalModuleVersion: "версия ЛМ ЧЗ",
             filterTsPiotVersion: "версия ТС ПИоТ",
             filterTsPiotLicense: "лицензия ТС ПИоТ до",
+            filterUpdatedBefore: "последнее обновление до",
             token: "Токен",
             tsPiotsModules: "Модули ТСПИоТ"
         };
@@ -553,7 +554,8 @@ class InstanceListView {
             this.filters?.name ||
             this.filters?.localModuleVersion ||
             this.filters?.tsPiotVersion ||
-            this.filters?.tsPiotLicense
+            this.filters?.tsPiotLicense ||
+            this.filters?.updatedBefore
         );
     }
 
@@ -669,6 +671,10 @@ class InstanceListView {
 
         if (this.filters?.tsPiotLicense) {
             parts.push(`${this.LABELS.filterTsPiotLicense} = ${this._formatFilterDate(this.filters.tsPiotLicense)}`);
+        }
+
+        if (this.filters?.updatedBefore) {
+            parts.push(`${this.LABELS.filterUpdatedBefore} = ${this._formatFilterDate(this.filters.updatedBefore)}`);
         }
 
         if (parts.length === 0) {

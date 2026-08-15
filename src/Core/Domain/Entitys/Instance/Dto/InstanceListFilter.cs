@@ -6,4 +6,5 @@ public record InstanceListFilter
     public string LocalModuleVersion { get; init; } = string.Empty;
     public string TsPiotVersion { get; init; } = string.Empty;
     public DateTime? TsPiotLicense { get; init; }
+    public DateTime? UpdatedBefore { get; init; }
 }
