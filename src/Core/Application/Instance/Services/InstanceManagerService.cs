@@ -12,6 +12,7 @@ using Domain.Entitys.Instance;
 using Domain.Entitys.Instance.Dto;
 using Domain.Entitys.Instance.Interfaces;
 using Domain.Entitys.Interfaces;
+using Domain.Entitys.SoftwareUpdateFiles;
 using Domain.Entitys.MarkCheckStatistics.Interfaces;
 using Domain.Entitys.MarksCheckStatistic;
 using Microsoft.Extensions.DependencyInjection;
@@ -280,19 +281,19 @@ public class InstanceManagerService : IInstanceManagerService
         return updateResult.IsSuccess ? Result.Success() : Result.Failure(updateResult.Error);
     }
 
-    public async Task<Result<Stream>> FmuApiUpdate(string token)
+    public async Task<Result<SoftwareUpdateFileDownload>> FmuApiUpdate(string token, long? rangeFrom)
     {
         var entitySearch = await _instanceRepository.ByToken(token);
 
         if (entitySearch.IsFailure)
-            return Result.Failure<Stream>(entitySearch.Error);
+            return Result.Failure<SoftwareUpdateFileDownload>(entitySearch.Error);
 
         var entity = entitySearch.Value;
 
         var softwareUpdateSettings = (await _parametersService.Current()).SoftwareUpdateSettings;
 
         if (!softwareUpdateSettings.IsDownloadAllowedNow())
-            return Result.Failure<Stream>("Загрузка обновления недоступна вне разрешённых интервалов");
+            return Result.Failure<SoftwareUpdateFileDownload>("Загрузка обновления недоступна вне разрешённых интервалов");
 
         var (needUpdate, _) = await _softwareVersionsManager.Value.NeedUpdate(entity.NodeInformation.Os,
             entity.NodeInformation.Architecture,
@@ -300,19 +301,16 @@ public class InstanceManagerService : IInstanceManagerService
             entity.Settings.Assembly);
 
         if (!needUpdate)
-            return Result.Failure<Stream>($"Для узла с id {token} не требуется обновление");
+            return Result.Failure<SoftwareUpdateFileDownload>($"Для узла с id {token} не требуется обновление");
 
-        var updateStream = await _softwareVersionsManager.Value.FmuApiUpdateData(entity.NodeInformation.Os,
+        return await _softwareVersionsManager.Value.FmuApiUpdateData(
+            entity.NodeInformation.Os,
             entity.NodeInformation.Architecture,
             entity.Settings.Version,
-            entity.Settings.Assembly);
-
-        return updateStream.IsSuccess ? Result.Success(updateStream.Value) : Result.Failure<Stream>(updateStream.Error);
+            entity.Settings.Assembly,
+            rangeFrom);
     }
 
-    /// <summary>
-    /// Формирует свойства центрального сервера для пакета обмена с инстансом.
-    /// </summary>
     private static CentralServerProperties CreateCentralServerProperties(SoftwareUpdateSettings settings) =>
         new()
         {

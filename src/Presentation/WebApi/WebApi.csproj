@@ -42,6 +42,7 @@
         <ProjectReference Include="..\..\Infrastructure\CouchDb\CouchDb.csproj" />
         <ProjectReference Include="..\..\Infrastructure\Logger\Logger\Logger.csproj" />
         <ProjectReference Include="..\..\Infrastructure\Messages\Messages.csproj" />
+        <ProjectReference Include="..\..\Infrastructure\TelegramBot\TelegramBot.csproj" />
     </ItemGroup>
 
     <Target Name="CleanupPublishFolder" AfterTargets="Publish">

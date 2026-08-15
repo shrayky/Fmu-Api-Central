@@ -1,18 +1,26 @@
+using CouchDb.Http;
 using CouchDB.Driver.Extensions;
 using CSharpFunctionalExtensions;
 using Domain.Dto.Responces;
 using Domain.Entitys.Interfaces;
 using Domain.Entitys.SoftwareUpdateFiles;
 using Microsoft.Extensions.DependencyInjection;
+using System.Net;
+using System.Net.Http.Headers;
+using System.Text;
 
 namespace CouchDb.Repositories;
 
 public class SoftwareUpdateFilesRepository : BaseCouchDbRepository<SoftwareUpdateFilesEntity>, ISoftwareUpdatesRepository
 {
+    public const string AttachmentHttpClientName = "CouchDbAttachment";
+
+    private readonly IHttpClientFactory _httpClientFactory;
+
     public SoftwareUpdateFilesRepository(IServiceProvider services) : base(
         services.GetRequiredService<Context>().SoftwareUpdateFiles, services)
     {
-        
+        _httpClientFactory = services.GetRequiredService<IHttpClientFactory>();
     }
 
     public async Task<Result<bool>> AttachFile(string entityId, string filePath, string contentType)
@@ -151,23 +159,88 @@ public class SoftwareUpdateFilesRepository : BaseCouchDbRepository<SoftwareUpdat
         }
     }
 
-    public async Task<Result<Stream>> FmuApiUpdate(string updateId)
+    public async Task<Result<SoftwareUpdateFileDownload>> FmuApiUpdate(string updateId, long? rangeFrom)
     {
-        if (!_appState.DbState())
-            return Result.Failure<Stream>(DatabaseUnavailable);
-        
-        var existEntity = await _database.FindAsync(updateId);
-        
-        if (existEntity == null)
-            return Result.Failure<Stream>($"Обновление ПО с id {updateId} не найдено в БД");
+        try
+        {
+            if (!_appState.DbState())
+                return Result.Failure<SoftwareUpdateFileDownload>(DatabaseUnavailable);
 
-        var attachment = existEntity.Attachments.FirstOrDefault();
+            var existEntity = await _database.FindAsync(updateId);
 
-        if (attachment == null)
-            return Result.Failure<Stream>($"Нет присоединенного файла обновления с id {updateId}");
-        
-        var responseStream = await _database.DownloadAttachmentAsStreamAsync(attachment);
-        
-        return Result.Success(responseStream);
+            if (existEntity == null)
+                return Result.Failure<SoftwareUpdateFileDownload>($"Обновление ПО с id {updateId} не найдено в БД");
+
+            var attachment = existEntity.Attachments.FirstOrDefault();
+
+            if (attachment == null)
+                return Result.Failure<SoftwareUpdateFileDownload>($"Нет присоединенного файла обновления с id {updateId}");
+
+            if (attachment.Uri == null)
+                return Result.Failure<SoftwareUpdateFileDownload>($"Вложение обновления с id {updateId} ещё не загружено");
+
+            var totalLength = attachment.Length ?? existEntity.Data.FileSize;
+            if (rangeFrom.HasValue && totalLength > 0 && rangeFrom.Value >= totalLength)
+                return Result.Failure<SoftwareUpdateFileDownload>(
+                    $"{SoftwareUpdateFileDownload.RangeNotSatisfiableCode}:{totalLength}");
+
+            var settings = await _parameters.Current();
+            var httpClient = _httpClientFactory.CreateClient(AttachmentHttpClientName);
+            using var request = new HttpRequestMessage(HttpMethod.Get, attachment.Uri);
+
+            var authToken = Convert.ToBase64String(
+                Encoding.ASCII.GetBytes($"{settings.DatabaseConnection.UserName}:{settings.DatabaseConnection.Password}"));
+            request.Headers.Authorization = new AuthenticationHeaderValue("Basic", authToken);
+
+            if (rangeFrom is > 0)
+                request.Headers.Range = new RangeHeaderValue(rangeFrom.Value, null);
+
+            var response = await httpClient
+                .SendAsync(request, HttpCompletionOption.ResponseHeadersRead)
+                .ConfigureAwait(false);
+
+            if (response.StatusCode == HttpStatusCode.RequestedRangeNotSatisfiable)
+            {
+                response.Dispose();
+                return Result.Failure<SoftwareUpdateFileDownload>(
+                    $"{SoftwareUpdateFileDownload.RangeNotSatisfiableCode}:{totalLength}");
+            }
+
+            if (response.StatusCode != HttpStatusCode.OK && response.StatusCode != HttpStatusCode.PartialContent)
+            {
+                var error = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                response.Dispose();
+                return Result.Failure<SoftwareUpdateFileDownload>(
+                    $"CouchDB вернула ошибку {response.StatusCode}: {error}");
+            }
+
+            var contentStream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
+            var from = 0L;
+            var to = totalLength > 0 ? totalLength - 1 : 0;
+
+            if (response.StatusCode == HttpStatusCode.PartialContent
+                && response.Content.Headers.ContentRange is { } contentRange)
+            {
+                from = contentRange.From ?? rangeFrom ?? 0;
+                to = contentRange.To ?? to;
+                totalLength = contentRange.Length ?? totalLength;
+            }
+
+            return Result.Success(new SoftwareUpdateFileDownload
+            {
+                Content = new HttpResponseOwnedStream(response, contentStream),
+                TotalLength = totalLength,
+                From = from,
+                To = to,
+                ContentType = string.IsNullOrWhiteSpace(attachment.ContentType)
+                    ? "application/octet-stream"
+                    : attachment.ContentType
+            });
+        }
+        catch (Exception ex)
+        {
+            return Result.Failure<SoftwareUpdateFileDownload>(
+                $"Ошибка загрузки файла обновления {updateId}: {ex.Message}");
+        }
     }
 }

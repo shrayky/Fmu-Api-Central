@@ -99,16 +99,19 @@ public class SoftwareUpdatesManagerService : ISoftwareUpdatesManagerService
         return (need, u.Sha256);
     }
 
-    public async Task<Result<Stream>> FmuApiUpdateData(string os, string architecture, int version, int assembly)
+    public async Task<Result<SoftwareUpdateFileDownload>> FmuApiUpdateData(
+        string os,
+        string architecture,
+        int version,
+        int assembly,
+        long? rangeFrom)
     {
         var softwareUpdateEntity = await _repository.MaxUpdateEntity(os, architecture, version, assembly);
         
         if (softwareUpdateEntity.IsFailure)
-            return Result.Failure<Stream>(softwareUpdateEntity.Error);
+            return Result.Failure<SoftwareUpdateFileDownload>(softwareUpdateEntity.Error);
 
-        var fileStreamResult = await _repository.FmuApiUpdate(softwareUpdateEntity.Value.Id);
-        
-        return fileStreamResult.IsSuccess ? Result.Success(fileStreamResult.Value) : Result.Failure<Stream>(fileStreamResult.Error);
+        return await _repository.FmuApiUpdate(softwareUpdateEntity.Value.Id, rangeFrom);
     }
 
     public async Task<Result<Stream>> FmuApiUpdateFile(string id)
@@ -118,9 +121,11 @@ public class SoftwareUpdatesManagerService : ISoftwareUpdatesManagerService
         if (entity.IsFailure)
             return Result.Failure<Stream>(entity.Error);
 
-        var fileStreamResult = await _repository.FmuApiUpdate(entity.Value.Id);
+        var fileStreamResult = await _repository.FmuApiUpdate(entity.Value.Id, rangeFrom: null);
         
-        return fileStreamResult.IsSuccess ? Result.Success(fileStreamResult.Value) : Result.Failure<Stream>(fileStreamResult.Error);
+        return fileStreamResult.IsSuccess
+            ? Result.Success(fileStreamResult.Value.Content)
+            : Result.Failure<Stream>(fileStreamResult.Error);
     }
 
     public async Task<Result<bool>> Delete(string id)

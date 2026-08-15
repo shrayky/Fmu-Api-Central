@@ -69,6 +69,17 @@ namespace CouchDb
              })
             .SetHandlerLifetime(TimeSpan.FromMinutes(10));
 
+            // Без общего таймаута: файл обновления стримится клиенту, обрыв ловит клиентская докачка.
+            services.AddHttpClient(SoftwareUpdateFilesRepository.AttachmentHttpClientName, client =>
+            {
+                client.Timeout = Timeout.InfiniteTimeSpan;
+            })
+            .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+            {
+                ServerCertificateCustomValidationCallback =
+                    HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+            });
+
             if (settings.Enable)
             {
                 services.AddHostedService<DatabaseStatusCheckWorker>();

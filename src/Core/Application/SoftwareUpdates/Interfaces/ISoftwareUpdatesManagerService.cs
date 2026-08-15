@@ -12,6 +12,6 @@ public interface ISoftwareUpdatesManagerService
     Task<Result<bool>> Delete(string id);
     Task<Result<bool>> AttachFile(string id, IFormFile file);
     Task<(bool, string)> NeedUpdate(string os, string architecture, int version, int assembly);
-    Task<Result<Stream>> FmuApiUpdateData(string os, string architecture, int version, int assembly);
+    Task<Result<SoftwareUpdateFileDownload>> FmuApiUpdateData(string os, string architecture, int version, int assembly, long? rangeFrom);
     Task<Result<Stream>> FmuApiUpdateFile(string id);
 }
