@@ -18,4 +18,5 @@ public class InstanceEntity : IHaveStringId
     public List<LocalModuleInformation> LocalModules { get; set; } = [];
     public List<TsPiotInformation> TsPiots { get; set; } = [];
     public bool SettingsModified { get; set; } = false;
+    public string ForcedUpdateId { get; set; } = string.Empty;
 }

@@ -15,6 +15,7 @@ public interface IInstanceManagerService
     Task<string> InstanceSettings(string token);
     Task<Result> SettingsUploaded(string token);
     Task<Result<SoftwareUpdateFileDownload>> FmuApiUpdate(string token, long? rangeFrom);
+    Task<Result<ForceUpdateResult>> AssignForcedUpdate(IReadOnlyList<string> tokens, string updateId);
     Task<Result<List<InstanceMonitoringInformation>>> OfflineInstance(DateTime toDate);
     Task<Result<List<InstanceMonitoringInformation>>> All();
 }

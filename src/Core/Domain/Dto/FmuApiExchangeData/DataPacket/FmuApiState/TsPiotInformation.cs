@@ -29,4 +29,6 @@ public record TsPiotInformation
     }
 
     public int? LicenseActiveTillTimeStamp { get; set; }
+
+    public int? LastCheckStatusCode { get; set; }
 }

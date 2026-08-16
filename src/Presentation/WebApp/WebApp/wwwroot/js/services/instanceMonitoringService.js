@@ -75,6 +75,24 @@ class InstanceMonitoringService {
         return true;
     }
 
+    async assignForcedUpdate(tokens, updateId) {
+        const endpoint = `${this.apiEndpoint}/force-update`;
+
+        const data = await this.authService.makeAuthenticatedRequest(endpoint, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ tokens, updateId })
+        });
+
+        if (!data.result) {
+            throw new Error(data.error);
+        }
+
+        return data.value;
+    }
+
 }
 
 export default new InstanceMonitoringService();

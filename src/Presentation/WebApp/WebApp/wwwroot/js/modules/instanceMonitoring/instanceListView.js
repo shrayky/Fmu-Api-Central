@@ -1,4 +1,5 @@
 import instanceMonitoringService from '../../services/instanceMonitoringService.js';
+import softwareUpdatesService from '../../services/softwareUpdatesService.js';
 import instanceElementView from './instanceElementView.js';
 import instanceFilterView from './instanceFilterView.js';
 import { pollingManager } from '../../services/PollingManager.js';
@@ -78,7 +79,18 @@ class InstanceListView {
             filterTsPiotLicense: "лицензия ТС ПИоТ до",
             filterUpdatedBefore: "последнее обновление до",
             token: "Токен",
-            tsPiotsModules: "Модули ТСПИоТ"
+            tsPiotsModules: "Модули ТСПИоТ",
+            actions: "Действия",
+            forceInstall: "Принудительная установка",
+            forceInstallTitle: "Принудительная установка",
+            selectedCount: "Инстансов выбрано",
+            selectVersion: "Версия",
+            applyForce: "Установить",
+            cancel: "Отмена",
+            selectInstances: "Выберите инстансы",
+            noUpdates: "Нет загруженных пакетов обновлений",
+            errorLoadUpdates: "Не удалось загрузить список обновлений",
+            selectVersionRequired: "Выберите версию"
         };
 
         this.NAMES = {
@@ -238,6 +250,28 @@ class InstanceListView {
                         }
                     }
                 },
+                {
+                    view: "menu",
+                    id: "actionsMenu",
+                    autowidth: true,
+                    data: [
+                        {
+                            id: "actions",
+                            value: this.LABELS.actions,
+                            autowidth: true,
+                            submenu: [
+                                { id: "actions:force-update", value: this.LABELS.forceInstall },
+                            ]
+                        }
+                    ],
+                    on: {
+                        onMenuItemClick: (id) => {
+                            if (id === "actions:force-update") {
+                                this._showForceUpdateDialog();
+                            }
+                        }
+                    }
+                },
                 {},
                 {
                     view: "button",
@@ -342,6 +376,13 @@ class InstanceListView {
             id: this.NAMES.dataTable,
             columns: [
                 {
+                    id: "checked",
+                    header: { content: "masterCheckbox" },
+                    template: "{common.checkbox()}",
+                    width: 40,
+                    css: "center"
+                },
+                {
                     id: this.NAMES.instanceName,
                     header: [this.LABELS.instanceName],
                     fillspace: true,
@@ -384,7 +425,7 @@ class InstanceListView {
                 },
             ],
             select: "row",
-            multiselect: false,
+            multiselect: true,
             fixedRowHeight: false,
             rowHeight: 36,
             css: "multiline_datatable",
@@ -435,7 +476,8 @@ class InstanceListView {
             this._updateFilterOptionsFromPacket(data, resetFilterOptions);
 
             const table = $$(this.NAMES.dataTable);
-            const selectedId = table.getSelectedId();
+            const selectedIds = this._normalizeIds(table.getSelectedId(true));
+            const checkedIds = this._getCheckedInstanceIds();
             this._assignRowHeightsToRecords(data.content);
 
             table.clearAll();
@@ -444,10 +486,7 @@ class InstanceListView {
             $$(this.id).enable();
 
             if (data.content.length > 0) {
-                const rowToSelect = selectedId && table.exists(selectedId)
-                    ? selectedId
-                    : data.content[0].id;
-                table.select(rowToSelect);
+                this._restoreRowMarks(table, selectedIds, checkedIds, data.content[0].id);
                 webix.UIManager.setFocus(this.NAMES.dataTable);
             }
 
@@ -811,9 +850,26 @@ class InstanceListView {
             const version = item.version == null || String(item.version).trim() === "" ? "нет данных" : item.version;
             const licenseTill = item.licenseActiveTill ?? item.LicenseActiveTill;
             const licenseText = this._formatLicenseActiveTill(licenseTill);
+            const statusIcon = this._formatLastCheckStatusCode(item.lastCheckStatusCode ?? item.LastCheckStatusCode);
 
-            return `<div class="instance-module-item"><strong>${name}</strong><br>${address} | версия: ${version}<br>лицензия до: ${licenseText}</div>`;
+            return `<div class="instance-module-item"><strong>${statusIcon}${name}</strong><br>${address} | версия: ${version}<br>лицензия до: ${licenseText}</div>`;
         }).join("");
+    }
+
+    /**
+     * Иконка HTTP-кода последней проверки ТС ПИоТ: 200 — галочка, ≥500 — восклицательный знак.
+     */
+    _formatLastCheckStatusCode(statusCode) {
+        if (statusCode == null || statusCode === 0)
+            return "";
+
+        if (statusCode === 200)
+            return `<span class="webix_icon wxi-check" style="color: #28a745;" title="${statusCode}"></span> `;
+
+        if (statusCode >= 500)
+            return `<span class="webix_icon wxi-alert" style="color: #dc3545;" title="${statusCode}"></span> `;
+
+        return `<span title="код ответа">${statusCode}</span> `;
     }
 
     _formatLicenseActiveTill(licenseActiveTill) {
@@ -884,7 +940,7 @@ class InstanceListView {
             return;
         }
 
-        const selectedId = preserveState ? table.getSelectedId() : null;
+        const selectedIds = preserveState ? this._normalizeIds(table.getSelectedId(true)) : [];
         const scroll = preserveState ? table.getScrollState() : null;
         const minHeight = table.config.rowHeight || 36;
 
@@ -899,9 +955,11 @@ class InstanceListView {
             table.scrollTo(scroll.x, scroll.y);
         }
 
-        if (selectedId && table.exists(selectedId)) {
-            table.select(selectedId);
-        }
+        selectedIds.forEach((id) => {
+            if (table.exists(id)) {
+                table.select(id, true);
+            }
+        });
     }
 
     _statusColor(status) {
@@ -1056,6 +1114,171 @@ class InstanceListView {
                 button.define({ hotkey: key });
             }
         });
+    }
+
+    // Приводит идентификаторы строк Webix к массиву.
+    _normalizeIds(ids) {
+        if (!ids) {
+            return [];
+        }
+
+        return Array.isArray(ids) ? ids : [ids];
+    }
+
+    // Возвращает токены инстансов, отмеченных чекбоксом.
+    _getCheckedInstanceIds() {
+        const table = $$(this.NAMES.dataTable);
+        const checked = [];
+
+        table.data.each((obj) => {
+            if (obj.checked) {
+                checked.push(obj.id);
+            }
+        });
+
+        return checked;
+    }
+
+    // Берёт отмеченные чекбоксом строки, иначе выделенные.
+    _getSelectedInstanceIds() {
+        const checked = this._getCheckedInstanceIds();
+        if (checked.length > 0) {
+            return checked;
+        }
+
+        return this._normalizeIds($$(this.NAMES.dataTable).getSelectedId(true));
+    }
+
+    // Восстанавливает выделение и чекбоксы после перезагрузки таблицы.
+    _restoreRowMarks(table, selectedIds, checkedIds, fallbackId) {
+        checkedIds.forEach((id) => {
+            if (table.exists(id)) {
+                table.getItem(id).checked = true;
+            }
+        });
+
+        if (checkedIds.length > 0) {
+            table.refresh();
+        }
+
+        const idsToSelect = selectedIds.filter((id) => table.exists(id));
+        if (idsToSelect.length > 0) {
+            idsToSelect.forEach((id) => table.select(id, true));
+            return;
+        }
+
+        if (fallbackId && table.exists(fallbackId)) {
+            table.select(fallbackId);
+        }
+    }
+
+    // Открывает диалог выбора пакета для принудительной установки.
+    async _showForceUpdateDialog() {
+        const tokens = this._getSelectedInstanceIds();
+        if (tokens.length === 0) {
+            webix.message({
+                text: this.LABELS.selectInstances,
+                type: "error"
+            });
+            return;
+        }
+
+        this._disableHotkeys();
+
+        let updates = [];
+        try {
+            const data = await softwareUpdatesService.loadUpdates(1, 500);
+            updates = data?.content || [];
+        } catch (error) {
+            webix.message({
+                text: this.LABELS.errorLoadUpdates,
+                type: "error"
+            });
+            this._enableHotkeys();
+            return;
+        }
+
+        if (updates.length === 0) {
+            webix.message({
+                text: this.LABELS.noUpdates,
+                type: "error"
+            });
+            this._enableHotkeys();
+            return;
+        }
+
+        const options = updates.map((update) => ({
+            id: update.id,
+            value: `${update.version}.${update.assembly} · ${update.os} · ${update.architecture}`
+        }));
+
+        webix.ui({
+            view: "window",
+            id: "forceUpdateWindow",
+            modal: true,
+            width: 420,
+            position: "center",
+            head: this.LABELS.forceInstallTitle,
+            body: {
+                view: "form",
+                id: "forceUpdateForm",
+                elements: [
+                    {
+                        view: "label",
+                        label: `${this.LABELS.selectedCount}: ${tokens.length}`
+                    },
+                    {
+                        view: "combo",
+                        name: "updateId",
+                        label: this.LABELS.selectVersion,
+                        labelPosition: "top",
+                        options,
+                        required: true,
+                        invalidMessage: this.LABELS.selectVersionRequired
+                    },
+                    {
+                        cols: [
+                            {
+                                view: "button",
+                                value: this.LABELS.applyForce,
+                                css: "webix_primary",
+                                click: () => this._applyForcedUpdate(tokens)
+                            },
+                            {
+                                view: "button",
+                                value: this.LABELS.cancel,
+                                click: () => {
+                                    $$("forceUpdateWindow").close();
+                                    this._enableHotkeys();
+                                }
+                            }
+                        ]
+                    }
+                ]
+            },
+            on: {
+                onDestruct: () => this._enableHotkeys()
+            }
+        }).show();
+    }
+
+    // Назначает выбранный пакет отмеченным инстансам.
+    async _applyForcedUpdate(tokens) {
+        const form = $$("forceUpdateForm");
+        if (!form.validate()) {
+            return;
+        }
+
+        try {
+            const result = await instanceMonitoringService.assignForcedUpdate(tokens, form.getValues().updateId);
+            webix.message(result.description || "Назначение выполнено");
+            $$("forceUpdateWindow").close();
+        } catch (error) {
+            webix.message({
+                text: error.message || "Ошибка назначения",
+                type: "error"
+            });
+        }
     }
 
     _getSortedInstancesForExport() {

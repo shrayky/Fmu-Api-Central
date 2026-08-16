@@ -3,6 +3,7 @@ using CSharpFunctionalExtensions;
 using Domain.Attributes;
 using Domain.Configuration.Interfaces;
 using Domain.Configuration.Options;
+using Domain.Dto.FmuApiExchangeData;
 using Domain.Dto.FmuApiExchangeData.Answer;
 using Domain.Dto.FmuApiExchangeData.DataPacket;
 using Domain.Dto.FmuApiExchangeData.DataPacket.FmuApiState;
@@ -106,10 +107,7 @@ public class InstanceManagerService : IInstanceManagerService
 
         var updateResult = await _instanceRepository.Update(instanceEntity);
 
-        var (needUpdate, updateHash) = await _softwareVersionsManager.Value.NeedUpdate(fmuApiState.NodeInformation.Os,
-            fmuApiState.NodeInformation.Architecture,
-            fmuApiState.FmuApiSetting.Version,
-            fmuApiState.FmuApiSetting.Assembly);
+        var (needUpdate, updateHash) = await ResolveAvailableUpdate(instanceEntity, fmuApiState.FmuApiSetting);
 
         var softwareUpdateSettings = (await _parametersService.Current()).SoftwareUpdateSettings;
 
@@ -228,6 +226,8 @@ public class InstanceManagerService : IInstanceManagerService
             entity.Settings = existInstance.Value.Settings;
             entity.Cdn = existInstance.Value.Cdn;
             entity.TsPiots = existInstance.Value.TsPiots;
+            entity.SettingsModified = existInstance.Value.SettingsModified;
+            entity.ForcedUpdateId = existInstance.Value.ForcedUpdateId;
         }
 
         var createResult = await _instanceRepository.CreateInstance(entity);
@@ -295,6 +295,24 @@ public class InstanceManagerService : IInstanceManagerService
         if (!softwareUpdateSettings.IsDownloadAllowedNow())
             return Result.Failure<SoftwareUpdateFileDownload>("Загрузка обновления недоступна вне разрешённых интервалов");
 
+        Result<SoftwareUpdateFileDownload> download;
+
+        if (!string.IsNullOrWhiteSpace(entity.ForcedUpdateId))
+        {
+            download = await _softwareVersionsManager.Value.FmuApiUpdateById(entity.ForcedUpdateId, rangeFrom);
+
+            if (download.IsFailure)
+            {
+                entity.ForcedUpdateId = string.Empty;
+                await _instanceRepository.Update(entity);
+            }
+            else
+            {
+                await ClearForcedUpdateIfDownloadCompleted(entity, download.Value);
+                return download;
+            }
+        }
+
         var (needUpdate, _) = await _softwareVersionsManager.Value.NeedUpdate(entity.NodeInformation.Os,
             entity.NodeInformation.Architecture,
             entity.Settings.Version,
@@ -309,6 +327,109 @@ public class InstanceManagerService : IInstanceManagerService
             entity.Settings.Version,
             entity.Settings.Assembly,
             rangeFrom);
+    }
+
+    /// <summary>
+    /// Назначает выбранным инстансам конкретный пакет обновления, включая понижение версии.
+    /// </summary>
+    public async Task<Result<ForceUpdateResult>> AssignForcedUpdate(IReadOnlyList<string> tokens, string updateId)
+    {
+        try
+        {
+            if (tokens == null || tokens.Count == 0)
+                return Result.Failure<ForceUpdateResult>("Не выбраны инстансы");
+
+            if (string.IsNullOrWhiteSpace(updateId))
+                return Result.Failure<ForceUpdateResult>("Не указан идентификатор обновления");
+
+            var updateSearch = await _softwareVersionsManager.Value.ById(updateId);
+            if (updateSearch.IsFailure)
+                return Result.Failure<ForceUpdateResult>(updateSearch.Error);
+
+            var update = updateSearch.Value;
+            var assigned = 0;
+            var skipped = 0;
+
+            foreach (var token in tokens.Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                var instanceSearch = await _instanceRepository.ByToken(token);
+                if (instanceSearch.IsFailure || !OsArchMatches(instanceSearch.Value.NodeInformation, update))
+                {
+                    skipped++;
+                    continue;
+                }
+
+                var instance = instanceSearch.Value;
+                instance.ForcedUpdateId = update.Id;
+                var save = await _instanceRepository.Update(instance);
+                if (save.IsFailure)
+                {
+                    skipped++;
+                    continue;
+                }
+
+                assigned++;
+            }
+
+            return Result.Success(new ForceUpdateResult
+            {
+                Assigned = assigned,
+                Skipped = skipped,
+                Description = $"Назначено: {assigned}, пропущено: {skipped}"
+            });
+        }
+        catch (Exception ex)
+        {
+            return Result.Failure<ForceUpdateResult>(ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Выбирает пакет для инстанса: принудительный, если задан, иначе более новую сборку.
+    /// </summary>
+    private async Task<(bool needUpdate, string updateHash)> ResolveAvailableUpdate(
+        InstanceEntity instance,
+        FmuApiSetting settings)
+    {
+        if (!string.IsNullOrWhiteSpace(instance.ForcedUpdateId))
+        {
+            var forced = await _softwareVersionsManager.Value.ById(instance.ForcedUpdateId);
+            if (forced.IsSuccess)
+                return (true, forced.Value.Sha256);
+
+            instance.ForcedUpdateId = string.Empty;
+            await _instanceRepository.Update(instance);
+        }
+
+        return await _softwareVersionsManager.Value.NeedUpdate(
+            instance.NodeInformation.Os,
+            instance.NodeInformation.Architecture,
+            settings.Version,
+            settings.Assembly);
+    }
+
+    /// <summary>
+    /// Снимает принудительное назначение после полной отдачи файла.
+    /// </summary>
+    private async Task ClearForcedUpdateIfDownloadCompleted(InstanceEntity instance, SoftwareUpdateFileDownload download)
+    {
+        if (download.TotalLength <= 0 || download.To < download.TotalLength - 1)
+            return;
+
+        instance.ForcedUpdateId = string.Empty;
+        await _instanceRepository.Update(instance);
+    }
+
+    /// <summary>
+    /// Проверяет совпадение ОС и архитектуры инстанса с пакетом обновления.
+    /// </summary>
+    private static bool OsArchMatches(NodeInformation node, SoftwareUpdateFilesEntity update)
+    {
+        if (string.IsNullOrWhiteSpace(node.Os) || string.IsNullOrWhiteSpace(node.Architecture))
+            return false;
+
+        return string.Equals(node.Os, update.Os, StringComparison.OrdinalIgnoreCase)
+               && string.Equals(node.Architecture, update.Architecture, StringComparison.OrdinalIgnoreCase);
     }
 
     private static CentralServerProperties CreateCentralServerProperties(SoftwareUpdateSettings settings) =>

@@ -57,4 +57,12 @@ public class FmuApiInstanceController : ControllerBase
 
         return Ok(result);
     }
+
+    [HttpPost("force-update")]
+    public async Task<IActionResult> ForceUpdate([FromBody] ForceUpdateRequest request)
+    {
+        var result = await _managerService.AssignForcedUpdate(request.Tokens, request.UpdateId);
+
+        return result.IsSuccess ? Ok(result.Value) : BadRequest(result.Error);
+    }
 }

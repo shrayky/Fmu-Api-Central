@@ -99,6 +99,11 @@ public class SoftwareUpdatesManagerService : ISoftwareUpdatesManagerService
         return (need, u.Sha256);
     }
 
+    public async Task<Result<SoftwareUpdateFilesEntity>> ById(string id) => await _repository.ById(id);
+
+    public async Task<Result<SoftwareUpdateFileDownload>> FmuApiUpdateById(string updateId, long? rangeFrom)
+        => await _repository.FmuApiUpdate(updateId, rangeFrom);
+
     public async Task<Result<SoftwareUpdateFileDownload>> FmuApiUpdateData(
         string os,
         string architecture,
