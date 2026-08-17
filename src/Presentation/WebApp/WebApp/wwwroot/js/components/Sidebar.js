@@ -8,11 +8,9 @@ export class Sidebar {
         this.logoText = logoText;
         this.sidebarId = "mainSidebar";
         this.logoId = "logoText";
+        this.collapsedLogoId = "collapsedLogo";
     }
 
-    /**
-     * Возвращает конфиг Webix для вставки в layout.
-     */
     getView() {
         const collapsed = this._getCollapsed();
 
@@ -56,13 +54,22 @@ export class Sidebar {
                         onAfterSelect: this.onSelect
                     },
                     borderless: true
+                },
+                {
+                    view: "template",
+                    id: this.collapsedLogoId,
+                    borderless: true,
+                    height: 44,
+                    css: "sidebar-collapsed-logo",
+                    template: `<img src="${this.logo}" class="app-logo-collapsed" alt=""/>`,
+                    hidden: !collapsed
                 }
             ]
         };
     }
 
     /**
-     * Переключает свёрнутость сайдбара и синхронизирует логотип.
+     * Переключает свёрнутость сайдбара и синхронизирует логотипы.
      */
     _toggle() {
         const sidebar = $$(this.sidebarId);
@@ -70,25 +77,26 @@ export class Sidebar {
 
         const isCollapsed = sidebar.getState().collapsed;
         this._saveCollapsed(isCollapsed);
+        this._syncLogos(isCollapsed);
+    }
 
+    _syncLogos(isCollapsed) {
         const logo = $$(this.logoId);
+        const collapsedLogo = $$(this.collapsedLogoId);
+
         if (isCollapsed) {
             logo.hide();
+            collapsedLogo.show();
         } else {
             logo.show();
+            collapsedLogo.hide();
         }
     }
 
-    /**
-     * Определяет, открыто ли приложение на мобильном устройстве.
-     */
     _isMobile() {
         return window.innerWidth <= 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
     }
 
-    /**
-     * Возвращает сохранённое состояние сайдбара. На мобильном всегда свёрнут.
-     */
     _getCollapsed() {
         if (this._isMobile()) {
             return true;
@@ -97,9 +105,6 @@ export class Sidebar {
         return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "true";
     }
 
-    /**
-     * Сохраняет состояние сайдбара для следующей сессии (только десктоп).
-     */
     _saveCollapsed(isCollapsed) {
         if (this._isMobile()) {
             return;

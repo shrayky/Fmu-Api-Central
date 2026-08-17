@@ -16,6 +16,21 @@
     margin-right: 8px;
 }
 
+/* Логотип внизу свёрнутого сайдбара */
+.sidebar-collapsed-logo .webix_template {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    padding: 0;
+}
+
+.app-logo-collapsed {
+    width: 24px;
+    height: 24px;
+    display: block;
+}
+
 /* Обычное состояние - более специфичные селекторы для гарантии применения */
 .webix_tree_item .mdi-menu,
 .webix_list_item .mdi-menu {
