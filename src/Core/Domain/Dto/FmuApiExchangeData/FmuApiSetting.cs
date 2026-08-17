@@ -44,6 +44,15 @@ public record ServerConfiguration
 {
     [JsonPropertyName("apiIpPort")]
     public int ApiIpPort { get; init; } = 0;
+    public bool TsPiotEnabled { get; set; } = false;
+    public LocalModuleGeneral LocalModuleGeneral { get; set; } = new();
+    public int LocalModuleVersion { get; set; } = 0;
+}
+
+public record LocalModuleGeneral
+{
+    public int Version { get; set; } = 2;
+    public bool AutoInitializeOnSyncError { get; set; } = false;
 }
 
 public record MinimalPrices

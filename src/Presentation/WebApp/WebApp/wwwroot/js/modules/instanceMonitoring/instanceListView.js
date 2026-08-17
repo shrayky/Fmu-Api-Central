@@ -224,16 +224,22 @@ class InstanceListView {
                 },
                 {
                     view: "menu",
-                    id: "reportsMenu",
-                    autowidth: true,
+                    id: "instanceToolbarMenu",
+                    autowidth:true,
                     data: [
                         {
                             id: "reports",
                             value: "Отчеты",
-                            autowidth: true,
                             submenu: [
                                 { id: "reports:print", value: this.LABELS.printInstancesList },
                                 { id: "reports:csv", value: this.LABELS.exportToCsv },
+                            ]
+                        },
+                        {
+                            id: "actions",
+                            value: this.LABELS.actions,
+                            submenu: [
+                                { id: "actions:force-update", value: this.LABELS.forceInstall },
                             ]
                         }
                     ],
@@ -246,26 +252,9 @@ class InstanceListView {
 
                             if (id === "reports:csv") {
                                 this._exportInstancesCsv();
+                                return;
                             }
-                        }
-                    }
-                },
-                {
-                    view: "menu",
-                    id: "actionsMenu",
-                    autowidth: true,
-                    data: [
-                        {
-                            id: "actions",
-                            value: this.LABELS.actions,
-                            autowidth: true,
-                            submenu: [
-                                { id: "actions:force-update", value: this.LABELS.forceInstall },
-                            ]
-                        }
-                    ],
-                    on: {
-                        onMenuItemClick: (id) => {
+
                             if (id === "actions:force-update") {
                                 this._showForceUpdateDialog();
                             }
