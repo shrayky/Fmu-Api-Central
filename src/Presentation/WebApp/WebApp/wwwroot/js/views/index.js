@@ -2,7 +2,8 @@ import "../utils/customComponents.js";
 import { InitProxy } from '../utils/proxy.js';
 import { AuthService } from '../services/AuthService.js';
 import { RouterService } from '../services/RouterService.js';
-import { createLayout, createToolbarWithLogout, createSidebar } from '../components/Layout.js';
+import { createLayout, createTopToolbarWithLogout } from '../components/Layout.js';
+import { Sidebar } from '../components/Sidebar.js';
 import { MENU_ITEMS } from '../config/menu.js';
 import { registerWebixEditors } from "../utils/webixEditors.js";
 
@@ -36,6 +37,8 @@ class App {
         this.router.register("telegramBotSettings", async (id) => await createAlertSettingsView(id));
     }
 
+    isMobile = () => window.innerWidth <= 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
     createBlankLayout() {
         return createLayout({
             rows: [
@@ -45,20 +48,60 @@ class App {
     }
 
     createMainLayout() {
-        return createLayout({
+        const mainSidebar = new Sidebar({
+            items: Object.values(MENU_ITEMS),
+            onSelect: (id) => this.router.navigate(id, this.bodyId),
+            logo: "../../img/logo.png",
+            logoText: "FMU-API-CENTRAL"
+        }).getView();
+
+        const topToolbar = createTopToolbarWithLogout("FMU-API-CENTRAL",
+            this.handleLogout.bind(this),
+            AuthService.getServerUrl());
+
+        const mainBody = {
             rows: [
-                createToolbarWithLogout("Fmu-Api-Central", this.handleLogout.bind(this), AuthService.getServerUrl()),
+                topToolbar,
+
                 {
-                    cols: [
-                        createSidebar(
-                            Object.values(MENU_ITEMS),
-                            (id) => this.router.navigate(id, this.bodyId)
-                        ),
-                        { id: this.bodyId }
-                    ]
+                    id: this.bodyId
                 }
             ]
-        });
+        }
+
+        const layout = this.isMobile()
+            ?
+            {
+                cols: [
+                    mainBody,
+                    mainSidebar
+                ]
+            }
+            :
+            {
+                cols: [
+                    mainSidebar,
+                    mainBody
+                ]
+            };
+
+        return createLayout(layout);
+
+
+        // return createLayout({
+        //     rows: [
+        //         createToolbarWithLogout("Fmu-Api-Central", this.handleLogout.bind(this), AuthService.getServerUrl()),
+        //         {
+        //             cols: [
+        //                 createSidebar(
+        //                     Object.values(MENU_ITEMS),
+        //                     (id) => this.router.navigate(id, this.bodyId)
+        //                 ),
+        //                 { id: this.bodyId }
+        //             ]
+        //         }
+        //     ]
+        // });
     }
 
     async handleLogout() {

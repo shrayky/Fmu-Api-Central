@@ -1,36 +1,43 @@
-// js/config/menu.js
 export const MENU_ITEMS = {
     INSTANCE_MONITORING: {
         id: "instanceMonitoring",
-        value: "Мониторинг fmu-api"
+        value: "Мониторинг fmu-api",
+        icon: "mdi mdi-monitor-dashboard"
     },
     MARK_CHECK_STATISTICS: {
         id: "markCheckStatistics",
-        value: "Статистика проверок"
+        value: "Статистика проверок",
+        icon: "mdi mdi-monitor-dashboard"
     },
     SOFTWARE_UPDATES: {
         id: "softwareUpdates",
-        value: "Обновления fmu-api"
+        value: "Обновления fmu-api",
+        icon: "mdi mdi-file-document"
     },
     SERVER: {
         id: "serverSettings",
-        value: "Настройки сервера"
+        value: "Настройки сервера",
+        icon: "mdi mdi-server"
     },
     COUCHDB: {
         id: "couchDbSettings",
-        value: "CouchDB"
+        value: "CouchDB",
+        icon: "mdi mdi-database"
     },
     TELEGRAM_BOT_SETTINGS: {
         id: "telegramBotSettings",
-        value: "Оповещения"
+        value: "Оповещения",
+        icon: "mdi mdi-telegram"
     },
     LOGS: {
         id: "logs",
-        value: "Логи работы"
+        value: "Логи работы",
+        icon: "mdi mdi-file-log"
     },
     INFO: {
         id: "information",
-        value: "Информация"
+        value: "Информация",
+        icon: "mdi mdi-information"
     },
 };
 

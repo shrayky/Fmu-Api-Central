@@ -48,13 +48,27 @@ export const createToolbarWithLogout = (label, onLogout, serverUrl) => {
     return toolbar;
 };
 
-export const createSidebar = (items, onSelect) => ({
-    view: "sidebar",
-    id: "sidebar",
-    width: 200,
-    collapsed: false,
-    data: items,
-    on: {
-        onAfterSelect: onSelect
-    }
-});
+export const createTopToolbarWithLogout = (label, onLogout, serverUrl) => {
+    const toolbar = createToolbar(label);
+    toolbar.elements = [
+        {},
+        {
+            view: "label",
+            label: `${serverUrl.replace('http://', '').replace('https://', '')}`,
+            css: "webix_secondary",
+            align: "center"
+        },
+        {},
+        {
+            view: "button",
+            value: "Выход",
+            width: 80,
+            height: 40,
+            css: "webix_primary",
+            on: {
+                onItemClick: onLogout
+            }
+        }
+    ];
+    return toolbar;
+};

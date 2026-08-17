@@ -1,0 +1,165 @@
+.mdi {
+    display: inline-block;
+    width: 24px;
+    height: 24px;
+    vertical-align: middle;
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+}
+
+/* Обычное состояние - более специфичные селекторы для гарантии применения */
+.webix_tree_item .mdi-menu,
+.webix_list_item .mdi-menu {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M3,6H21V8H3V6M3,11H21V13H3V11M3,16H21V18H3V16Z' fill='%2394A1B3'/%3E%3C/svg%3E");
+}
+
+.mdi-menu {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M3,6H21V8H3V6M3,11H21V13H3V11M3,16H21V18H3V16Z' fill='%2394A1B3'/%3E%3C/svg%3E");
+}
+
+.webix_tree_item .mdi-monitor-dashboard,
+.webix_list_item .mdi-monitor-dashboard {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M21,16V4H3V16H21M21,2A2,2 0 0,1 23,4V16A2,2 0 0,1 21,18H14V20H16V22H8V20H10V18H3A2,2 0 0,1 1,16V4C1,2.89 1.9,2 3,2H21Z' fill='%2394A1B3'/%3E%3C/svg%3E");
+}
+
+.mdi-monitor-dashboard {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M21,16V4H3V16H21M21,2A2,2 0 0,1 23,4V16A2,2 0 0,1 21,18H14V20H16V22H8V20H10V18H3A2,2 0 0,1 1,16V4C1,2.89 1.9,2 3,2H21Z' fill='%2394A1B3'/%3E%3C/svg%3E");
+}
+
+.webix_tree_item .mdi-database,
+.webix_list_item .mdi-database {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12,3C7.58,3 4,4.79 4,7C4,9.21 7.58,11 12,11C16.42,11 20,9.21 20,7C20,4.79 16.42,3 12,3M4,9V12C4,14.21 7.58,16 12,16C16.42,16 20,14.21 20,12V9C20,11.21 16.42,13 12,13C7.58,13 4,11.21 4,9M4,14V17C4,19.21 7.58,21 12,21C16.42,21 20,19.21 20,17V14C20,16.21 16.42,18 12,18C7.58,18 4,16.21 4,14Z' fill='%2394A1B3'/%3E%3C/svg%3E");
+}
+
+.mdi-database {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12,3C7.58,3 4,4.79 4,7C4,9.21 7.58,11 12,11C16.42,11 20,9.21 20,7C20,4.79 16.42,3 12,3M4,9V12C4,14.21 7.58,16 12,16C16.42,16 20,14.21 20,12V9C20,11.21 16.42,13 12,13C7.58,13 4,11.21 4,9M4,14V17C4,19.21 7.58,21 12,21C16.42,21 20,19.21 20,17V14C20,16.21 16.42,18 12,18C7.58,18 4,16.21 4,14Z' fill='%2394A1B3'/%3E%3C/svg%3E");
+}
+
+.webix_tree_item .mdi-telegram,
+.webix_list_item .mdi-telegram {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M9.78,18.65L10.06,14.42L17.74,7.5C18.08,7.19 17.67,7.04 17.22,7.31L7.74,13.3L3.64,12C2.76,11.75 2.75,11.14 3.84,10.7L19.81,4.54C20.54,4.21 21.24,4.72 20.96,5.84L18.24,18.65C18.05,19.56 17.5,19.78 16.74,19.36L12.6,16.3L10.61,18.23C10.38,18.46 10.19,18.65 9.78,18.65Z' fill='%2394A1B3'/%3E%3C/svg%3E");
+}
+
+.mdi-telegram {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M9.78,18.65L10.06,14.42L17.74,7.5C18.08,7.19 17.67,7.04 17.22,7.31L7.74,13.3L3.64,12C2.76,11.75 2.75,11.14 3.84,10.7L19.81,4.54C20.54,4.21 21.24,4.72 20.96,5.84L18.24,18.65C18.05,19.56 17.5,19.78 16.74,19.36L12.6,16.3L10.61,18.23C10.38,18.46 10.19,18.65 9.78,18.65Z' fill='%2394A1B3'/%3E%3C/svg%3E");
+}
+
+.webix_tree_item .mdi-folder,
+.webix_list_item .mdi-folder {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M10,4H4C2.89,4 2,4.89 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V8C22,6.89 21.1,6 20,6H12L10,4Z' fill='%2394A1B3'/%3E%3C/svg%3E");
+}
+
+.mdi-folder {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M10,4H4C2.89,4 2,4.89 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V8C22,6.89 21.1,6 20,6H12L10,4Z' fill='%2394A1B3'/%3E%3C/svg%3E");
+}
+
+.webix_tree_item .mdi-file-document,
+.webix_list_item .mdi-file-document {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M20,6H12L10,4H4C2.89,4 2,4.89 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V8C22,6.89 21.1,6 20,6M18,18H4V8H20V18Z' fill='%2394A1B3'/%3E%3Cpath d='M6,12H18V14H6V12M6,15H14V17H6V15Z' fill='%2394A1B3'/%3E%3C/svg%3E");
+}
+
+.mdi-file-document {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M20,6H12L10,4H4C2.89,4 2,4.89 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V8C22,6.89 21.1,6 20,6M18,18H4V8H20V18Z' fill='%2394A1B3'/%3E%3Cpath d='M6,12H18V14H6V12M6,15H14V17H6V15Z' fill='%2394A1B3'/%3E%3C/svg%3E");
+}
+
+.webix_tree_item .mdi-information,
+.webix_list_item .mdi-information {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M13,9H11V7H13M13,17H11V11H13M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2Z' fill='%2394A1B3'/%3E%3C/svg%3E");
+}
+
+.mdi-information {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M13,9H11V7H13M13,17H11V11H13M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2Z' fill='%2394A1B3'/%3E%3C/svg%3E");
+}
+
+.webix_tree_item .mdi-server,
+.webix_list_item .mdi-server {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M3,17V19H9V17H3M3,5V7H13V5H3M13,21V19H21V17H13V15H11V21H13M7,9V11H3V13H7V15H9V9H7M21,13V11H11V13H21M15,9H17V7H21V5H17V3H15V9Z' fill='%2394A1B3'/%3E%3C/svg%3E");
+}
+
+.mdi-server {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M3,17V19H9V17H3M3,5V7H13V5H3M13,21V19H21V17H13V15H11V21H13M7,9V11H3V13H7V15H9V9H7M21,13V11H11V13H21M15,9H17V7H21V5H17V3H15V9Z' fill='%2394A1B3'/%3E%3C/svg%3E");
+}
+
+.webix_tree_item .mdi-file-log,
+.webix_list_item .mdi-file-log {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z' fill='%2394A1B3'/%3E%3C/svg%3E");
+}
+
+.mdi-file-log {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z' fill='%2394A1B3'/%3E%3C/svg%3E");
+}
+
+.webix_icon_button .webix_icon.mdi-fullscreen,
+.mdi-fullscreen {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M5,5H10V7H7V10H5V5M14,5H19V10H17V7H14V5M17,14H19V19H14V17H17V14M10,17V19H5V14H7V17H10Z' fill='%2394A1B3'/%3E%3C/svg%3E");
+}
+
+.webix_icon_button .webix_icon.mdi-fullscreen-exit,
+.mdi-fullscreen-exit {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M14,14H19V19H17V17H14V14M5,14H10V19H7V17H5V14M17,10H19V5H14V7H17V10M10,7V5H5V10H7V7H10Z' fill='%2394A1B3'/%3E%3C/svg%3E");
+}
+
+/* Стили для выбранных элементов - версии иконок с синим цветом */
+.webix_sidebar_selected .mdi-menu,
+.webix_selected .mdi-menu,
+.webix_tree_item.webix_selected .mdi-menu,
+.webix_tree_item.webix_sidebar_selected .mdi-menu {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M3,6H21V8H3V6M3,11H21V13H3V11M3,16H21V18H3V16Z' fill='%231CA1C1'/%3E%3C/svg%3E") !important;
+}
+
+.webix_sidebar_selected .mdi-monitor-dashboard,
+.webix_selected .mdi-monitor-dashboard,
+.webix_tree_item.webix_selected .mdi-monitor-dashboard,
+.webix_tree_item.webix_sidebar_selected .mdi-monitor-dashboard {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M21,16V4H3V16H21M21,2A2,2 0 0,1 23,4V16A2,2 0 0,1 21,18H14V20H16V22H8V20H10V18H3A2,2 0 0,1 1,16V4C1,2.89 1.9,2 3,2H21Z' fill='%231CA1C1'/%3E%3C/svg%3E") !important;
+}
+
+.webix_sidebar_selected .mdi-database,
+.webix_selected .mdi-database,
+.webix_tree_item.webix_selected .mdi-database,
+.webix_tree_item.webix_sidebar_selected .mdi-database {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12,3C7.58,3 4,4.79 4,7C4,9.21 7.58,11 12,11C16.42,11 20,9.21 20,7C20,4.79 16.42,3 12,3M4,9V12C4,14.21 7.58,16 12,16C16.42,16 20,14.21 20,12V9C20,11.21 16.42,13 12,13C7.58,13 4,11.21 4,9M4,14V17C4,19.21 7.58,21 12,21C16.42,21 20,19.21 20,17V14C20,16.21 16.42,18 12,18C7.58,18 4,16.21 4,14Z' fill='%231CA1C1'/%3E%3C/svg%3E") !important;
+}
+
+.webix_sidebar_selected .mdi-telegram,
+.webix_selected .mdi-telegram,
+.webix_tree_item.webix_selected .mdi-telegram,
+.webix_tree_item.webix_sidebar_selected .mdi-telegram {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M9.78,18.65L10.06,14.42L17.74,7.5C18.08,7.19 17.67,7.04 17.22,7.31L7.74,13.3L3.64,12C2.76,11.75 2.75,11.14 3.84,10.7L19.81,4.54C20.54,4.21 21.24,4.72 20.96,5.84L18.24,18.65C18.05,19.56 17.5,19.78 16.74,19.36L12.6,16.3L10.61,18.23C10.38,18.46 10.19,18.65 9.78,18.65Z' fill='%231CA1C1'/%3E%3C/svg%3E") !important;
+}
+
+.webix_sidebar_selected .mdi-folder,
+.webix_selected .mdi-folder,
+.webix_tree_item.webix_selected .mdi-folder,
+.webix_tree_item.webix_sidebar_selected .mdi-folder {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M10,4H4C2.89,4 2,4.89 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V8C22,6.89 21.1,6 20,6H12L10,4Z' fill='%231CA1C1'/%3E%3C/svg%3E") !important;
+}
+
+.webix_sidebar_selected .mdi-file-document,
+.webix_selected .mdi-file-document,
+.webix_tree_item.webix_selected .mdi-file-document,
+.webix_tree_item.webix_sidebar_selected .mdi-file-document {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M20,6H12L10,4H4C2.89,4 2,4.89 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V8C22,6.89 21.1,6 20,6M18,18H4V8H20V18Z' fill='%231CA1C1'/%3E%3Cpath d='M6,12H18V14H6V12M6,15H14V17H6V15Z' fill='%231CA1C1'/%3E%3C/svg%3E") !important;
+}
+
+.webix_sidebar_selected .mdi-information,
+.webix_selected .mdi-information,
+.webix_tree_item.webix_selected .mdi-information,
+.webix_tree_item.webix_sidebar_selected .mdi-information {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M13,9H11V7H13M13,17H11V11H13M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2Z' fill='%231CA1C1'/%3E%3C/svg%3E") !important;
+}
+
+.webix_sidebar_selected .mdi-server,
+.webix_selected .mdi-server,
+.webix_tree_item.webix_selected .mdi-server,
+.webix_tree_item.webix_sidebar_selected .mdi-server {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M3,17V19H9V17H3M3,5V7H13V5H3M13,21V19H21V17H13V15H11V21H13M7,9V11H3V13H7V15H9V9H7M21,13V11H11V13H21M15,9H17V7H21V5H17V3H15V9Z' fill='%231CA1C1'/%3E%3C/svg%3E") !important;
+}
+
+.webix_sidebar_selected .mdi-file-log,
+.webix_selected .mdi-file-log,
+.webix_tree_item.webix_selected .mdi-file-log,
+.webix_tree_item.webix_sidebar_selected .mdi-file-log {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z' fill='%231CA1C1'/%3E%3C/svg%3E") !important;
+}
