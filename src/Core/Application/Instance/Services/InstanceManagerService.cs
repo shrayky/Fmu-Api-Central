@@ -189,6 +189,7 @@ public class InstanceManagerService : IInstanceManagerService
                 LocalModules = entity.LocalModules,
                 TsPiots = entity.TsPiots,
                 Address = entity.Address,
+                ForcedUpdateId = entity.ForcedUpdateId,
             };
 
             content.Add(record);
@@ -329,9 +330,6 @@ public class InstanceManagerService : IInstanceManagerService
             rangeFrom);
     }
 
-    /// <summary>
-    /// Назначает выбранным инстансам конкретный пакет обновления, включая понижение версии.
-    /// </summary>
     public async Task<Result<ForceUpdateResult>> AssignForcedUpdate(IReadOnlyList<string> tokens, string updateId)
     {
         try
@@ -384,9 +382,6 @@ public class InstanceManagerService : IInstanceManagerService
         }
     }
 
-    /// <summary>
-    /// Выбирает пакет для инстанса: принудительный, если задан, иначе более новую сборку.
-    /// </summary>
     private async Task<(bool needUpdate, string updateHash)> ResolveAvailableUpdate(
         InstanceEntity instance,
         FmuApiSetting settings)
@@ -408,9 +403,6 @@ public class InstanceManagerService : IInstanceManagerService
             settings.Assembly);
     }
 
-    /// <summary>
-    /// Снимает принудительное назначение после полной отдачи файла.
-    /// </summary>
     private async Task ClearForcedUpdateIfDownloadCompleted(InstanceEntity instance, SoftwareUpdateFileDownload download)
     {
         if (download.TotalLength <= 0 || download.To < download.TotalLength - 1)
@@ -420,9 +412,6 @@ public class InstanceManagerService : IInstanceManagerService
         await _instanceRepository.Update(instance);
     }
 
-    /// <summary>
-    /// Проверяет совпадение ОС и архитектуры инстанса с пакетом обновления.
-    /// </summary>
     private static bool OsArchMatches(NodeInformation node, SoftwareUpdateFilesEntity update)
     {
         if (string.IsNullOrWhiteSpace(node.Os) || string.IsNullOrWhiteSpace(node.Architecture))

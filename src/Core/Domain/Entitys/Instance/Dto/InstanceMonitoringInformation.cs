@@ -28,4 +28,7 @@ public record InstanceMonitoringInformation
 
     [JsonPropertyName("TsPiots")]
     public List<TsPiotInformation> TsPiots { get; init; } = [];
+
+    [JsonPropertyName("forcedUpdateId")]
+    public string ForcedUpdateId { get; init; } = string.Empty;
 }

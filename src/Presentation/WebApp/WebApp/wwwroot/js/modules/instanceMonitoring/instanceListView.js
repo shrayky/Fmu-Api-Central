@@ -376,6 +376,7 @@ class InstanceListView {
                     header: [this.LABELS.instanceName],
                     fillspace: true,
                     sort: "string",
+                    template: (obj) => this._formatInstanceName(obj)
                 },
                 {
                     id: this.NAMES.hostAddress,
@@ -811,6 +812,17 @@ class InstanceListView {
 
         this._assignRowHeightsToRecords([createdRecord]);
         table.add(createdRecord);
+    }
+
+    /**
+     * Имя инстанса и иконка принудительной установки, если пакет назначен.
+     */
+    _formatInstanceName(obj) {
+        const name = webix.template.escape(obj.name || "");
+        if (!obj.forcedUpdateId)
+            return name;
+
+        return `${name} <span class="webix_icon wxi-download" style="color: #0d6efd;" title="${this.LABELS.forceInstall}"></span>`;
     }
 
     _formatLocalModules(localModules) {
@@ -1262,6 +1274,7 @@ class InstanceListView {
             const result = await instanceMonitoringService.assignForcedUpdate(tokens, form.getValues().updateId);
             webix.message(result.description || "Назначение выполнено");
             $$("forceUpdateWindow").close();
+            this._loadData();
         } catch (error) {
             webix.message({
                 text: error.message || "Ошибка назначения",
