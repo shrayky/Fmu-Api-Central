@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" shape-rendering="geometricPrecision">
+  <circle cx="256" cy="256" r="248" fill="#056464" stroke="#ffffff" stroke-width="12"/>
+  <polygon points="488,256 372,456.92 140,456.92 24,256 140,55.08 372,55.08" fill="none" stroke="#ffffff" stroke-width="12" stroke-linejoin="miter"/>
+  <text x="256" y="256" text-anchor="middle" dominant-baseline="middle" fill="#ffffff" font-family="Bahnschrift, 'Segoe UI', Arial, sans-serif" font-weight="700" font-size="82">fmu-api</text>
+  <text x="256" y="338" text-anchor="middle" fill="#ffffff" font-family="Bahnschrift, 'Segoe UI', Arial, sans-serif" font-weight="400" font-size="44" letter-spacing="4">central</text>
+</svg>

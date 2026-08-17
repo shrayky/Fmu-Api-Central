@@ -51,7 +51,7 @@ class App {
         const mainSidebar = new Sidebar({
             items: Object.values(MENU_ITEMS),
             onSelect: (id) => this.router.navigate(id, this.bodyId),
-            logo: "../../img/logo.png",
+            logo: "../../img/logo.svg",
             logoText: "FMU-API-CENTRAL"
         }).getView();
 

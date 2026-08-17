@@ -8,6 +8,14 @@
     background-position: center;
 }
 
+/* Логотип в шапке сайдбара: вектор, без растрового размытия */
+.app-logo {
+    width: 48px;
+    height: 48px;
+    vertical-align: middle;
+    margin-right: 8px;
+}
+
 /* Обычное состояние - более специфичные селекторы для гарантии применения */
 .webix_tree_item .mdi-menu,
 .webix_list_item .mdi-menu {

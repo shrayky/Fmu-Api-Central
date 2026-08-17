@@ -34,7 +34,7 @@ export class Sidebar {
                             borderless: true,
                             css: "webix_primary",
                             minWidth: 200,
-                            template: `<div style="text-align:left;line-height:56px;"><img src="${this.logo}" style="height:28px;vertical-align:middle;margin-right:8px;"/>${this.logoText}</div>`,
+                            template: `<div style="text-align:left;line-height:56px;"><img src="${this.logo}" class="app-logo" alt=""/>${this.logoText}</div>`,
                             hidden: collapsed
                         },
                         {},
