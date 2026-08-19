@@ -3,7 +3,6 @@ using Authentication;
 using Configuration;
 using CouchDb;
 using Domain.Configuration;
-using Domain.Configuration.Constants;
 using Logger;
 using Messages.Extensions;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
@@ -14,34 +13,23 @@ using WebApi.Workers;
 
 var settingsLoadResult = await ParametersLoader.LoadFromAppFolder();
 Parameters appSettings = new();
-const string appType = "api";
-                                                                    
-if (settingsLoadResult.IsSuccess)                                   
-    appSettings = settingsLoadResult.Value;                         
 
-if (args.Contains("--install"))
-{
-    InstallerFabric.Install(args, 
-        $"{ApplicationInformation.Name}-{appType}",
-        $"{ApplicationInformation.ServiceName}-{appType}",
-        ApplicationInformation.Manufacture,
-        appSettings.ServerSettings.ApiIpPort);
-}
-else if (args.Contains("--uninstall"))
-{
-    InstallerFabric.Uninstall($"{ApplicationInformation.Name}-{appType}",
-        $"{ApplicationInformation.ServiceName}-{appType}", 
-        ApplicationInformation.Manufacture, 
-        appSettings.ServerSettings.ApiIpPort);
-}
-else if (args.Contains("--help"))
+if (settingsLoadResult.IsSuccess)
+    appSettings = settingsLoadResult.Value;
+
+if (args.Contains("--help"))
 {
     Console.WriteLine("Использование:");
-    Console.WriteLine("--install - для установки службы (для linux - генерация скриптов установки)");
-    Console.WriteLine("--uninstall - для удаления службы (для linux - генерация скриптов удаления)");
+    Console.WriteLine("--service - запуск в режиме службы (рабочий режим под host)");
+    Console.WriteLine("--install - установка службы (через fmu-api-central.exe)");
+    Console.WriteLine("--uninstall - удаление службы");
+    return;
 }
 
-if (args.Length > 0)
+if (HostProcessLauncher.IsHostCommand(args))
+    Environment.Exit(HostProcessLauncher.Run(args));
+
+if (args.Length > 0 && !args.Contains("--service"))
     return;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -79,11 +67,6 @@ builder.Services.Configure<KestrelServerOptions>(options =>
     options.Limits.KeepAliveTimeout = TimeSpan.FromMinutes(10);
     options.Limits.RequestHeadersTimeout = TimeSpan.FromMinutes(10);
 });
-
-if (OperatingSystem.IsWindows())
-{
-    builder.Host.UseWindowsService();
-}
 
 var app = builder.Build();
 

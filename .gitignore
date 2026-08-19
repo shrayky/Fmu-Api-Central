@@ -438,4 +438,5 @@ typings/
 # TernJS port file
 .tern-port
 /builds
+/.nuke/temp
 /temp_couch.dll

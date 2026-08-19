@@ -1,32 +1,20 @@
-using Domain.Configuration.Constants;
 using Shared.Installer;
 
 const int ipPort = 2580;
-const string appType = "web";
-                                                                    
-if (args.Contains("--install"))
-{
-    InstallerFabric.Install(args, 
-        $"{ApplicationInformation.Name}-{appType}",
-        $"{ApplicationInformation.ServiceName}-{appType}",
-        ApplicationInformation.Manufacture,
-        ipPort);
-}
-else if (args.Contains("--uninstall"))
-{
-    InstallerFabric.Uninstall($"{ApplicationInformation.Name}-{appType}",
-        $"{ApplicationInformation.ServiceName}-{appType}", 
-        ApplicationInformation.Manufacture, 
-        ipPort);
-}
-else if (args.Contains("--help"))
+
+if (args.Contains("--help"))
 {
     Console.WriteLine("Использование:");
-    Console.WriteLine("--install - для установки службы (для linux - генерация скриптов установки)");
-    Console.WriteLine("--uninstall - для удаления службы (для linux - генерация скриптов удаления)");
+    Console.WriteLine("--service - запуск в режиме службы (рабочий режим под host)");
+    Console.WriteLine("--install - установка службы (через fmu-api-central.exe)");
+    Console.WriteLine("--uninstall - удаление службы");
+    return;
 }
 
-if (args.Length > 0)
+if (HostProcessLauncher.IsHostCommand(args))
+    Environment.Exit(HostProcessLauncher.Run(args));
+
+if (args.Length > 0 && !args.Contains("--service"))
     return;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -36,11 +24,6 @@ Console.WriteLine("Starting WebApp application...");
 builder.WebHost.UseUrls($"http://+:{ipPort}");
 
 builder.Services.AddRazorPages();
-
-if (OperatingSystem.IsWindows())
-{
-    builder.Host.UseWindowsService();
-}
 
 var app = builder.Build();
 

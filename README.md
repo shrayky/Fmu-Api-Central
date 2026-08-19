@@ -8,14 +8,14 @@ FMU-API-CENTRAL
 
 Установка: запуск из консоли
 ```
-WebApi --install.
+fmu-api-central.exe --install
 ```
 
-Удаление: запуск из консоли 
+Удаление: запуск из консоли
 ```
-WebApi --uninstall.
+fmu-api-central.exe --uninstall
 ```
 
-Аналогично и с WebView.
+Хост ставит одну Windows-службу и запускает API и WebApp как дочерние процессы.
 
 Для работы требуется установить [CouchDb](https://couchdb.apache.org).
