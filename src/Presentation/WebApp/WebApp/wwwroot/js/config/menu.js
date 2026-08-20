@@ -7,7 +7,7 @@ export const MENU_ITEMS = {
     MARK_CHECK_STATISTICS: {
         id: "markCheckStatistics",
         value: "Статистика проверок",
-        icon: "mdi mdi-monitor-dashboard"
+        icon: "mdi mdi-table-chart"
     },
     SOFTWARE_UPDATES: {
         id: "softwareUpdates",
@@ -37,7 +37,7 @@ export const MENU_ITEMS = {
     SERVICE: {
         id: "service",
         value: "Сервис",
-        icon: "mdi mdi-toolbox"
+        icon: "mdi mdi-engineering"
     },
     INFO: {
         id: "information",
