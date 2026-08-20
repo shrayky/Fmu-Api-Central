@@ -8,4 +8,6 @@ public class DatabaseNames
     public const string MarkCheckingStatistic = "fmu-api-central-mark-checking-statistic";
 
     public static string[] All() => [Users, Instance, SoftwareUpdateFiles, MarkCheckingStatistic];
+
+    public static string[] ExcludedFromExport() => [Users, SoftwareUpdateFiles];
 }

@@ -52,3 +52,64 @@ export async function saveConfigurationSections(updaters) {
 
   return await saveConfiguration(content);
 }
+
+/**
+ * Скачивает JSON переносимых настроек приложения.
+ */
+export async function exportPortableSettings() {
+  const token = await AuthService.getValidToken();
+  const response = await fetch(`${AuthService.getServerUrl()}/api/Configuration/export`, {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
+
+  if (response.status === 401) {
+    AuthService.redirectToLogin();
+    return { result: false, error: 'Unauthorized', value: null };
+  }
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    return { result: false, error: errorText, value: null };
+  }
+
+  const blob = await response.blob();
+  return {
+    result: true,
+    error: null,
+    value: {
+      blob,
+      fileName: fileNameFromDisposition(response.headers.get('Content-Disposition'), 'fmu-api-central-settings.json')
+    }
+  };
+}
+
+/**
+ * Загружает JSON переносимых настроек приложения.
+ */
+export async function importPortableSettings(file) {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  return await AuthService.makeAuthenticatedRequest('/api/Configuration/import', {
+    method: 'POST',
+    body: formData
+  });
+}
+
+function fileNameFromDisposition(disposition, fallback) {
+  if (!disposition)
+    return fallback;
+
+  const utfMatch = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utfMatch)
+    return decodeURIComponent(utfMatch[1]);
+
+  const match = disposition.match(/filename="?([^"]+)"?/i);
+  if (match)
+    return match[1];
+
+  return fallback;
+}

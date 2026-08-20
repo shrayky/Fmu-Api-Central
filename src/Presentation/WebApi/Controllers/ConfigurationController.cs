@@ -3,6 +3,7 @@
 using Application.Configuration.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Text;
 using System.Text.Json;
 
 namespace WebApi.Controllers.Api
@@ -36,6 +37,28 @@ namespace WebApi.Controllers.Api
                 BadRequest("Ошибка обновления конфигурации");
 
             return Content(content, "application/json");
+        }
+
+        [HttpGet("export")]
+        public async Task<IActionResult> ExportPortable(CancellationToken cancellationToken)
+        {
+            var result = await _configurationService.ExportPortable(cancellationToken);
+            if (result.IsFailure)
+                return BadRequest(result.Error);
+
+            var file = result.Value;
+            var bytes = Encoding.UTF8.GetBytes(file.Json);
+            return File(bytes, file.ContentType, file.FileName);
+        }
+
+        [HttpPost("import")]
+        public async Task<IActionResult> ImportPortable(IFormFile file, CancellationToken cancellationToken)
+        {
+            if (file == null || file.Length == 0)
+                return BadRequest("Не выбран файл настроек");
+
+            var result = await _configurationService.ImportPortable(file, cancellationToken);
+            return result.IsSuccess ? Ok() : BadRequest(result.Error);
         }
 
         [HttpGet("about")]

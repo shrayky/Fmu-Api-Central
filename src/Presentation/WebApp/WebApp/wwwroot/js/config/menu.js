@@ -34,6 +34,11 @@ export const MENU_ITEMS = {
         value: "Логи работы",
         icon: "mdi mdi-file-log"
     },
+    SERVICE: {
+        id: "service",
+        value: "Сервис",
+        icon: "mdi mdi-toolbox"
+    },
     INFO: {
         id: "information",
         value: "Информация",

@@ -80,6 +80,17 @@ namespace CouchDb
                     HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
             });
 
+            // Выгрузка и загрузка баз идёт пакетами и может занимать дольше обычного queryTimeout.
+            services.AddHttpClient(Services.CouchDbDumpService.HttpClientName, client =>
+            {
+                client.Timeout = Timeout.InfiniteTimeSpan;
+            })
+            .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+            {
+                ServerCertificateCustomValidationCallback =
+                    HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+            });
+
             if (settings.Enable)
             {
                 services.AddHostedService<DatabaseStatusCheckWorker>();
