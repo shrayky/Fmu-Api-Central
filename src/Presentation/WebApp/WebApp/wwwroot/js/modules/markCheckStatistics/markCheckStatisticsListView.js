@@ -27,6 +27,7 @@ class MarkCheckStatisticsListView {
             prevButton: "←",
             nextButton: "→",
             instanceName: "Имя инстанса",
+            lastUpdated: "Обновлен",
             total: "Всего",
             onlineChecks: "Онлайн",
             offlineChecks: "Офлайн",
@@ -55,6 +56,7 @@ class MarkCheckStatisticsListView {
             dataTable: "markCheckStatisticsDataTable",
             filterSummaryLabel: "markCheckStatisticsFilterSummaryLabel",
             instanceName: "instanceName",
+            lastUpdated: "lastUpdated",
             total: "total",
             onlineChecks: "successfulOnlineChecks",
             offlineChecks: "successfulOfflineChecks",
@@ -319,6 +321,13 @@ class MarkCheckStatisticsListView {
                     sort: "string",
                 },
                 {
+                    id: this.NAMES.lastUpdated,
+                    header: [this.LABELS.lastUpdated],
+                    width: 140,
+                    template: (obj) => this._formatLastUpdated(obj.lastUpdated),
+                    sort: "string",
+                },
+                {
                     id: this.NAMES.total,
                     header: [this.LABELS.total],
                     width: 90,
@@ -575,6 +584,34 @@ class MarkCheckStatisticsListView {
         }
 
         return `${Number(value).toFixed(2)}%`;
+    }
+
+    /**
+     * Форматирует дату последнего обмена; старше 24 часов выделяет красным.
+     */
+    _formatLastUpdated(dateString) {
+        if (!dateString) {
+            return "";
+        }
+
+        const date = new Date(dateString);
+        if (isNaN(date.getTime()) || date.getFullYear() <= 1) {
+            return "";
+        }
+
+        const day = date.getDate().toString().padStart(2, "0");
+        const month = (date.getMonth() + 1).toString().padStart(2, "0");
+        const year = date.getFullYear().toString().slice(-2);
+        const hours = date.getHours().toString().padStart(2, "0");
+        const minutes = date.getMinutes().toString().padStart(2, "0");
+        const formattedDate = `${day}.${month}.${year} ${hours}:${minutes}`;
+
+        const diffInHours = (Date.now() - date.getTime()) / (1000 * 60 * 60);
+        if (diffInHours > 24) {
+            return `<span style="color: red; font-weight: bold;">${formattedDate}</span>`;
+        }
+
+        return formattedDate;
     }
 
     _printList() {

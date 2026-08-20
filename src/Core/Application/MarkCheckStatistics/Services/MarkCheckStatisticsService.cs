@@ -1,6 +1,7 @@
 using CSharpFunctionalExtensions;
 using Domain.Attributes;
 using Domain.Dto.Responces;
+using Domain.Entitys.Instance;
 using Domain.Entitys.Interfaces;
 using Domain.Entitys.MarkCheckStatistics.Dto;
 using Domain.Entitys.MarkCheckStatistics.Interfaces;
@@ -44,13 +45,13 @@ public class MarkCheckStatisticsService : IMarkCheckStatisticsService
             return EmptyResponse(pageSize, instancesResult.Error);
         }
 
-        var instanceNames = instancesResult.Value.ToDictionary(i => i.Id, i => i.Name);
+        var instances = instancesResult.Value.ToDictionary(i => i.Id);
         var recordsByInstance = statisticsResult.Value
             .GroupBy(entity => entity.NodeId)
             .ToDictionary(group => group.Key, group => group.ToList());
 
         var rows = recordsByInstance.Keys
-            .Select(nodeId => BuildPeriodRow(nodeId, instanceNames, recordsByInstance))
+            .Select(nodeId => BuildPeriodRow(nodeId, instances, recordsByInstance))
             .Where(row => MatchesFilter(row, filter))
             .OrderBy(row => row.InstanceName, StringComparer.Create(new System.Globalization.CultureInfo("ru-RU"), true))
             .ToList();
@@ -86,10 +87,10 @@ public class MarkCheckStatisticsService : IMarkCheckStatisticsService
 
     private static MarkCheckStatisticsPeriodRow BuildPeriodRow(
         string nodeId,
-        Dictionary<string, string> instanceNames,
+        Dictionary<string, InstanceEntity> instances,
         Dictionary<string, List<MarkCheckStatisticsEntity>> recordsByInstance)
     {
-        instanceNames.TryGetValue(nodeId, out var instanceName);
+        instances.TryGetValue(nodeId, out var instance);
         var records = recordsByInstance[nodeId];
 
         var total = records.Sum(record => record.Total);
@@ -103,7 +104,8 @@ public class MarkCheckStatisticsService : IMarkCheckStatisticsService
         return new MarkCheckStatisticsPeriodRow
         {
             Id = nodeId,
-            InstanceName = instanceName ?? nodeId,
+            InstanceName = instance?.Name ?? nodeId,
+            LastUpdated = instance?.UpdatedAt,
             Total = total,
             SuccessfulOnlineChecks = online,
             SuccessfulOfflineChecks = offline,
