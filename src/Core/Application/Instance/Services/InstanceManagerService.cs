@@ -15,6 +15,8 @@ using Domain.Entitys.Instance.Interfaces;
 using Domain.Entitys.InstanceGroup;
 using Domain.Entitys.InstanceGroup.Dto;
 using Domain.Entitys.Interfaces;
+using Application.SettingsSchema;
+using Domain.Entitys.SettingsSchema.Interfaces;
 using Domain.Entitys.SoftwareUpdateFiles;
 using Domain.Entitys.MarkCheckStatistics.Interfaces;
 using Domain.Entitys.MarksCheckStatistic;
@@ -32,18 +34,21 @@ public class InstanceManagerService : IInstanceManagerService
     private readonly ILogger<IInstanceManagerService> _logger;
     private readonly IInstanceRepository _instanceRepository;
     private readonly IInstanceGroupRepository _instanceGroupRepository;
+    private readonly ISettingsSchemaRepository _settingsSchemaRepository;
     private readonly Lazy<ISoftwareUpdatesManagerService> _softwareVersionsManager;
     private readonly IMarksCheckStatisticRepository _marksCheckStatisticRepository;
     private readonly IParametersService _parametersService;
 
     public InstanceManagerService(ILogger<IInstanceManagerService> logger, IInstanceRepository instanceRepository,
         IInstanceGroupRepository instanceGroupRepository,
+        ISettingsSchemaRepository settingsSchemaRepository,
         IServiceProvider serviceProvider, IMarksCheckStatisticRepository marksCheckStatisticRepository,
         IParametersService parametersService)
     {
         _logger = logger;
         _instanceRepository = instanceRepository;
         _instanceGroupRepository = instanceGroupRepository;
+        _settingsSchemaRepository = settingsSchemaRepository;
         
         _softwareVersionsManager =
             new Lazy<ISoftwareUpdatesManagerService>(serviceProvider
@@ -107,8 +112,7 @@ public class InstanceManagerService : IInstanceManagerService
         if (loadStatisticResult.IsFailure)
             return Result.Failure<FmuApiCentralResponse>(loadStatisticResult.Error);
 
-        if (!instanceEntity.SettingsModified)
-            instanceEntity.Settings = fmuApiState.FmuApiSetting;
+        instanceEntity.Settings = await ResolveSettingsForSave(instanceEntity, fmuApiState.FmuApiSetting);
 
         var updateResult = await _instanceRepository.Update(instanceEntity);
 
@@ -200,7 +204,8 @@ public class InstanceManagerService : IInstanceManagerService
                 {
                     Id = entity.GroupId,
                     Name = groupNames.GetValueOrDefault(entity.GroupId, string.Empty)
-                }
+                },
+                SettingsModified = entity.SettingsModified
             };
 
             content.Add(record);
@@ -227,7 +232,8 @@ public class InstanceManagerService : IInstanceManagerService
             UpdatedAt = instance.LastUpdated,
             SecretKey = instance.SecretKey,
             Address = instance.Address,
-            GroupId = instance.Group?.Id ?? string.Empty
+            GroupId = instance.Group?.Id ?? string.Empty,
+            SettingsModified = instance.SettingsModified
         };
         
         var existInstance = await _instanceRepository.ByToken(instance.Token);
@@ -239,8 +245,11 @@ public class InstanceManagerService : IInstanceManagerService
             entity.Settings = existInstance.Value.Settings;
             entity.Cdn = existInstance.Value.Cdn;
             entity.TsPiots = existInstance.Value.TsPiots;
-            entity.SettingsModified = existInstance.Value.SettingsModified;
             entity.ForcedUpdateId = existInstance.Value.ForcedUpdateId;
+        }
+        else if (entity.SettingsModified)
+        {
+            entity.Settings = await ApplyGroupSchema(entity.GroupId, entity.Settings);
         }
 
         var createResult = await _instanceRepository.CreateInstance(entity);
@@ -428,6 +437,37 @@ public class InstanceManagerService : IInstanceManagerService
 
         instance.ForcedUpdateId = string.Empty;
         await _instanceRepository.Update(instance);
+    }
+
+    private async Task<FmuApiSetting> ResolveSettingsForSave(InstanceEntity instance, FmuApiSetting incoming)
+    {
+        if (!instance.SettingsModified)
+            return incoming;
+
+        if (GroupSettingsApply.HasSnapshot(instance.Settings))
+            return instance.Settings;
+
+        return await ApplyGroupSchema(instance.GroupId, incoming);
+    }
+
+    private async Task<FmuApiSetting> ApplyGroupSchema(string groupId, FmuApiSetting source)
+    {
+        if (string.IsNullOrEmpty(groupId))
+            return source;
+
+        var groupSearch = await _instanceGroupRepository.GetById(groupId);
+        if (groupSearch.IsFailure || string.IsNullOrEmpty(groupSearch.Value.SettingsSchemaId))
+            return source;
+
+        var schemaSearch = await _settingsSchemaRepository.GetById(groupSearch.Value.SettingsSchemaId);
+        if (schemaSearch.IsFailure)
+            return source;
+
+        return GroupSettingsApply.Apply(
+            source,
+            schemaSearch.Value.HttpRequestTimeouts,
+            schemaSearch.Value.GisMtProductMappings,
+            schemaSearch.Value.HostsToPing);
     }
 
     private async Task<bool> AutoUpdateAllowed(InstanceEntity instance)

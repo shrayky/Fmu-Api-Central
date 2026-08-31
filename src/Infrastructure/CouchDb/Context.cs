@@ -6,6 +6,7 @@ using Domain.Entitys;
 using Domain.Entitys.Instance;
 using Domain.Entitys.InstanceGroup;
 using Domain.Entitys.MarksCheckStatistic;
+using Domain.Entitys.SettingsSchema;
 using Domain.Entitys.SoftwareUpdateFiles;
 
 namespace CouchDb
@@ -15,6 +16,7 @@ namespace CouchDb
         public required CouchDatabase<UniversalDocument<UserEntity>> Users { get; set; }
         public required CouchDatabase<UniversalDocument<InstanceEntity>> FmuApiInstances { get; set; }
         public required CouchDatabase<UniversalDocument<InstanceGroupEntity>> InstanceGroups { get; set; }
+        public required CouchDatabase<UniversalDocument<SettingsSchemaEntity>> SettingsSchemas { get; set; }
         public required CouchDatabase<UniversalDocument<SoftwareUpdateFilesEntity>> SoftwareUpdateFiles { get; set; }
         public required CouchDatabase<UniversalDocument<MarkCheckStatisticsEntity>> MarkCheckStatistics { get; set; }
 
@@ -31,6 +33,7 @@ namespace CouchDb
             databaseBuilder.Document<UniversalDocument<UserEntity>>().ToDatabase(DatabaseNames.Users);
             databaseBuilder.Document<UniversalDocument<InstanceEntity>>().ToDatabase(DatabaseNames.Instance);
             databaseBuilder.Document<UniversalDocument<InstanceGroupEntity>>().ToDatabase(DatabaseNames.InstanceGroup);
+            databaseBuilder.Document<UniversalDocument<SettingsSchemaEntity>>().ToDatabase(DatabaseNames.SettingsSchema);
             databaseBuilder.Document<UniversalDocument<SoftwareUpdateFilesEntity>>().ToDatabase(DatabaseNames.SoftwareUpdateFiles);
             databaseBuilder.Document<UniversalDocument<MarkCheckStatisticsEntity>>().ToDatabase(DatabaseNames.MarkCheckingStatistic);
         }

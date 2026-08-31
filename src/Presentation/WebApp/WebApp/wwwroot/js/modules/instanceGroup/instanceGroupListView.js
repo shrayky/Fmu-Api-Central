@@ -24,6 +24,8 @@ class InstanceGroupListView {
             actions: "Действия",
             forceInstall: "Принудительная установка",
             forceInstallTitle: "Принудительная установка",
+            exportSettings: "Выгрузить настройки",
+            settingsSchema: "Схема настроек",
             selectGroup: "Выберите группу",
             selectedGroup: "Группа",
             selectVersion: "Версия",
@@ -145,7 +147,8 @@ class InstanceGroupListView {
                     id: "actions",
                     value: this.LABELS.actions,
                     submenu: [
-                        { id: "actions:force-update", value: this.LABELS.forceInstall }
+                        { id: "actions:force-update", value: this.LABELS.forceInstall },
+                        { id: "actions:export-settings", value: this.LABELS.exportSettings }
                     ]
                 }
             ],
@@ -153,6 +156,10 @@ class InstanceGroupListView {
                 onMenuItemClick: (id) => {
                     if (id === "actions:force-update") {
                         this._showForceUpdateDialog();
+                    }
+
+                    if (id === "actions:export-settings") {
+                        this._exportSettings();
                     }
                 }
             }
@@ -170,6 +177,28 @@ class InstanceGroupListView {
         }
 
         return selectedId;
+    }
+
+    async _exportSettings() {
+        const groupId = this._getSelectedGroupId();
+        if (!groupId) {
+            webix.message({
+                text: this.LABELS.selectGroup,
+                type: "error"
+            });
+            return;
+        }
+
+        try {
+            const result = await instanceGroupService.exportSettings([groupId]);
+            webix.message(result.description || "Выгрузка назначена");
+            this._loadData();
+        } catch (error) {
+            webix.message({
+                text: error.message || "Ошибка выгрузки настроек",
+                type: "error"
+            });
+        }
     }
 
     async _showForceUpdateDialog() {
@@ -283,6 +312,12 @@ class InstanceGroupListView {
             id: this.NAMES.dataTable,
             columns: [
                 { id: "name", header: this.LABELS.name, fillspace: true },
+                {
+                    id: "settingsSchemaName",
+                    header: this.LABELS.settingsSchema,
+                    width: 220,
+                    template: (obj) => obj.settingsSchema?.name || ""
+                },
                 {
                     id: "autoUpdateAllowed",
                     header: this.LABELS.autoUpdateAllowed,

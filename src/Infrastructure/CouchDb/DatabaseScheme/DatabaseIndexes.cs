@@ -10,6 +10,7 @@ public class DatabaseIndexes
             {
                 { DatabaseNames.Instance, InstanceIndexSchema() },
                 { DatabaseNames.InstanceGroup, InstanceGroupIndexSchema() },
+                { DatabaseNames.SettingsSchema, SettingsSchemaIndexSchema() },
                 { DatabaseNames.SoftwareUpdateFiles, SoftwareUpdateFilesSchema() },
                 { DatabaseNames.MarkCheckingStatistic, MarkCheckingStatisticIndexSchema() }
             };
@@ -23,6 +24,12 @@ public class DatabaseIndexes
         ];
 
     private static CouchDbIndexDefinition[] InstanceGroupIndexSchema() =>
+        [
+            new("name-idx", new(["data.name"])),
+            new("settings-schema-id-idx", new(["data.settingsSchemaId"])),
+        ];
+
+    private static CouchDbIndexDefinition[] SettingsSchemaIndexSchema() =>
         [
             new("name-idx", new(["data.name"])),
         ];

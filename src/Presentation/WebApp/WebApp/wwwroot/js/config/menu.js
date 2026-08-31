@@ -9,6 +9,11 @@ export const MENU_ITEMS = {
         value: "Группы инстансов",
         icon: "mdi mdi-folder"
     },
+    SETTINGS_SCHEMAS: {
+        id: "settingsSchemas",
+        value: "Схемы настроек",
+        icon: "mdi mdi-developer-mode-tv"
+    },
     MARK_CHECK_STATISTICS: {
         id: "markCheckStatistics",
         value: "Статистика проверок",

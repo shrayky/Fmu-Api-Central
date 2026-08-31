@@ -1,23 +1,22 @@
-using CouchDb.Dto;
 using CouchDB.Driver.Extensions;
 using CSharpFunctionalExtensions;
 using Domain.Dto.Responces;
-using Domain.Entitys.InstanceGroup;
-using Domain.Entitys.Interfaces;
+using Domain.Entitys.SettingsSchema;
+using Domain.Entitys.SettingsSchema.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace CouchDb.Repositories;
 
-public class InstanceGroupsRepository : BaseCouchDbRepository<InstanceGroupEntity>, IInstanceGroupRepository
+public class SettingsSchemaRepository : BaseCouchDbRepository<SettingsSchemaEntity>, ISettingsSchemaRepository
 {
-    private const string LogRepository = "группы инстансов";
+    private const string LogRepository = "схемы настроек";
 
-    public InstanceGroupsRepository(IServiceProvider services) : base(
-        services.GetRequiredService<Context>().InstanceGroups, services)
+    public SettingsSchemaRepository(IServiceProvider services) : base(
+        services.GetRequiredService<Context>().SettingsSchemas, services)
     {
     }
 
-    public async Task<Result> Create(InstanceGroupEntity entity)
+    public async Task<Result> Create(SettingsSchemaEntity entity)
     {
         if (!_appState.DbState())
             return Result.Failure(DatabaseUnavailable);
@@ -25,10 +24,9 @@ public class InstanceGroupsRepository : BaseCouchDbRepository<InstanceGroupEntit
         try
         {
             var createResult = await CreateAsync(entity);
-            if (!createResult)
-                return Result.Failure($"Не удалось создать запись {LogRepository} с {entity.Id} в БД");
-
-            return Result.Success();
+            return createResult
+                ? Result.Success()
+                : Result.Failure($"Не удалось создать запись {LogRepository} с {entity.Id} в БД");
         }
         catch (Exception ex)
         {
@@ -36,7 +34,7 @@ public class InstanceGroupsRepository : BaseCouchDbRepository<InstanceGroupEntit
         }
     }
 
-    public async Task<Result> Update(InstanceGroupEntity entity)
+    public async Task<Result> Update(SettingsSchemaEntity entity)
     {
         if (!_appState.DbState())
             return Result.Failure(DatabaseUnavailable);
@@ -54,22 +52,22 @@ public class InstanceGroupsRepository : BaseCouchDbRepository<InstanceGroupEntit
         }
     }
 
-    public async Task<Result<InstanceGroupEntity>> GetById(string id)
+    public async Task<Result<SettingsSchemaEntity>> GetById(string id)
     {
         if (!_appState.DbState())
-            return Result.Failure<InstanceGroupEntity>(DatabaseUnavailable);
+            return Result.Failure<SettingsSchemaEntity>(DatabaseUnavailable);
 
         try
         {
             var searchResult = await GetByIdAsync(id);
             if (searchResult is null)
-                return Result.Failure<InstanceGroupEntity>($"Не найдена запись {LogRepository} с id {id}");
+                return Result.Failure<SettingsSchemaEntity>($"Не найдена запись {LogRepository} с id {id}");
 
             return Result.Success(searchResult);
         }
         catch (Exception ex)
         {
-            return Result.Failure<InstanceGroupEntity>($"Не удалось прочитать запись {LogRepository} с {id} в БД {ex.Message}");
+            return Result.Failure<SettingsSchemaEntity>($"Не удалось прочитать запись {LogRepository} с {id} в БД {ex.Message}");
         }
     }
 
@@ -95,11 +93,11 @@ public class InstanceGroupsRepository : BaseCouchDbRepository<InstanceGroupEntit
         }
     }
 
-    public async Task<PaginatedResponse<InstanceGroupEntity>> List(int pageNumber, int pageSize)
+    public async Task<PaginatedResponse<SettingsSchemaEntity>> List(int pageNumber, int pageSize)
     {
         if (!_appState.DbState())
         {
-            return new PaginatedResponse<InstanceGroupEntity>
+            return new PaginatedResponse<SettingsSchemaEntity>
             {
                 Description = DatabaseUnavailable,
                 ListEnabled = false,
@@ -119,7 +117,7 @@ public class InstanceGroupsRepository : BaseCouchDbRepository<InstanceGroupEntit
                 .Take(pageSize)
                 .ToListAsync();
 
-            return new PaginatedResponse<InstanceGroupEntity>
+            return new PaginatedResponse<SettingsSchemaEntity>
             {
                 Content = entities.Select(record => record.Data),
                 CurrentPage = pageNumber,
@@ -130,7 +128,7 @@ public class InstanceGroupsRepository : BaseCouchDbRepository<InstanceGroupEntit
         }
         catch (Exception ex)
         {
-            return new PaginatedResponse<InstanceGroupEntity>
+            return new PaginatedResponse<SettingsSchemaEntity>
             {
                 Description = ex.Message,
                 ListEnabled = false,
@@ -142,7 +140,7 @@ public class InstanceGroupsRepository : BaseCouchDbRepository<InstanceGroupEntit
         }
     }
 
-    public async Task<List<InstanceGroupEntity>> All()
+    public async Task<List<SettingsSchemaEntity>> All()
     {
         if (!_appState.DbState())
             return [];
@@ -152,11 +150,11 @@ public class InstanceGroupsRepository : BaseCouchDbRepository<InstanceGroupEntit
         var dbDocs = await _database.Take(queryLimit).ToListAsync();
 
         return dbDocs.Select(doc => doc.Data)
-            .OrderBy(group => group.Name)
+            .OrderBy(schema => schema.Name)
             .ToList();
     }
 
-    public async Task<List<InstanceGroupEntity>> ByListId(List<string> ids)
+    public async Task<List<SettingsSchemaEntity>> ByListId(List<string> ids)
     {
         if (!_appState.DbState() || ids.Count == 0)
             return [];
@@ -168,29 +166,6 @@ public class InstanceGroupsRepository : BaseCouchDbRepository<InstanceGroupEntit
         catch
         {
             return [];
-        }
-    }
-
-    public async Task<Result> ClearSettingsSchemaLink(string settingsSchemaId)
-    {
-        if (!_appState.DbState())
-            return Result.Failure(DatabaseUnavailable);
-
-        try
-        {
-            var groups = await _database.Where(p => p.Data.SettingsSchemaId == settingsSchemaId).ToListAsync();
-            if (groups.Count == 0)
-                return Result.Success();
-
-            foreach (var document in groups)
-                document.Data.SettingsSchemaId = string.Empty;
-
-            await _database.AddOrUpdateRangeAsync(groups);
-            return Result.Success();
-        }
-        catch (Exception ex)
-        {
-            return Result.Failure(ex.Message);
         }
     }
 }

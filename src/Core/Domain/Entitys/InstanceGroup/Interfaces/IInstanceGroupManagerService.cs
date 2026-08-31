@@ -13,4 +13,5 @@ public interface IInstanceGroupManagerService
     Task<PaginatedResponse<InstanceGroupView>> List(int pageNumber, int pageSize);
     Task<List<GroupLink>> AllLinks();
     Task<Result<ForceUpdateResult>> AssignForcedUpdate(IReadOnlyList<string> groupIds, string updateId);
+    Task<Result<ForceUpdateResult>> ExportSettings(IReadOnlyList<string> groupIds);
 }

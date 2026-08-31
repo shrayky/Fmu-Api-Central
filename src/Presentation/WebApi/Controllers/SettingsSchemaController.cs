@@ -1,6 +1,5 @@
-using Domain.Entitys.InstanceGroup.Dto;
-using Domain.Entitys.InstanceGroup.Interfaces;
 using Domain.Entitys.SettingsSchema.Dto;
+using Domain.Entitys.SettingsSchema.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -9,11 +8,11 @@ namespace WebApi.Controllers;
 [ApiController]
 [Route("/api/[controller]")]
 [Authorize]
-public class InstanceGroupController : ControllerBase
+public class SettingsSchemaController : ControllerBase
 {
-    private readonly IInstanceGroupManagerService _manager;
+    private readonly ISettingsSchemaManagerService _manager;
 
-    public InstanceGroupController(IInstanceGroupManagerService manager)
+    public SettingsSchemaController(ISettingsSchemaManagerService manager)
     {
         _manager = manager;
     }
@@ -26,15 +25,19 @@ public class InstanceGroupController : ControllerBase
     public async Task<IActionResult> ListAllLinks()
         => Ok(await _manager.AllLinks());
 
+    [HttpGet("defaults")]
+    public IActionResult Defaults()
+        => Ok(_manager.Defaults());
+
     [HttpPost]
-    public async Task<IActionResult> Post([FromBody] InstanceGroupView data)
+    public async Task<IActionResult> Post([FromBody] SettingsSchemaView data)
     {
         var createResult = await _manager.Create(data);
         return createResult.IsSuccess ? Ok() : BadRequest(createResult.Error);
     }
 
     [HttpPut]
-    public async Task<IActionResult> Put([FromBody] InstanceGroupView data)
+    public async Task<IActionResult> Put([FromBody] SettingsSchemaView data)
     {
         var updateResult = await _manager.Update(data);
         return updateResult.IsSuccess ? Ok() : BadRequest(updateResult.Error);
@@ -45,19 +48,5 @@ public class InstanceGroupController : ControllerBase
     {
         var deleteResult = await _manager.Delete(id);
         return deleteResult.IsSuccess ? Ok() : BadRequest(deleteResult.Error);
-    }
-
-    [HttpPost("force-update")]
-    public async Task<IActionResult> ForceUpdate([FromBody] GroupForceUpdateRequest request)
-    {
-        var result = await _manager.AssignForcedUpdate(request.GroupIds, request.UpdateId);
-        return result.IsSuccess ? Ok(result.Value) : BadRequest(result.Error);
-    }
-
-    [HttpPost("export-settings")]
-    public async Task<IActionResult> ExportSettings([FromBody] GroupSettingsExportRequest request)
-    {
-        var result = await _manager.ExportSettings(request.GroupIds);
-        return result.IsSuccess ? Ok(result.Value) : BadRequest(result.Error);
     }
 }

@@ -1,5 +1,6 @@
 import { Text, CheckBox } from '../../utils/ui.js';
 import instanceGroupService from '../../services/instanceGroupService.js';
+import settingsSchemaService from '../../services/settingsSchemaService.js';
 
 class InstanceGroupElementView {
     constructor() {
@@ -11,18 +12,23 @@ class InstanceGroupElementView {
             formTitle: "Группа инстансов",
             createButton: "Сохранить",
             cancelButton: "Отмена",
-            autoUpdateAllowed: "Автообновление разрешено"
+            autoUpdateAllowed: "Автообновление разрешено",
+            settingsSchema: "Схема настроек",
+            selectSchema: "Выберите схему"
         };
 
         this.NAMES = {
             formId: "instanceGroupElement",
             name: "instanceGroupName",
-            autoUpdateAllowed: "instanceGroupAutoUpdateAllowed"
+            autoUpdateAllowed: "instanceGroupAutoUpdateAllowed",
+            settingsSchema: "instanceGroupSettingsSchema"
         };
     }
 
-    showDialog(editedData = {}, onSuccess, onClose) {
+    async showDialog(editedData = {}, onSuccess, onClose) {
         this.elementId = editedData.id || crypto.randomUUID();
+        const schemaOptions = await this._loadSchemaOptions();
+        const currentSchemaId = editedData.settingsSchema?.id || "";
 
         webix.ui({
             view: "window",
@@ -44,6 +50,15 @@ class InstanceGroupElementView {
                     CheckBox(this.LABELS.autoUpdateAllowed, this.NAMES.autoUpdateAllowed, {
                         value: !!editedData.autoUpdateAllowed
                     }),
+                    {
+                        view: "richselect",
+                        label: this.LABELS.settingsSchema,
+                        labelPosition: "top",
+                        id: this.NAMES.settingsSchema,
+                        name: this.NAMES.settingsSchema,
+                        value: currentSchemaId,
+                        options: schemaOptions
+                    },
                     this._createButtons(onSuccess, onClose)
                 ]
             }
@@ -93,10 +108,18 @@ class InstanceGroupElementView {
         form.showProgress({ type: "icon" });
         form.disable();
 
+        const schemaId = $$(this.NAMES.settingsSchema).getValue() || "";
+        const schemaList = $$(this.NAMES.settingsSchema).getList();
+        const schemaItem = schemaId && schemaList ? schemaList.getItem(schemaId) : null;
+
         const data = {
             id: this.elementId,
             name: $$(this.NAMES.name).getValue(),
-            autoUpdateAllowed: !!$$(this.NAMES.autoUpdateAllowed).getValue()
+            autoUpdateAllowed: !!$$(this.NAMES.autoUpdateAllowed).getValue(),
+            settingsSchema: {
+                id: schemaId,
+                name: schemaId ? (schemaItem?.value || "") : ""
+            }
         };
 
         try {
@@ -122,6 +145,19 @@ class InstanceGroupElementView {
         }
 
         return true;
+    }
+
+    async _loadSchemaOptions() {
+        try {
+            const schemas = await settingsSchemaService.allLinks();
+            return [
+                { id: "", value: this.LABELS.selectSchema },
+                ...schemas.map((schema) => ({ id: schema.id, value: schema.name }))
+            ];
+        } catch (error) {
+            webix.message({ text: `Ошибка загрузки схем: ${error.message}`, type: "error" });
+            return [{ id: "", value: this.LABELS.selectSchema }];
+        }
     }
 }
 

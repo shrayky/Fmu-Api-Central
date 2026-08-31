@@ -1,8 +1,8 @@
 import { AuthService } from './AuthService.js';
 
-class InstanceGroupService {
+class SettingsSchemaService {
     constructor() {
-        this.apiEndpoint = "/api/instanceGroup";
+        this.apiEndpoint = "/api/settingsSchema";
         this.authService = AuthService;
     }
 
@@ -27,6 +27,16 @@ class InstanceGroupService {
         return data.value || [];
     }
 
+    async defaults() {
+        const data = await this.authService.makeAuthenticatedRequest(`${this.apiEndpoint}/defaults`);
+
+        if (!data.result) {
+            throw new Error(data.error);
+        }
+
+        return data.value || {};
+    }
+
     async create(payload) {
         const data = await this.authService.makeAuthenticatedRequest(this.apiEndpoint, {
             method: "POST",
@@ -34,38 +44,6 @@ class InstanceGroupService {
                 "Content-Type": "application/json"
             },
             body: JSON.stringify(payload)
-        });
-
-        if (!data.result) {
-            throw new Error(data.error);
-        }
-
-        return data.value;
-    }
-
-    async exportSettings(groupIds) {
-        const data = await this.authService.makeAuthenticatedRequest(`${this.apiEndpoint}/export-settings`, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({ groupIds })
-        });
-
-        if (!data.result) {
-            throw new Error(data.error);
-        }
-
-        return data.value;
-    }
-
-    async assignForcedUpdate(groupIds, updateId) {
-        const data = await this.authService.makeAuthenticatedRequest(`${this.apiEndpoint}/force-update`, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({ groupIds, updateId })
         });
 
         if (!data.result) {
@@ -88,4 +66,4 @@ class InstanceGroupService {
     }
 }
 
-export default new InstanceGroupService();
+export default new SettingsSchemaService();

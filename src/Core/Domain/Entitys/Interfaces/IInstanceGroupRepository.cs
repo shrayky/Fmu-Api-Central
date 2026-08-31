@@ -13,4 +13,5 @@ public interface IInstanceGroupRepository
     Task<PaginatedResponse<InstanceGroupEntity>> List(int pageNumber, int pageSize);
     Task<List<InstanceGroupEntity>> All();
     Task<List<InstanceGroupEntity>> ByListId(List<string> ids);
+    Task<Result> ClearSettingsSchemaLink(string settingsSchemaId);
 }

@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Domain.Entitys.SettingsSchema.Dto;
 
 namespace Domain.Entitys.InstanceGroup.Dto;
 
@@ -18,4 +19,7 @@ public record InstanceGroupView
 
     [JsonPropertyName("instancesOnline")]
     public int InstancesOnline { get; set; }
+
+    [JsonPropertyName("settingsSchema")]
+    public SettingsSchemaLink SettingsSchema { get; set; } = new();
 }

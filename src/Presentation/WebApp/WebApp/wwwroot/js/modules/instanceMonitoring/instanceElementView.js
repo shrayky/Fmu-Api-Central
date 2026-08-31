@@ -1,6 +1,6 @@
 import instanceMonitoringService from '../../services/instanceMonitoringService.js';
 import instanceGroupService from '../../services/instanceGroupService.js';
-import { Text } from '../../utils/ui.js';
+import { Text, CheckBox } from '../../utils/ui.js';
 
 class InstanceElementView {
     constructor() {
@@ -18,7 +18,8 @@ class InstanceElementView {
             createButton: "Сохранить",
             cancelButton: "Отмена",
             group: "Группа",
-            selectGroup: "Выберите группу"
+            selectGroup: "Выберите группу",
+            settingsModified: "Выгрузить настройки"
         }
 
         this.NAMES = {
@@ -30,6 +31,7 @@ class InstanceElementView {
             generateToken: "generateToken",
             secretKey: "secretKey",
             group: "instanceGroup",
+            settingsModified: "instanceSettingsModified"
         }
     }
 
@@ -79,6 +81,10 @@ class InstanceElementView {
                         value: currentGroupId,
                         options: groupOptions
                     },
+
+                    CheckBox(this.LABELS.settingsModified, this.NAMES.settingsModified, {
+                        value: editedData.id ? !!editedData.settingsModified : true
+                    }),
 
                     this._createTokenField(editedData.id || ""),
 
@@ -196,7 +202,8 @@ class InstanceElementView {
             group: {
                 id: groupId,
                 name: groupId ? (groupItem?.value || "") : ""
-            }
+            },
+            settingsModified: !!$$(this.NAMES.settingsModified).getValue()
         };
 
         try {

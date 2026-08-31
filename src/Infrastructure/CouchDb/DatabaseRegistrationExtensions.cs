@@ -7,8 +7,9 @@ using Microsoft.Extensions.DependencyInjection;
 using System.Net.Http.Headers;
 using System.Reflection;
 using Domain.Entitys.Interfaces;
-using Domain.Entitys.Users.Interfaces;
 using Domain.Entitys.MarkCheckStatistics.Interfaces;
+using Domain.Entitys.SettingsSchema.Interfaces;
+using Domain.Entitys.Users.Interfaces;
 
 namespace CouchDb
 {
@@ -41,6 +42,7 @@ namespace CouchDb
             services.AddScoped<FmuApiInstancesRepository>();
             services.AddScoped<IInstanceRepository, FmuApiInstancesRepository>();
             services.AddScoped<IInstanceGroupRepository, InstanceGroupsRepository>();
+            services.AddScoped<ISettingsSchemaRepository, SettingsSchemaRepository>();
             services.AddScoped<ISoftwareUpdatesRepository, SoftwareUpdateFilesRepository>();
             services.AddScoped<IMarksCheckStatisticRepository, MarkCheckStatisticsRepository>();
                 

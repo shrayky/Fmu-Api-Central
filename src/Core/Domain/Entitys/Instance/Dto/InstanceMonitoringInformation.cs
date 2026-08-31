@@ -35,4 +35,7 @@ public record InstanceMonitoringInformation
 
     [JsonPropertyName("group")]
     public GroupLink Group { get; init; } = new();
+
+    [JsonPropertyName("settingsModified")]
+    public bool SettingsModified { get; init; } = true;
 }
