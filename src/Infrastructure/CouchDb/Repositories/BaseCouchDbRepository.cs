@@ -1,11 +1,14 @@
 ﻿using CouchDb.Dto;
+using CouchDb.Models;
 using CouchDB.Driver;
 using Domain.AppState.Interfaces;
 using Domain.Configuration.Interfaces;
 using Domain.Database.Interfaces;
 using Domain.Entitys.Interfaces;
+using Flurl.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using System.Text.Json;
 
 namespace CouchDb.Repositories
 {
@@ -151,11 +154,29 @@ namespace CouchDb.Repositories
             return entityData;
         }
 
+        /// <summary>
+        /// Количество документов без design-документов индексов.
+        /// </summary>
         public async Task<int> RecordCount()
         {
             var info = await _database.GetInfoAsync();
+            var designDocCount = await CountDesignDocumentsAsync();
 
-            return info.DocCount;
+            return Math.Max(0, info.DocCount - designDocCount);
+        }
+
+        /// <summary>
+        /// Число _design документов в текущей базе.
+        /// </summary>
+        private async Task<int> CountDesignDocumentsAsync()
+        {
+            var json = await _database.NewRequest()
+                .AppendPathSegment("_design_docs")
+                .SetQueryParam("limit", 0)
+                .GetStringAsync();
+
+            var response = JsonSerializer.Deserialize<CouchDesignDocsResponse>(json);
+            return response?.TotalRows ?? 0;
         }
 
         public async Task<bool> IsHealthy()
