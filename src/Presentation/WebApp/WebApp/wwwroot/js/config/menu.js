@@ -4,6 +4,11 @@ export const MENU_ITEMS = {
         value: "Мониторинг fmu-api",
         icon: "mdi mdi-monitor-dashboard"
     },
+    MARK_CHECK_STATISTICS: {
+        id: "markCheckStatistics",
+        value: "Статистика проверок",
+        icon: "mdi mdi-table-chart"
+    },
     INSTANCE_GROUPS: {
         id: "instanceGroups",
         value: "Группы инстансов",
@@ -14,10 +19,10 @@ export const MENU_ITEMS = {
         value: "Схемы настроек",
         icon: "mdi mdi-developer-mode-tv"
     },
-    MARK_CHECK_STATISTICS: {
-        id: "markCheckStatistics",
-        value: "Статистика проверок",
-        icon: "mdi mdi-table-chart"
+    ORGANIZATIONS: {
+        id: "organizations",
+        value: "Организации",
+        icon: "mdi mdi-domain"
     },
     SOFTWARE_UPDATES: {
         id: "softwareUpdates",

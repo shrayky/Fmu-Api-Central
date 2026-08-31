@@ -11,6 +11,7 @@ public class DatabaseIndexes
                 { DatabaseNames.Instance, InstanceIndexSchema() },
                 { DatabaseNames.InstanceGroup, InstanceGroupIndexSchema() },
                 { DatabaseNames.SettingsSchema, SettingsSchemaIndexSchema() },
+                { DatabaseNames.Organization, OrganizationIndexSchema() },
                 { DatabaseNames.SoftwareUpdateFiles, SoftwareUpdateFilesSchema() },
                 { DatabaseNames.MarkCheckingStatistic, MarkCheckingStatisticIndexSchema() }
             };
@@ -32,6 +33,12 @@ public class DatabaseIndexes
     private static CouchDbIndexDefinition[] SettingsSchemaIndexSchema() =>
         [
             new("name-idx", new(["data.name"])),
+        ];
+
+    private static CouchDbIndexDefinition[] OrganizationIndexSchema() =>
+        [
+            new("name-idx", new(["data.name"])),
+            new("inn-idx", new(["data.inn"])),
         ];
 
     private static CouchDbIndexDefinition[] SoftwareUpdateFilesSchema() =>

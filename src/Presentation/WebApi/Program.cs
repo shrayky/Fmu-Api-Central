@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Scalar.AspNetCore;
 using Shared.Installer;
 using TelegramBot.Extensions;
+using TrueApiIntegration;
 using WebApi.Workers;
 
 var settingsLoadResult = await ParametersLoader.LoadFromAppFolder();
@@ -44,6 +45,7 @@ builder.Services.AddConfigurationServices();
 builder.Services.AddConfigureLogger(appSettings.LoggerSettings);
 builder.Services.AddCouchDb(appSettings.DatabaseConnection);
 builder.Services.AddApplicationServices();
+builder.Services.AddTrueApiIntegration();
 builder.Services.AddBotService(appSettings.BotSettings);
 
 builder.Services.AddControllers();

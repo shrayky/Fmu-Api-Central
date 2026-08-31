@@ -43,6 +43,7 @@
         <ProjectReference Include="..\..\Infrastructure\Logger\Logger\Logger.csproj" />
         <ProjectReference Include="..\..\Infrastructure\Messages\Messages.csproj" />
         <ProjectReference Include="..\..\Infrastructure\TelegramBot\TelegramBot.csproj" />
+        <ProjectReference Include="..\..\Infrastructure\TrueApiIntegration\TrueApiIntegration.csproj" />
     </ItemGroup>
 
     <Target Name="CleanupPublishFolder" AfterTargets="Publish">
