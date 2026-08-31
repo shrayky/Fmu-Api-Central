@@ -4,6 +4,11 @@ export const MENU_ITEMS = {
         value: "Мониторинг fmu-api",
         icon: "mdi mdi-monitor-dashboard"
     },
+    INSTANCE_GROUPS: {
+        id: "instanceGroups",
+        value: "Группы инстансов",
+        icon: "mdi mdi-folder"
+    },
     MARK_CHECK_STATISTICS: {
         id: "markCheckStatistics",
         value: "Статистика проверок",

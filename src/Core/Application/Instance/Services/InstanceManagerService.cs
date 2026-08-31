@@ -12,6 +12,8 @@ using Domain.Dto.Responces;
 using Domain.Entitys.Instance;
 using Domain.Entitys.Instance.Dto;
 using Domain.Entitys.Instance.Interfaces;
+using Domain.Entitys.InstanceGroup;
+using Domain.Entitys.InstanceGroup.Dto;
 using Domain.Entitys.Interfaces;
 using Domain.Entitys.SoftwareUpdateFiles;
 using Domain.Entitys.MarkCheckStatistics.Interfaces;
@@ -29,16 +31,19 @@ public class InstanceManagerService : IInstanceManagerService
 {
     private readonly ILogger<IInstanceManagerService> _logger;
     private readonly IInstanceRepository _instanceRepository;
+    private readonly IInstanceGroupRepository _instanceGroupRepository;
     private readonly Lazy<ISoftwareUpdatesManagerService> _softwareVersionsManager;
     private readonly IMarksCheckStatisticRepository _marksCheckStatisticRepository;
     private readonly IParametersService _parametersService;
 
     public InstanceManagerService(ILogger<IInstanceManagerService> logger, IInstanceRepository instanceRepository,
+        IInstanceGroupRepository instanceGroupRepository,
         IServiceProvider serviceProvider, IMarksCheckStatisticRepository marksCheckStatisticRepository,
         IParametersService parametersService)
     {
         _logger = logger;
         _instanceRepository = instanceRepository;
+        _instanceGroupRepository = instanceGroupRepository;
         
         _softwareVersionsManager =
             new Lazy<ISoftwareUpdatesManagerService>(serviceProvider
@@ -176,6 +181,7 @@ public class InstanceManagerService : IInstanceManagerService
             };
         }
 
+        var groupNames = await ResolveGroupNames(answer.Value.Content.Select(entity => entity.GroupId));
         List<InstanceMonitoringInformation> content = [];
 
         foreach (var entity in answer.Value.Content)
@@ -190,6 +196,11 @@ public class InstanceManagerService : IInstanceManagerService
                 TsPiots = entity.TsPiots,
                 Address = entity.Address,
                 ForcedUpdateId = entity.ForcedUpdateId,
+                Group = new GroupLink
+                {
+                    Id = entity.GroupId,
+                    Name = groupNames.GetValueOrDefault(entity.GroupId, string.Empty)
+                }
             };
 
             content.Add(record);
@@ -215,7 +226,8 @@ public class InstanceManagerService : IInstanceManagerService
             CreatedAt = DateTime.Now,
             UpdatedAt = instance.LastUpdated,
             SecretKey = instance.SecretKey,
-            Address = instance.Address
+            Address = instance.Address,
+            GroupId = instance.Group?.Id ?? string.Empty
         };
         
         var existInstance = await _instanceRepository.ByToken(instance.Token);
@@ -314,6 +326,9 @@ public class InstanceManagerService : IInstanceManagerService
             }
         }
 
+        if (!await AutoUpdateAllowed(entity))
+            return Result.Failure<SoftwareUpdateFileDownload>("Автообновление запрещено группой инстанса");
+
         var (needUpdate, _) = await _softwareVersionsManager.Value.NeedUpdate(entity.NodeInformation.Os,
             entity.NodeInformation.Architecture,
             entity.Settings.Version,
@@ -396,6 +411,9 @@ public class InstanceManagerService : IInstanceManagerService
             await _instanceRepository.Update(instance);
         }
 
+        if (!await AutoUpdateAllowed(instance))
+            return (false, string.Empty);
+
         return await _softwareVersionsManager.Value.NeedUpdate(
             instance.NodeInformation.Os,
             instance.NodeInformation.Architecture,
@@ -410,6 +428,32 @@ public class InstanceManagerService : IInstanceManagerService
 
         instance.ForcedUpdateId = string.Empty;
         await _instanceRepository.Update(instance);
+    }
+
+    private async Task<bool> AutoUpdateAllowed(InstanceEntity instance)
+    {
+        if (string.IsNullOrEmpty(instance.GroupId))
+            return false;
+
+        var groupSearch = await _instanceGroupRepository.GetById(instance.GroupId);
+        if (groupSearch.IsFailure)
+            return false;
+
+        return AutoUpdatePolicy.IsAllowed(groupSearch.Value);
+    }
+
+    private async Task<Dictionary<string, string>> ResolveGroupNames(IEnumerable<string> groupIds)
+    {
+        var ids = groupIds
+            .Where(id => !string.IsNullOrEmpty(id))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (ids.Count == 0)
+            return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        var groups = await _instanceGroupRepository.ByListId(ids);
+        return groups.ToDictionary(group => group.Id, group => group.Name, StringComparer.OrdinalIgnoreCase);
     }
 
     private static bool OsArchMatches(NodeInformation node, SoftwareUpdateFilesEntity update)

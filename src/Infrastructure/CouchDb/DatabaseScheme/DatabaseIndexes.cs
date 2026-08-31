@@ -9,6 +9,7 @@ public class DatabaseIndexes
         return new Dictionary<string, CouchDbIndexDefinition[]>
             {
                 { DatabaseNames.Instance, InstanceIndexSchema() },
+                { DatabaseNames.InstanceGroup, InstanceGroupIndexSchema() },
                 { DatabaseNames.SoftwareUpdateFiles, SoftwareUpdateFilesSchema() },
                 { DatabaseNames.MarkCheckingStatistic, MarkCheckingStatisticIndexSchema() }
             };
@@ -18,6 +19,12 @@ public class DatabaseIndexes
         [
             new("name-idx", new(["data.markId"])),
             new("updated-at-idx", new(["data.updatedAt"])),
+            new("group-id-idx", new(["data.groupId"])),
+        ];
+
+    private static CouchDbIndexDefinition[] InstanceGroupIndexSchema() =>
+        [
+            new("name-idx", new(["data.name"])),
         ];
 
     private static CouchDbIndexDefinition[] SoftwareUpdateFilesSchema() =>

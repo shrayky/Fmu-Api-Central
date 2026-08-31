@@ -14,6 +14,7 @@ import createServerSettingsView from '../modules/serverSettingsView.js';
 import createLogsView from '../modules/logsView.js';
 import createSoftwareUpdatesListView from '../modules/softwareUpdates/softwareUpdatesListView.js';
 import createInstanceListView from '../modules/instanceMonitoring/instanceListView.js';
+import createInstanceGroupListView from '../modules/instanceGroup/instanceGroupListView.js';
 import createMarkCheckStatisticsListView from '../modules/markCheckStatistics/markCheckStatisticsListView.js';
 import createAlertSettingsView from '../modules/alertSettingsView.js';
 import createServiceView from '../modules/serviceView.js';
@@ -34,6 +35,7 @@ class App {
         this.router.register("logs", async (id) => await createLogsView(id));
         this.router.register("softwareUpdates", async (id) => await createSoftwareUpdatesListView(id));
         this.router.register("instanceMonitoring", async (id) => await createInstanceListView(id));
+        this.router.register("instanceGroups", async (id) => await createInstanceGroupListView(id));
         this.router.register("markCheckStatistics", async (id) => await createMarkCheckStatisticsListView(id));
         this.router.register("telegramBotSettings", async (id) => await createAlertSettingsView(id));
         this.router.register("service", async (id) => await createServiceView(id));

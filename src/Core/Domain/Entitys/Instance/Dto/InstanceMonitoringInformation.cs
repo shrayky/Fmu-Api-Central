@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using Domain.Dto.FmuApiExchangeData.DataPacket.FmuApiState;
+using Domain.Entitys.InstanceGroup.Dto;
 
 namespace Domain.Entitys.Instance.Dto;
 
@@ -31,4 +32,7 @@ public record InstanceMonitoringInformation
 
     [JsonPropertyName("forcedUpdateId")]
     public string ForcedUpdateId { get; init; } = string.Empty;
+
+    [JsonPropertyName("group")]
+    public GroupLink Group { get; init; } = new();
 }

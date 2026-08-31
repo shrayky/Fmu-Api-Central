@@ -1,8 +1,11 @@
 import instanceMonitoringService from '../../services/instanceMonitoringService.js';
+import instanceGroupService from '../../services/instanceGroupService.js';
 import { Text } from '../../utils/ui.js';
 
 class InstanceElementView {
     constructor() {
+        this.editedData = {};
+
         this.LABELS = {
             instanceName: "Имя инстанса",
             instanceNetAddress: "Адрес инстанса",
@@ -14,6 +17,8 @@ class InstanceElementView {
             invalidTokenMessage: "укажите токен",
             createButton: "Сохранить",
             cancelButton: "Отмена",
+            group: "Группа",
+            selectGroup: "Выберите группу"
         }
 
         this.NAMES = {
@@ -24,10 +29,15 @@ class InstanceElementView {
             copyToken: "copyToken",
             generateToken: "generateToken",
             secretKey: "secretKey",
+            group: "instanceGroup",
         }
     }
 
-    showDialog(editedData = [], onSuccess, onClose) {
+    async showDialog(editedData = [], onSuccess, onClose) {
+        this.editedData = editedData || {};
+        const groupOptions = await this._loadGroupOptions();
+        const currentGroupId = this.editedData.group?.id || "";
+
         webix.ui({
             view: "window",
             id: this.NAMES.formId,
@@ -59,6 +69,16 @@ class InstanceElementView {
                          editedData.secretKey,
                          { required: false, placeholder: this.LABELS.secretKeyMessage }
                         ),
+
+                    {
+                        view: "richselect",
+                        label: this.LABELS.group,
+                        labelPosition: "top",
+                        id: this.NAMES.group,
+                        name: this.NAMES.group,
+                        value: currentGroupId,
+                        options: groupOptions
+                    },
 
                     this._createTokenField(editedData.id || ""),
 
@@ -158,14 +178,25 @@ class InstanceElementView {
         const instanceToken = $$(this.NAMES.instanceToken).getValue();
         const instanceSecretKey = $$(this.NAMES.secretKey).getValue();
         const instanceAddress = $$(this.NAMES.instanceAddress).getValue();
+        const groupId = $$(this.NAMES.group).getValue() || "";
+        const groupList = $$(this.NAMES.group).getList();
+        const groupItem = groupId && groupList ? groupList.getItem(groupId) : null;
+        const current = this.editedData || {};
 
         const instanceData = {
             name: instanceName,
             id: instanceToken,
-            version: "-",
-            lastUpdated: new Date("2000-01-01T00:00:00.000Z"),
+            version: current.version || "-",
+            lastUpdated: current.lastUpdated || new Date("2000-01-01T00:00:00.000Z"),
             secretKey: instanceSecretKey,
-            address: instanceAddress
+            address: instanceAddress,
+            localModules: current.localModules,
+            TsPiots: current.TsPiots,
+            forcedUpdateId: current.forcedUpdateId,
+            group: {
+                id: groupId,
+                name: groupId ? (groupItem?.value || "") : ""
+            }
         };
 
         try {
@@ -203,6 +234,19 @@ class InstanceElementView {
 
         return true;
 
+    }
+
+    async _loadGroupOptions() {
+        try {
+            const groups = await instanceGroupService.allLinks();
+            return [
+                { id: "", value: this.LABELS.selectGroup },
+                ...groups.map((group) => ({ id: group.id, value: group.name }))
+            ];
+        } catch (error) {
+            webix.message({ text: `Ошибка загрузки групп: ${error.message}`, type: "error" });
+            return [{ id: "", value: this.LABELS.selectGroup }];
+        }
     }
 
     _generateToken() {

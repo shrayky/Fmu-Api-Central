@@ -1,4 +1,5 @@
 import instanceMonitoringService from '../../services/instanceMonitoringService.js';
+import instanceGroupService from '../../services/instanceGroupService.js';
 import softwareUpdatesService from '../../services/softwareUpdatesService.js';
 import instanceElementView from './instanceElementView.js';
 import instanceFilterView from './instanceFilterView.js';
@@ -78,6 +79,8 @@ class InstanceListView {
             filterTsPiotVersion: "версия ТС ПИоТ",
             filterTsPiotLicense: "лицензия ТС ПИоТ до",
             filterUpdatedBefore: "последнее обновление до",
+            filterGroup: "группа",
+            instanceGroup: "Группа",
             token: "Токен",
             tsPiotsModules: "Модули ТСПИоТ",
             actions: "Действия",
@@ -114,7 +117,8 @@ class InstanceListView {
             formId: "instanceMonitoringListViewForm",
             hostAddress: "address",
             id: "id",
-            tsPiots: "tsPiots"
+            tsPiots: "tsPiots",
+            instanceGroup: "groupName"
         };
 
         this.hotkeys = [
@@ -153,12 +157,21 @@ class InstanceListView {
     }
 
     delayedDataLoading() {
+        this._preloadGroups();
 
         setTimeout(() => {
             this._loadData();
         }, 10);
 
         return this;
+    }
+
+    async _preloadGroups() {
+        try {
+            this.filterOptions.groups = await instanceGroupService.allLinks();
+        } catch {
+            this.filterOptions.groups = [];
+        }
     }
 
     render() {
@@ -384,6 +397,12 @@ class InstanceListView {
                     fillspace: true
                 },
                 {
+                    id: this.NAMES.instanceGroup,
+                    header: this.LABELS.instanceGroup,
+                    width: 160,
+                    template: (obj) => obj.group?.name || ""
+                },
+                {
                     id: this.NAMES.id,
                     header: this.LABELS.token,
                     hidden: true,
@@ -558,8 +577,14 @@ class InstanceListView {
         }
     }
 
-    _showFilterDialog() {
+    async _showFilterDialog() {
         this._disableHotkeys();
+
+        try {
+            this.filterOptions.groups = await instanceGroupService.allLinks();
+        } catch {
+            this.filterOptions.groups = [];
+        }
 
         instanceFilterView.showDialog(
             this._getFilterOptionsDto(),
@@ -584,14 +609,16 @@ class InstanceListView {
             this.filters?.localModuleVersion ||
             this.filters?.tsPiotVersion ||
             this.filters?.tsPiotLicense ||
-            this.filters?.updatedBefore
+            this.filters?.updatedBefore ||
+            this.filters?.groupId
         );
     }
 
     _createEmptyFilterOptions() {
         return {
             localModuleVersions: new Set(),
-            tsPiotVersions: new Set()
+            tsPiotVersions: new Set(),
+            groups: []
         };
     }
 
@@ -669,7 +696,8 @@ class InstanceListView {
 
         return {
             localModuleVersions: sortValues(this.filterOptions.localModuleVersions),
-            tsPiotVersions: sortValues(this.filterOptions.tsPiotVersions)
+            tsPiotVersions: sortValues(this.filterOptions.tsPiotVersions),
+            groups: this.filterOptions.groups || []
         };
     }
 
@@ -704,6 +732,11 @@ class InstanceListView {
 
         if (this.filters?.updatedBefore) {
             parts.push(`${this.LABELS.filterUpdatedBefore} = ${this._formatFilterDate(this.filters.updatedBefore)}`);
+        }
+
+        if (this.filters?.groupId) {
+            const group = (this.filterOptions.groups || []).find((item) => item.id === this.filters.groupId);
+            parts.push(`${this.LABELS.filterGroup} = ${group?.name || this.filters.groupId}`);
         }
 
         if (parts.length === 0) {

@@ -40,6 +40,7 @@ namespace CouchDb
                 
             services.AddScoped<FmuApiInstancesRepository>();
             services.AddScoped<IInstanceRepository, FmuApiInstancesRepository>();
+            services.AddScoped<IInstanceGroupRepository, InstanceGroupsRepository>();
             services.AddScoped<ISoftwareUpdatesRepository, SoftwareUpdateFilesRepository>();
             services.AddScoped<IMarksCheckStatisticRepository, MarkCheckStatisticsRepository>();
                 

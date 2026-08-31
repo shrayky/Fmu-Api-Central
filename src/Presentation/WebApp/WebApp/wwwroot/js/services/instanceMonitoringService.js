@@ -32,6 +32,10 @@ class InstanceMonitoringService {
             params.append("updatedBefore", filters.updatedBefore);
         }
 
+        if (filters.groupId) {
+            params.append("groupId", filters.groupId);
+        }
+
         const endpoint = `${this.apiEndpoint}?${params.toString()}`;
         
         const data = await this.authService.makeAuthenticatedRequest(endpoint);

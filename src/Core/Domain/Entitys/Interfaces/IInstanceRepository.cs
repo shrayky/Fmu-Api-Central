@@ -14,4 +14,6 @@ public interface IInstanceRepository
     Task<Result<bool>> DeleteInstance(InstanceEntity instance);
     Task<Result<List<InstanceEntity>>> OfflineInstances(DateTime toDate);
     Task<Result<List<InstanceEntity>>> All();
+    Task<Result<List<InstanceEntity>>> ByGroupIds(IReadOnlyList<string> groupIds);
+    Task<Result> ClearGroupLink(string groupId);
 }

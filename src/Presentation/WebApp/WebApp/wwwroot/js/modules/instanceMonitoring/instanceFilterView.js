@@ -7,6 +7,7 @@ class InstanceFilterView {
             tsPiotVersion: "Версия ТС ПИоТ",
             tsPiotLicense: "Дата окончания лицензии",
             updatedBefore: "Последнее обновление до",
+            group: "Группа",
             applyButton: "Применить",
             resetButton: "Сбросить",
             cancelButton: "Отмена",
@@ -21,6 +22,7 @@ class InstanceFilterView {
             tsPiotVersion: "filterTsPiotVersion",
             tsPiotLicense: "filterTsPiotLicense",
             updatedBefore: "filterUpdatedBefore",
+            group: "filterGroup",
             allValue: "__all__"
         };
     }
@@ -68,6 +70,12 @@ class InstanceFilterView {
                         this.NAMES.updatedBefore,
                         currentFilters.updatedBefore
                     ),
+                    this._createGroupSelect(
+                        this.LABELS.group,
+                        this.NAMES.group,
+                        filterOptions.groups,
+                        currentFilters.groupId
+                    ),
                     this._createButtons(onApply, onClose)
                 ]
             }
@@ -95,6 +103,24 @@ class InstanceFilterView {
             id: name,
             value: this._parseLicenseDate(value),
             format: "%d.%m.%Y"
+        };
+    }
+
+    _createGroupSelect(label, name, groups, selectedValue) {
+        const items = [{ id: this.NAMES.allValue, value: this.LABELS.allOption }];
+
+        (groups || []).forEach((group) => {
+            items.push({ id: group.id, value: group.name });
+        });
+
+        return {
+            view: "richselect",
+            label,
+            labelPosition: "top",
+            name,
+            id: name,
+            value: this._toSelectValue(selectedValue),
+            options: items
         };
     }
 
@@ -192,7 +218,8 @@ class InstanceFilterView {
             localModuleVersion: this._fromSelectValue(values[this.NAMES.localModuleVersion]),
             tsPiotVersion: this._fromSelectValue(values[this.NAMES.tsPiotVersion]),
             tsPiotLicense: this._formatLicenseFilterValue(values[this.NAMES.tsPiotLicense]),
-            updatedBefore: this._formatLicenseFilterValue(values[this.NAMES.updatedBefore])
+            updatedBefore: this._formatLicenseFilterValue(values[this.NAMES.updatedBefore]),
+            groupId: this._fromSelectValue(values[this.NAMES.group])
         };
     }
 
@@ -212,7 +239,8 @@ class InstanceFilterView {
             [this.NAMES.localModuleVersion]: this.NAMES.allValue,
             [this.NAMES.tsPiotVersion]: this.NAMES.allValue,
             [this.NAMES.tsPiotLicense]: "",
-            [this.NAMES.updatedBefore]: ""
+            [this.NAMES.updatedBefore]: "",
+            [this.NAMES.group]: this.NAMES.allValue
         });
 
         this._closeWindow();
@@ -223,7 +251,8 @@ class InstanceFilterView {
                 localModuleVersion: "",
                 tsPiotVersion: "",
                 tsPiotLicense: "",
-                updatedBefore: ""
+                updatedBefore: "",
+                groupId: ""
             });
         }
     }

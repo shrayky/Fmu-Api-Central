@@ -158,12 +158,67 @@ public class FmuApiInstancesRepository : BaseCouchDbRepository<InstanceEntity>, 
         }
     }
 
+    public async Task<Result<List<InstanceEntity>>> ByGroupIds(IReadOnlyList<string> groupIds)
+    {
+        if (!_appState.DbState())
+            return Result.Failure<List<InstanceEntity>>(DatabaseUnavailable);
+
+        var ids = groupIds
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (ids.Count == 0)
+            return Result.Success(new List<InstanceEntity>());
+
+        try
+        {
+            List<InstanceEntity> answer = [];
+
+            foreach (var groupId in ids)
+            {
+                var documents = await _database.Where(p => p.Data.GroupId == groupId).ToListAsync();
+                answer.AddRange(documents.Select(document => document.Data));
+            }
+
+            return Result.Success(answer);
+        }
+        catch (Exception ex)
+        {
+            return Result.Failure<List<InstanceEntity>>(ex.Message);
+        }
+    }
+
+    public async Task<Result> ClearGroupLink(string groupId)
+    {
+        if (!_appState.DbState())
+            return Result.Failure(DatabaseUnavailable);
+
+        try
+        {
+            var instances = await _database.Where(p => p.Data.GroupId == groupId).ToListAsync();
+            if (instances.Count == 0)
+                return Result.Success();
+
+            foreach (var document in instances)
+                document.Data.GroupId = string.Empty;
+
+            await _database.AddOrUpdateRangeAsync(instances);
+            return Result.Success();
+        }
+        catch (Exception ex)
+        {
+            return Result.Failure(ex.Message);
+        }
+    }
+
     private static bool HasActiveFilter(InstanceListFilter filter) =>
         !string.IsNullOrEmpty(filter.Name) ||
         !string.IsNullOrEmpty(filter.LocalModuleVersion) ||
         !string.IsNullOrEmpty(filter.TsPiotVersion) ||
         filter.TsPiotLicense.HasValue ||
-        filter.UpdatedBefore.HasValue;
+        filter.UpdatedBefore.HasValue ||
+        !string.IsNullOrEmpty(filter.GroupId);
 
     private static IQueryable<UniversalDocument<InstanceEntity>> ApplyListFilter(
         IQueryable<UniversalDocument<InstanceEntity>> query,
@@ -194,6 +249,9 @@ public class FmuApiInstancesRepository : BaseCouchDbRepository<InstanceEntity>, 
             var updatedBefore = filter.UpdatedBefore.Value.Date;
             query = query.Where(p => p.Data.UpdatedAt < updatedBefore);
         }
+
+        if (!string.IsNullOrEmpty(filter.GroupId))
+            query = query.Where(p => p.Data.GroupId == filter.GroupId);
 
         return query;
     }
