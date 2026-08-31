@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 using System.Text;
 using System.Text.Json;
 
-namespace WebApi.Controllers.Api
+namespace WebApi.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]

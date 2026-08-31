@@ -24,4 +24,7 @@ public sealed class PortableSettings
 
     [JsonPropertyName("softwareUpdateSettings")]
     public SoftwareUpdateSettings? SoftwareUpdateSettings { get; set; }
+
+    [JsonPropertyName("gisMtSettings")]
+    public GisMtSettings? GisMtSettings { get; set; }
 }

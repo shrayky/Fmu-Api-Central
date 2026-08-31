@@ -10,6 +10,7 @@ import { registerWebixEditors } from "../utils/webixEditors.js";
 import informationView from '../modules/informationView.js';
 import createAuthView from '../modules/authView.js';
 import createCouchDbSettingsView from '../modules/couchDbSettingsView.js';
+import createGisMtSettingsView from '../modules/gisMtSettingsView.js';
 import createServerSettingsView from '../modules/serverSettingsView.js';
 import createLogsView from '../modules/logsView.js';
 import createSoftwareUpdatesListView from '../modules/softwareUpdates/softwareUpdatesListView.js';
@@ -33,6 +34,7 @@ class App {
     initRoutes() {
         this.router.register("information", () => informationView);
         this.router.register("couchDbSettings", async (id) => await createCouchDbSettingsView(id));
+        this.router.register("gisMtSettings", async (id) => await createGisMtSettingsView(id));
         this.router.register("serverSettings", async (id) => await createServerSettingsView(id));
         this.router.register("logs", async (id) => await createLogsView(id));
         this.router.register("softwareUpdates", async (id) => await createSoftwareUpdatesListView(id));

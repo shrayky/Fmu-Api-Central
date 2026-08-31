@@ -2,31 +2,33 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace Domain.Configuration
+namespace Domain.Configuration;
+
+public class Parameters
 {
-    public class Parameters
+    [JsonPropertyName("information")]
+    public Information Information { get; set; } = new();
+    
+    [JsonPropertyName("databaseConnection")]
+    public DatabaseConnection DatabaseConnection { get; set; } = new();
+    
+    [JsonPropertyName("loggerSettings")]
+    public LogSettings LoggerSettings { get; set; } = new();
+    
+    [JsonPropertyName("serverSettings")]
+    public ServerSettings ServerSettings { get; set; } = new();
+
+    [JsonPropertyName("telegramBotSettings")]
+    public TelegramBotSetting BotSettings { get; set; } = new();
+
+    [JsonPropertyName("softwareUpdateSettings")]
+    public SoftwareUpdateSettings SoftwareUpdateSettings { get; set; } = new();
+
+    [JsonPropertyName("gisMtSettings")]
+    public GisMtSettings GisMtSettings { get; set; } = new();
+
+    public override string ToString()
     {
-        [JsonPropertyName("information")]
-        public Information Information { get; set; } = new();
-        
-        [JsonPropertyName("databaseConnection")]
-        public DatabaseConnection DatabaseConnection { get; set; } = new();
-        
-        [JsonPropertyName("loggerSettings")]
-        public LogSettings LoggerSettings { get; set; } = new();
-        
-        [JsonPropertyName("serverSettings")]
-        public ServerSettings ServerSettings { get; set; } = new();
-
-        [JsonPropertyName("telegramBotSettings")]
-        public TelegramBotSetting BotSettings { get; set; } = new();
-
-        [JsonPropertyName("softwareUpdateSettings")]
-        public SoftwareUpdateSettings SoftwareUpdateSettings { get; set; } = new();
-
-        public override string ToString()
-        {
-            return JsonSerializer.Serialize(this);
-        }
+        return JsonSerializer.Serialize(this);
     }
 }

@@ -24,6 +24,16 @@ export const MENU_ITEMS = {
         value: "Организации",
         icon: "mdi mdi-domain"
     },
+    GIS_MT: {
+        id: "gisMtSettings",
+        value: "ГИС МТ",
+        icon: "mdi mdi-honest-sign"
+    },
+    TELEGRAM_BOT_SETTINGS: {
+        id: "telegramBotSettings",
+        value: "Оповещения",
+        icon: "mdi mdi-telegram"
+    },
     SOFTWARE_UPDATES: {
         id: "softwareUpdates",
         value: "Обновления fmu-api",
@@ -38,11 +48,6 @@ export const MENU_ITEMS = {
         id: "couchDbSettings",
         value: "CouchDB",
         icon: "mdi mdi-database"
-    },
-    TELEGRAM_BOT_SETTINGS: {
-        id: "telegramBotSettings",
-        value: "Оповещения",
-        icon: "mdi mdi-telegram"
     },
     LOGS: {
         id: "logs",

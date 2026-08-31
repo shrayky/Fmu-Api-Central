@@ -8,7 +8,6 @@ using Messages.Extensions;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Scalar.AspNetCore;
 using Shared.Installer;
-using TelegramBot.Extensions;
 using TrueApiIntegration;
 using WebApi.Workers;
 

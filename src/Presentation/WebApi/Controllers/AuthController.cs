@@ -2,7 +2,7 @@
 using Application.Authentication.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 
-namespace WebApi.Controllers.Api
+namespace WebApi.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]

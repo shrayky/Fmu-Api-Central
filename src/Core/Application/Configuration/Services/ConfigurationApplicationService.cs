@@ -82,7 +82,8 @@ public class ConfigurationApplicationService : IConfigurationApplicationService
                 ExportedAt = DateTime.Now,
                 LoggerSettings = current.LoggerSettings,
                 TelegramBotSettings = current.BotSettings,
-                SoftwareUpdateSettings = current.SoftwareUpdateSettings
+                SoftwareUpdateSettings = current.SoftwareUpdateSettings,
+                GisMtSettings = current.GisMtSettings
             };
 
             var json = await JsonHelpers.SerializeAsync(portable);
@@ -122,6 +123,8 @@ public class ConfigurationApplicationService : IConfigurationApplicationService
                 current.BotSettings = portable.TelegramBotSettings;
             if (portable.SoftwareUpdateSettings != null)
                 current.SoftwareUpdateSettings = portable.SoftwareUpdateSettings;
+            if (portable.GisMtSettings != null)
+                current.GisMtSettings = portable.GisMtSettings;
 
             var updated = await _parametersService.Update(current);
             if (!updated)
