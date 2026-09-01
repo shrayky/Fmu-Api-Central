@@ -1,4 +1,4 @@
-﻿using CSharpFunctionalExtensions;
+using CSharpFunctionalExtensions;
 using Domain.AppState.Interfaces;
 using Domain.Attributes;
 using Domain.Configuration;
@@ -64,6 +64,7 @@ namespace Configuration.Services
             await _fileManager.Value.SaveConfiguration(migratedConfig);
             await _fileManager.Value.CreateBackup(migratedConfig);
             _cacheManager.Value.CacheConfiguration(migratedConfig);
+            _applicationState.Value.MarkGisMtPushPending();
 
             _logger.LogInformation("Конфигурация обновлена");
             return true;

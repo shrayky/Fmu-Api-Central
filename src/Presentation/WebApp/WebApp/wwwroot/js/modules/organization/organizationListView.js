@@ -15,6 +15,14 @@ class OrganizationListView {
             name: "Наименование",
             inn: "ИНН",
             token: "Токен",
+            gisMt: "ГИС МТ",
+            gisMtEmpty: "—",
+            actions: "Действия",
+            loadProductGroups: "Получить товарные группы",
+            loadDocuments: "Загрузить документы",
+            loadStock: "Загрузить остатки",
+            selectOrganization: "Выберите организацию",
+            operationAccepted: "Задание принято. Обновите список через несколько секунд.",
             tokenMissing: "Токен не получен",
             tokenReceived: "Получен, до",
             tokenCopyHint: "Копировать токен",
@@ -32,6 +40,7 @@ class OrganizationListView {
         this.NAMES = {
             toolbarLabel: "toolbarLabel",
             refreshBtn: "organizationRefreshBtn",
+            actionsMenu: "organizationActionsMenu",
             addBtn: "organizationAddBtn",
             deleteBtn: "organizationDeleteBtn",
             dataTable: "organizationDataTable",
@@ -104,6 +113,7 @@ class OrganizationListView {
                     click: () => this._loadData(),
                     hotkey: "f5"
                 },
+                this._actionsMenu(),
                 {},
                 {
                     view: "button",
@@ -134,6 +144,84 @@ class OrganizationListView {
         };
     }
 
+    /** Меню ручных операций ГИС МТ — как у групп инстансов. */
+    _actionsMenu() {
+        return {
+            view: "menu",
+            id: this.NAMES.actionsMenu,
+            autowidth: true,
+            data: [
+                {
+                    id: "actions",
+                    value: this.LABELS.actions,
+                    submenu: [
+                        { id: "actions:product-groups", value: this.LABELS.loadProductGroups },
+                        { id: "actions:documents", value: this.LABELS.loadDocuments },
+                        { id: "actions:stock", value: this.LABELS.loadStock }
+                    ]
+                }
+            ],
+            on: {
+                onMenuItemClick: (id) => {
+                    if (id === "actions:product-groups") {
+                        this._enqueueGisMt("product-groups");
+                    }
+                    if (id === "actions:documents") {
+                        this._enqueueGisMt("documents");
+                    }
+                    if (id === "actions:stock") {
+                        this._enqueueGisMt("stock");
+                    }
+                }
+            }
+        };
+    }
+
+    /** Идентификатор выделенной строки списка организаций. */
+    _getSelectedOrganizationId() {
+        const selectedId = $$(this.NAMES.dataTable).getSelectedId();
+        if (!selectedId) {
+            return "";
+        }
+
+        if (typeof selectedId === "object") {
+            return selectedId.id || selectedId.Id || "";
+        }
+
+        return selectedId;
+    }
+
+    /** Отправляет операцию ГИС МТ; без строки или токена запрос не уходит. */
+    async _enqueueGisMt(operation) {
+        const organizationId = this._getSelectedOrganizationId();
+        if (!organizationId) {
+            webix.message({
+                text: this.LABELS.selectOrganization,
+                type: "error"
+            });
+            return;
+        }
+
+        const record = $$(this.NAMES.dataTable).getItem(organizationId);
+        if (!record?.trueApiTokenReceived) {
+            webix.message({
+                text: this.LABELS.tokenMissing,
+                type: "error"
+            });
+            return;
+        }
+
+        try {
+            await organizationService.enqueueGisMt(organizationId, operation);
+            webix.message(this.LABELS.operationAccepted);
+        } catch (error) {
+            webix.message({
+                text: error.message || this.LABELS.errorLoad,
+                type: "error"
+            });
+        }
+    }
+
     _dataTable() {
         return {
             view: "datatable",
@@ -144,6 +232,12 @@ class OrganizationListView {
                     header: this.LABELS.name,
                     fillspace: true,
                     template: (obj) => this._formatName(obj)
+                },
+                {
+                    id: "gisMtStatus",
+                    header: this.LABELS.gisMt,
+                    width: 280,
+                    template: (obj) => this._formatGisMtStatus(obj)
                 },
                 { id: "inn", header: this.LABELS.inn, width: 180 },
                 {
@@ -164,6 +258,24 @@ class OrganizationListView {
                 onItemDblClick: (cell) => this._edit(cell.row)
             }
         };
+    }
+
+    _formatGisMtStatus(obj) {
+        const status = obj.gisMtLastStatus || {};
+        const code = status.code;
+        if (code === null || code === undefined || code === "") {
+            return this.LABELS.gisMtEmpty;
+        }
+
+        const numeric = Number(code);
+        const ok = numeric >= 200 && numeric < 300;
+        const description = ok ? "" : (status.description || "");
+        const text = `${code} ${description}`.trim()
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;");
+        const color = ok ? "" : "color:#E74C3C;";
+        return `<span style="${color}">${text}</span>`;
     }
 
     _formatToken(obj) {

@@ -65,6 +65,20 @@ class OrganizationService {
 
         return data.value;
     }
+
+    /** Ставит в очередь операцию ГИС МТ для организации. */
+    async enqueueGisMt(organizationId, operation) {
+        const data = await this.authService.makeAuthenticatedRequest(
+            `${this.apiEndpoint}/${encodeURIComponent(organizationId)}/gismt/${operation}`,
+            { method: "POST" }
+        );
+
+        if (!data.result) {
+            throw new Error(data.error);
+        }
+
+        return true;
+    }
 }
 
 export default new OrganizationService();

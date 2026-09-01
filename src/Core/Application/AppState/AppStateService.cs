@@ -1,4 +1,4 @@
-﻿using System.Collections.Concurrent;
+using System.Collections.Concurrent;
 using Domain.AppState.Interfaces;
 using Domain.Attributes;
 using Domain.TrueApiIntegration;
@@ -11,6 +11,7 @@ namespace Application.AppState
     {
         private bool _dbState { get; set; } = false;
         private bool _needRessart { get; set; } = false;
+        private bool _gisMtPushPending;
         private readonly ConcurrentDictionary<string, TrueApiToken> _trueApiTokens = new();
 
         public bool DbState() => _dbState;
@@ -41,5 +42,19 @@ namespace Application.AppState
 
             return data;
         }
+
+        public IReadOnlyList<TrueApiToken> TrueApiTokens()
+        {
+            var now = DateTime.Now;
+            return _trueApiTokens.Values
+                .Where(item => !string.IsNullOrEmpty(item.Token) && item.LiveUntil >= now)
+                .ToList();
+        }
+
+        public void MarkGisMtPushPending() => _gisMtPushPending = true;
+
+        public bool GisMtPushPending() => _gisMtPushPending;
+
+        public void ClearGisMtPushPending() => _gisMtPushPending = false;
     }
 }

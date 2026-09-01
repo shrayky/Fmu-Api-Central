@@ -1,6 +1,7 @@
 ﻿using CouchDb.Dto;
 using CouchDb.Models;
 using CouchDB.Driver;
+using CSharpFunctionalExtensions;
 using Domain.AppState.Interfaces;
 using Domain.Configuration.Interfaces;
 using Domain.Database.Interfaces;
@@ -8,7 +9,7 @@ using Domain.Entitys.Interfaces;
 using Flurl.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using System.Text.Json;
+using Newtonsoft.Json;
 
 namespace CouchDb.Repositories
 {
@@ -166,6 +167,32 @@ namespace CouchDb.Repositories
         }
 
         /// <summary>
+        /// Выполняет mango-запрос _find и возвращает Data документов.
+        /// </summary>
+        protected async Task<Result<List<T>>> ExecuteMangoQueryAsync(object mangoQuery)
+        {
+            try
+            {
+                var json = await _database.NewRequest()
+                    .AppendPathSegment("_find")
+                    .PostJsonAsync(mangoQuery)
+                    .ReceiveString();
+
+                var response = JsonConvert.DeserializeObject<MangoFindResponse<UniversalDocument<T>>>(json);
+                var list = response?.Docs
+                    .Where(doc => doc.Data != null)
+                    .Select(doc => doc.Data)
+                    .ToList() ?? [];
+                return Result.Success(list);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Ошибка mango-запроса");
+                return Result.Failure<List<T>>("Ошибка запроса к БД");
+            }
+        }
+
+        /// <summary>
         /// Число _design документов в текущей базе.
         /// </summary>
         private async Task<int> CountDesignDocumentsAsync()
@@ -175,7 +202,7 @@ namespace CouchDb.Repositories
                 .SetQueryParam("limit", 0)
                 .GetStringAsync();
 
-            var response = JsonSerializer.Deserialize<CouchDesignDocsResponse>(json);
+            var response = System.Text.Json.JsonSerializer.Deserialize<CouchDesignDocsResponse>(json);
             return response?.TotalRows ?? 0;
         }
 

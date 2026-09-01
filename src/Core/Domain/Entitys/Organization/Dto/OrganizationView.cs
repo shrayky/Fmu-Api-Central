@@ -1,3 +1,4 @@
+using Domain.GisMt.Models;
 using System.Text.Json.Serialization;
 
 namespace Domain.Entitys.Organization.Dto;
@@ -21,6 +22,12 @@ public record OrganizationView
 
     [JsonPropertyName("trueApiTokenExpired")]
     public DateTime? TrueApiTokenExpired { get; set; }
+
+    [JsonPropertyName("gisMtLastStatus")]
+    public GisMtLastStatus GisMtLastStatus { get; set; } = new();
+
+    [JsonPropertyName("gisMtProductGroups")]
+    public List<GisMtConnectedProductGroup> GisMtProductGroups { get; set; } = [];
 
     [JsonPropertyName("trueApiIntegrationSettings")]
     public TrueApiIntegrationSettings TrueApiIntegrationSettings { get; set; } = new();

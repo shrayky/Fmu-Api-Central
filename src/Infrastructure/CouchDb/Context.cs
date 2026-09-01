@@ -8,6 +8,7 @@ using Domain.Entitys.InstanceGroup;
 using Domain.Entitys.MarksCheckStatistic;
 using Domain.Entitys.Organization;
 using Domain.Entitys.SettingsSchema;
+using Domain.GisMt.Entity;
 using Domain.Entitys.SoftwareUpdateFiles;
 
 namespace CouchDb
@@ -21,6 +22,8 @@ namespace CouchDb
         public required CouchDatabase<UniversalDocument<OrganizationEntity>> Organizations { get; set; }
         public required CouchDatabase<UniversalDocument<SoftwareUpdateFilesEntity>> SoftwareUpdateFiles { get; set; }
         public required CouchDatabase<UniversalDocument<MarkCheckStatisticsEntity>> MarkCheckStatistics { get; set; }
+        public required CouchDatabase<UniversalDocument<GisMtDocumentEntity>> GisMtDocuments { get; set; }
+        public required CouchDatabase<UniversalDocument<GisMtMarkEntity>> GisMtMarks { get; set; }
 
         public Context(CouchOptions<Context> options) : base(options)
         {
@@ -39,6 +42,8 @@ namespace CouchDb
             databaseBuilder.Document<UniversalDocument<OrganizationEntity>>().ToDatabase(DatabaseNames.Organization);
             databaseBuilder.Document<UniversalDocument<SoftwareUpdateFilesEntity>>().ToDatabase(DatabaseNames.SoftwareUpdateFiles);
             databaseBuilder.Document<UniversalDocument<MarkCheckStatisticsEntity>>().ToDatabase(DatabaseNames.MarkCheckingStatistic);
+            databaseBuilder.Document<UniversalDocument<GisMtDocumentEntity>>().ToDatabase(DatabaseNames.GisMtDocuments);
+            databaseBuilder.Document<UniversalDocument<GisMtMarkEntity>>().ToDatabase(DatabaseNames.GisMtMarks);
         }
 
     }

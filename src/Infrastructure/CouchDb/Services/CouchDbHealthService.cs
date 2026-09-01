@@ -36,6 +36,8 @@ public class CouchDbHealthService : IDbHealthService
                 DatabaseNames.Users => await _dbContext.Users.GetInfoAsync(),
                 DatabaseNames.Instance => await _dbContext.FmuApiInstances.GetInfoAsync(),
                 DatabaseNames.SoftwareUpdateFiles => await _dbContext.SoftwareUpdateFiles.GetInfoAsync(),
+                DatabaseNames.GisMtDocuments => await _dbContext.GisMtDocuments.GetInfoAsync(),
+                DatabaseNames.GisMtMarks => await _dbContext.GisMtMarks.GetInfoAsync(),
                 _ => throw new ArgumentException($"Неизвестная база данных: {databaseName}")
             };
 

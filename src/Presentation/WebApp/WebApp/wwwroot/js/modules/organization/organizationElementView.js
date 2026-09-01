@@ -16,6 +16,10 @@ class OrganizationElementView {
             signPassword: "Пароль от ЭЦП",
             LoadToken: "Получить токен",
             cryptoProHint: "Для работы необходимо, чтобы на одном ПК с fmu-api-central был установлен КриптоПро, а также у пользователя, от которого запущена служба, был установлен сертификат ЭЦП.",
+            gisMtTab: "Подключенные группы",
+            gisMtGroupCode: "Код",
+            gisMtGroupName: "Название",
+            gisMtGroupTitle: "Название группы",
             invalidNameMessage: "заполните наименование",
             invalidInnMessage: "заполните ИНН",
             saveFirst: "Сначала сохраните организацию",
@@ -32,7 +36,11 @@ class OrganizationElementView {
             digitalSignature: "TrueApiIntegrationDigitalSignature",
             password: "TrueApiIntegrationPassword",
             loadToken: "loadTrueApiToken",
-            trueApiFields: "TrueApiIntegrationFields"
+            trueApiFields: "TrueApiIntegrationFields",
+            tabs: "organizationTabs",
+            trueApiTab: "organizationTrueApiTab",
+            gisMtTab: "organizationGisMtTab",
+            gisMtGroupsTable: "organizationGisMtGroupsTable"
         };
     }
 
@@ -40,6 +48,7 @@ class OrganizationElementView {
         this.elementId = editedData.id || crypto.randomUUID();
         const isNew = !editedData.id;
         const trueApi = editedData.trueApiIntegrationSettings || {};
+        const groups = editedData.gisMtProductGroups || [];
 
         if ($$(this.NAMES.windowId)) {
             $$(this.NAMES.windowId).destructor();
@@ -86,11 +95,13 @@ class OrganizationElementView {
                     }),
                     {
                         view: "tabview",
-                        height: 300,
+                        id: this.NAMES.tabs,
+                        height: 320,
                         cells: [
                             {
                                 header: "True api интеграция",
                                 body: {
+                                    id: this.NAMES.trueApiTab,
                                     padding: 10,
                                     rows: [
                                         CheckBox(this.LABELS.enable, this.NAMES.enable, {
@@ -141,6 +152,16 @@ class OrganizationElementView {
                                         }
                                     ]
                                 }
+                            },
+                            {
+                                header: this.LABELS.gisMtTab,
+                                body: {
+                                    id: this.NAMES.gisMtTab,
+                                    padding: 10,
+                                    rows: [
+                                        this._groupsTable(groups)
+                                    ]
+                                }
                             }
                         ]
                     },
@@ -151,6 +172,7 @@ class OrganizationElementView {
 
         await this._loadCertificates(trueApi.digitalSignature || "");
         this._setTrueApiFieldsEnabled(!!trueApi.enable);
+        this._setGroupsTabEnabled(groups.length > 0);
 
         setTimeout(() => {
             const nameField = $$(this.NAMES.name);
@@ -232,6 +254,40 @@ class OrganizationElementView {
         }
 
         fields.disable();
+    }
+
+    _groupsTable(groups) {
+        return {
+            view: "datatable",
+            id: this.NAMES.gisMtGroupsTable,
+            select: "row",
+            columns: [
+                { id: "code", header: this.LABELS.gisMtGroupCode, width: 80, sort: "int" },
+                { id: "name", header: this.LABELS.gisMtGroupName, width: 160, sort: "string" },
+                { id: "groupName", header: this.LABELS.gisMtGroupTitle, fillspace: true, sort: "string" }
+            ],
+            data: (groups || []).map((item, index) => ({
+                id: item.name || item.code || index + 1,
+                code: item.code,
+                name: item.name || "",
+                groupName: item.groupName || ""
+            }))
+        };
+    }
+
+    _setGroupsTabEnabled(enabled) {
+        const tabs = $$(this.NAMES.tabs);
+        if (!tabs) {
+            return;
+        }
+
+        const bar = tabs.getTabbar();
+        if (enabled) {
+            bar.enableOption(this.NAMES.gisMtTab);
+            return;
+        }
+
+        bar.disableOption(this.NAMES.gisMtTab);
     }
 
     _createButtons(onSuccess, onClose) {

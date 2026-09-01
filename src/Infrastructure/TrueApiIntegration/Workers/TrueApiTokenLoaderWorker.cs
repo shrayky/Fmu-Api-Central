@@ -31,8 +31,10 @@ public class TrueApiTokenLoaderWorker : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-#if !DEBUG
-        await Task.Delay(TimeSpan.FromMinutes(TrueApiTokenDefaults.StartDelayMinutes), stoppingToken).ConfigureAwait(false);
+#if DEBUG
+        await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken).ConfigureAwait(false);
+#else
+    await Task.Delay(TimeSpan.FromMinutes(TrueApiTokenDefaults.StartDelayMinutes), stoppingToken).ConfigureAwait(false);
 #endif
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -87,6 +89,7 @@ public class TrueApiTokenLoaderWorker : BackgroundService
 
                 var tokenLifeUntil = DateTime.Now.AddHours(TrueApiTokenDefaults.LifeHours);
                 _applicationState.UpdateTrueApiToken(inn, token.Value, tokenLifeUntil);
+                _applicationState.MarkGisMtPushPending();
 
                 _logger.LogInformation("Для {inn} получен новый токен, который действует до {tokenLifeUntil}", inn, tokenLifeUntil);
             }

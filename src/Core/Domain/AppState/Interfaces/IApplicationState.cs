@@ -1,4 +1,4 @@
-﻿using Domain.TrueApiIntegration;
+using Domain.TrueApiIntegration;
 
 namespace Domain.AppState.Interfaces
 {
@@ -12,5 +12,11 @@ namespace Domain.AppState.Interfaces
         void UpdateTrueApiToken(string inn, string token, DateTime lifeUntil);
 
         TrueApiToken TrueApiToken(string inn);
+
+        IReadOnlyList<TrueApiToken> TrueApiTokens();
+
+        void MarkGisMtPushPending();
+        bool GisMtPushPending();
+        void ClearGisMtPushPending();
     }
 }

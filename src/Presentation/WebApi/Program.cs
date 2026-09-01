@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Scalar.AspNetCore;
 using Shared.Installer;
 using TrueApiIntegration;
+using GisMtExchange;
 using WebApi.Workers;
 
 var settingsLoadResult = await ParametersLoader.LoadFromAppFolder();
@@ -45,6 +46,7 @@ builder.Services.AddConfigureLogger(appSettings.LoggerSettings);
 builder.Services.AddCouchDb(appSettings.DatabaseConnection);
 builder.Services.AddApplicationServices();
 builder.Services.AddTrueApiIntegration();
+builder.Services.AddGisMtExchange();
 builder.Services.AddBotService(appSettings.BotSettings);
 
 builder.Services.AddControllers();

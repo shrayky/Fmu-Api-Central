@@ -5,6 +5,7 @@ using Domain.Dto.Responces;
 using Domain.Entitys.Organization;
 using Domain.Entitys.Organization.Dto;
 using Domain.Entitys.Organization.Interfaces;
+using Domain.GisMt.Models;
 using Domain.TrueApiIntegration;
 using Domain.TrueApiIntegration.Dto;
 using Domain.TrueApiIntegration.Interfaces;
@@ -174,6 +175,7 @@ public class OrganizationManagerService : IOrganizationManagerService
 
     private OrganizationView ToView(OrganizationEntity entity)
     {
+        entity.NormalizeGisMtLastStatus();
         var cached = _applicationState.TrueApiToken(entity.Inn);
         var received = !string.IsNullOrEmpty(cached.Token);
 
@@ -185,9 +187,32 @@ public class OrganizationManagerService : IOrganizationManagerService
             TrueApiEnabled = entity.TrueApiIntegrationSettings?.Enable ?? false,
             TrueApiTokenReceived = received,
             TrueApiTokenExpired = received ? cached.LiveUntil : null,
+            GisMtLastStatus = CopyStatus(entity.GisMtLastStatus),
+            GisMtProductGroups = CopyGroups(entity.GisMtProductGroups),
             TrueApiIntegrationSettings = entity.TrueApiIntegrationSettings ?? new TrueApiIntegrationSettings()
         };
     }
+
+    private static GisMtLastStatus CopyStatus(GisMtLastStatus? status)
+    {
+        status ??= new();
+        return new GisMtLastStatus
+        {
+            Code = status.Code,
+            Description = status.Description ?? string.Empty,
+            At = status.At
+        };
+    }
+
+    private static List<GisMtConnectedProductGroup> CopyGroups(List<GisMtConnectedProductGroup>? groups)
+        => (groups ?? [])
+            .Select(item => new GisMtConnectedProductGroup
+            {
+                Code = item.Code,
+                Name = item.Name ?? string.Empty,
+                GroupName = item.GroupName ?? string.Empty
+            })
+            .ToList();
 
     private static TrueApiTokenView ToTokenView(TrueApiToken token) => new()
     {

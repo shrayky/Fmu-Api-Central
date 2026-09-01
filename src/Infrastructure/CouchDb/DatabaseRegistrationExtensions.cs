@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using System.Net.Http.Headers;
 using System.Reflection;
 using Domain.Entitys.Interfaces;
+using Domain.GisMt.Interfaces;
 using Domain.Entitys.MarkCheckStatistics.Interfaces;
 using Domain.Entitys.Organization.Interfaces;
 using Domain.Entitys.SettingsSchema.Interfaces;
@@ -47,6 +48,8 @@ public static class DatabaseRegistrationExtensions
         services.AddScoped<IOrganizationRepository, OrganizationRepository>();
         services.AddScoped<ISoftwareUpdatesRepository, SoftwareUpdateFilesRepository>();
         services.AddScoped<IMarksCheckStatisticRepository, MarkCheckStatisticsRepository>();
+        services.AddScoped<IGisMtDocumentRepository, GisMtDocumentRepository>();
+        services.AddScoped<IGisMtMarkRepository, GisMtMarkRepository>();
             
         services.AddHttpClient("CouchDbState", client =>
         {
