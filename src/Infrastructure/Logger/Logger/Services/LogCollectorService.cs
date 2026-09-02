@@ -1,5 +1,6 @@
 ﻿using Domain.Attributes;
 using Domain.Configuration.Constants;
+using Domain.Logs;
 using Domain.Logs.Dto;
 using Domain.Logs.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
@@ -37,43 +38,36 @@ namespace Logger.Services
             if (!Directory.Exists(_logsFolderPath))
                 return new();
 
-            var files = Directory.EnumerateFiles(_logsFolderPath, $"{_logFileName}*.log");
+            var files = LogFileNameOrder.Descending(
+                Directory.EnumerateFiles(_logsFolderPath, $"{_logFileName}*.log"),
+                DateSuffix);
 
-            if (!files.Any())
+            if (files.Count == 0)
                 return new();
 
-            string uploadLogFileName = string.Empty;
-            string nowFileName = string.Empty;
-            string fileNameWithoutPrefix = string.Empty;
+            packet.LogFileNames.AddRange(files.Select(DateSuffix));
 
-            foreach (var file in files)
-            {
-                fileNameWithoutPrefix = Path.GetFileNameWithoutExtension(file).Replace(_logFileName, "");
-
-                packet.LogFileNames.Add(fileNameWithoutPrefix);
-
-                if (selectedFileName == string.Empty)
-                    continue;
-
-                if (fileNameWithoutPrefix == selectedFileName)
-                    uploadLogFileName = file;
-
-                nowFileName = file;
-            }
+            var uploadLogFileName = string.Empty;
 
             if (selectedFileName == "now")
             {
-                uploadLogFileName = nowFileName;
-                selectedFileName = fileNameWithoutPrefix;
+                uploadLogFileName = files[0];
+                selectedFileName = DateSuffix(files[0]);
+            }
+            else if (selectedFileName != string.Empty)
+            {
+                uploadLogFileName = files.FirstOrDefault(file => DateSuffix(file) == selectedFileName) ?? string.Empty;
             }
 
             packet.LogText = await ReadLogFileAsync(uploadLogFileName);
             packet.SelectedLogFileName = selectedFileName;
-            ;
 
             return packet;
 
         }
+
+        private string DateSuffix(string path) =>
+            Path.GetFileNameWithoutExtension(path).Replace(_logFileName, "");
 
         private async Task<string> ReadLogFileAsync(string logFileName)
         {

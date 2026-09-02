@@ -1,6 +1,7 @@
 // wwwroot/js/modules/logsView.js
 
 import { AuthService } from '../services/AuthService.js';
+import { formatLogFileLabel } from '../utils/logFileLabel.js';
 
 class LogsView {
     constructor(id) {
@@ -138,7 +139,10 @@ class LogsView {
 
                 var comboOptions = combo.getPopup().getList();
                 comboOptions.clearAll();
-                comboOptions.parse(logInfo.logFilesNames);
+                comboOptions.parse(logInfo.logFilesNames.map(name => ({
+                    id: name,
+                    value: formatLogFileLabel(name)
+                })));
 
                 combo.setValue(logInfo.selectedLogFileName);
 
