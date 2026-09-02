@@ -10,6 +10,7 @@ using Domain.Entitys.Interfaces;
 using Domain.GisMt.Interfaces;
 using Domain.Entitys.MarkCheckStatistics.Interfaces;
 using Domain.Entitys.Organization.Interfaces;
+using Domain.Entitys.AlertTemplates.Interfaces;
 using Domain.Entitys.SettingsSchema.Interfaces;
 using Domain.Entitys.Users.Interfaces;
 
@@ -50,6 +51,7 @@ public static class DatabaseRegistrationExtensions
         services.AddScoped<IMarksCheckStatisticRepository, MarkCheckStatisticsRepository>();
         services.AddScoped<IGisMtDocumentRepository, GisMtDocumentRepository>();
         services.AddScoped<IGisMtMarkRepository, GisMtMarkRepository>();
+        services.AddScoped<IAlertTemplateRepository, AlertTemplateRepository>();
             
         services.AddHttpClient("CouchDbState", client =>
         {

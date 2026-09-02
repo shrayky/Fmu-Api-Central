@@ -15,7 +15,8 @@ public class DatabaseIndexes
                 { DatabaseNames.SoftwareUpdateFiles, SoftwareUpdateFilesSchema() },
                 { DatabaseNames.MarkCheckingStatistic, MarkCheckingStatisticIndexSchema() },
                 { DatabaseNames.GisMtDocuments, GisMtDocumentsIndexSchema() },
-                { DatabaseNames.GisMtMarks, GisMtMarksIndexSchema() }
+                { DatabaseNames.GisMtMarks, GisMtMarksIndexSchema() },
+                { DatabaseNames.AlertTemplates, AlertTemplatesIndexSchema() }
             };
     }
 
@@ -71,5 +72,10 @@ public class DatabaseIndexes
             new("gis-mt-mark-product-group-loaded-at-idx", new(["data.productGroup", "data.infoLoadedAt"])),
             new("gis-mt-mark-info-loaded-at-idx", new(["data.infoLoadedAt"])),
             new("gis-mt-mark-cleanup-idx", new(["data.infoLoadedAt", "data.sold"])),
+        ];
+
+    private static CouchDbIndexDefinition[] AlertTemplatesIndexSchema() =>
+        [
+            new("name-idx", new(["data.name"])),
         ];
 }

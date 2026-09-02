@@ -22,6 +22,7 @@ public static class Registration
         services.AddSingleton<IAlertMessageConstructor, AlertsConstuctor>();
 
         services.AddHostedService<MessagesSendWorker>();
+        services.AddHostedService<AlertTemplateSendWorker>();
 
         return services;
     }

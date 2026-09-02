@@ -1,0 +1,36 @@
+---
+description: Не писать очевидные комментарии — только неочевидный why
+alwaysApply: true
+---
+
+# Комментарии
+
+Не комментируй то, что уже сказано именем типа, метода или кода.
+
+Комментарий нужен только если без него неочевидно **почему** так сделано (ограничение API, баг Webix, формат Telegram, единицы времени).
+
+```csharp
+// плохо — пересказ имени
+/// <summary>
+/// Возвращает включённые шаблоны.
+/// </summary>
+public Task<List<AlertTemplateEntity>> AllEnabled()
+
+// хорошо — неочевидное поведение
+/// <summary>
+/// Суффикс после '-' в версии игнорируется.
+/// </summary>
+public static bool IsVersionBelowThreshold(string current, string threshold)
+```
+
+```javascript
+// плохо
+/** Вкладка JS-скрипта набора данных. */
+_scriptTab(scriptValue) { ... }
+
+// хорошо
+/** После fullscreen Webix оставляет left=0 — позицию задаём явно. */
+_restoreCenteredWindow() { ... }
+```
+
+Не добавляй XML-summary на класс/DTO, если он только повторяет имя (`AlertTemplateView` — «представление шаблона»).

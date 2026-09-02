@@ -1,6 +1,7 @@
 import { loadConfiguration, saveConfigurationSections } from '../services/ConfigurationService.js';
 import { Number, CheckBox, Text } from '../utils/ui.js';
 import { AuthService } from '../services/AuthService.js';
+import { createAlertTemplatesTab } from './alertTemplates/alertTemplatesListView.js';
 
 class AlertSettingsView {
     constructor(id) {
@@ -284,7 +285,7 @@ class AlertSettingsView {
         };
 
         return {
-            id: this.id,
+            id: "alertSettingsTabBody",
             rows: [
                 alertSettingsForm,
             ],
@@ -429,5 +430,23 @@ class AlertSettingsView {
 export default async function createAlertSettingsView(id) {
     const view = new AlertSettingsView(id);
     await view.loadData();
-    return view.renderView();
+
+    return {
+        id,
+        rows: [
+            {
+                view: "tabview",
+                cells: [
+                    {
+                        header: "Настройки",
+                        body: view.renderView()
+                    },
+                    {
+                        header: "Шаблоны",
+                        body: createAlertTemplatesTab("alertTemplatesTab")
+                    }
+                ]
+            }
+        ]
+    };
 }
