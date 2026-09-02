@@ -278,6 +278,12 @@ class AlertSettingsView {
                     id: this.standardFormId,
                     elements: [
                         standardFields,
+                        {
+                            cols: [
+                                this._sendAllertsButton,
+                                {}
+                            ]
+                        },
                         {}
                     ]
                 }
@@ -413,7 +419,8 @@ class AlertSettingsView {
     _sendAllertsButton = {
         view: "button",
         value: "Отправить уведомления",
-        width: 120,
+        autowidth: true,
+        minWidth: 240,
         click: async function () {
             let answer = await AuthService.makeAuthenticatedRequest('/api/BotTest/sendAllerts', {
                 method: 'GET'
@@ -460,7 +467,6 @@ export default async function createAlertSettingsView(id) {
                 cols: [
                     view._saveButton,
                     view._testButton,
-                    view._sendAllertsButton,
                     {}
                 ]
             }
