@@ -7,9 +7,15 @@ class AlertSettingsView {
     constructor(id) {
         this.id = id;
         this.alertSettingsElementsId = "alertSettingsView";
+        this.standardSettingsElementsId = "alertStandardSettingsView";
+        this.channelFormId = "alertChannelForm";
+        this.standardFormId = "alertStandardForm";
         this.labels = {
             title: "Fmu-Api-Central: Настройки оповещений",
             alertSettings: "Настройки оповещений",
+            channelTab: "Настройка канала оповещения",
+            templatesTab: "Шаблоны",
+            standardTab: "Стандартные",
             isEnabled: "Использовать",
             chatId: "ID чата",
             botToken: "Токен бота",
@@ -78,6 +84,19 @@ class AlertSettingsView {
         grid.remove(rowId);
     }
 
+    _setAlertFieldsEnabled(enabled) {
+        [this.alertSettingsElementsId, this.standardSettingsElementsId].forEach((id) => {
+            const view = $$(id);
+            if (!view) return;
+
+            if (enabled) {
+                view.enable();
+            } else {
+                view.disable();
+            }
+        });
+    }
+
     async loadData() {
         const requestResult = await loadConfiguration();
 
@@ -122,173 +141,147 @@ class AlertSettingsView {
         return this;
     }
 
-    renderView() {
+    renderChannelTab() {
         $$("toolbarLabel").setValue(this.labels.title);
 
-        const alertSettings = {
-            id: this.alertSettingsElementsId,
-            disabled: !this.alertSettings.isEnabled,
-            rows: [],
-        };
-
-        const enaledCheckBox = CheckBox(this.labels.isEnabled, "isEnabled", {
+        const enabledCheckBox = CheckBox(this.labels.isEnabled, "isEnabled", {
             value: this.alertSettings.isEnabled,
             on: {
-                onChange: (enabled) => {
-                    if (enabled) {
-                        $$(this.alertSettingsElementsId).enable();
-                    } else {
-                        $$(this.alertSettingsElementsId).disable();
-                    }
-                }
+                onChange: (enabled) => this._setAlertFieldsEnabled(enabled)
             }
         });
 
-        alertSettings.rows.push(
-            {
-                view: "richselect",
-                label: this.labels.botProtocol,
-                name: "provider",
-                value: this.alertSettings.provider,
-                options: [
-                    { id: "telegram", value: "telegram" },
-                    { id: "max", value: "max" },
-                    { id: "ntfy", value: "ntfy" }
-                ]
-            },
-
-            Number(this.labels.chatId, "chatId", this.alertSettings.chatId),
-
-            Text(this.labels.botToken, "botToken", this.alertSettings.botToken),
-
-            {
-                rows: [
-                    { view: "label", label: this.labels.scheduler },
-
-                    {
-                        cols: [
-                            {
-                                view: "button",
-                                value: this.labels.addScheduleTime,
-                                width: 180,
-                                click: () => {
-                                    const grid = $$("alertSchedulerGrid");
-                                    grid.add({
-                                        id: this._getNextScheduleId(),
-                                        time: "09:00:00"
-                                    });
-                                }
-                            },
-                            {
-                                view: "button",
-                                value: this.labels.remove,
-                                width: 180,
-                                click: () => {
-                                    const grid = $$("alertSchedulerGrid");
-                                    this._removeSchedulerRow(grid, grid.getSelectedId());
-                                }
-                            },
-                            {}
-                        ]
-                    },
-
-                    {
-                        view: "datatable",
-                        id: "alertSchedulerGrid",
-                        height: 220,
-                        editable: true,
-                        editaction: "click",
-                        select: "row",
-                        data: this.alertSettings.scheduler,
-                        columns: [
-                            { id: "id", header: "№", hidden: false, width: 80 },
-                            {
-                                id: "time",
-                                header: "Время (HH:mm:ss)",
-                                fillspace: true,
-                                editor: "dateTime",
-                                format: webix.Date.dateToStr("%H:%i:%s")
-                            }
-                        ],
-                        on: {
-                            onBeforeDelete: function () {
-                                if (this.getEditor && this.getEditor()) {
-                                    this.editCancel();
-                                }
-                                return true;
-                            }
-                        },
-                        onClick: {
-                            "remove-schedule-row": function (e, cell) {
-                                this.remove(cell.row);
-                                return false;
-                            }
-                        },
-                    },
-
-                ]
-            },
-
-            Number(this.labels.offlineNodeAlertInterval, "offlineNodeAlertInterval", this.alertSettings.offlineNodeAlertInterval),
-
-            Text(this.labels.localModuleVersionAlert, "localModuleVersionAlert", this.alertSettings.localModuleVersionAlert),
-
-            Number(this.labels.localModuleDaysWithoutSynchronization, "localModuleDaysWithoutSynchronization", this.alertSettings.localModuleDaysWithoutSynchronization),
-
-            CheckBox(this.labels.tsPiotStatusAlertEnabled, "tsPiotStatusAlertEnabled", {
-                value: this.alertSettings.tsPiotStatusAlertEnabled
-            }),
-
-            CheckBox(this.labels.tsPiotLicenseAlertEnabled, "tsPiotLicenseAlertEnabled", {
-                value: this.alertSettings.tsPiotLicenseAlertEnabled
-            }),
-
-            Number(this.labels.tsPiotLicenseAlertDays, "tsPiotLicenseAlertDays", this.alertSettings.tsPiotLicenseAlertDays),
-
-            Text(this.labels.tsPiotVersionAlert, "tsPiotVersionAlert", this.alertSettings.tsPiotVersionAlert)
-        );
-
-        const info = {
-            view: "template",
-            template: `<div>
-                <strong>Проверяются следующие параметры:</strong><br>
-                 - связь с нодами<br>
-                 - статус локальных модулей нод (если не ready)<br>
-                 - версия локальных модулей нод<br>
-                 - дата-время синхронизации локальных модулей<br>
-                 - состояние ТС ПИоТ (offline)<br>
-                 - истечение лицензии ТС ПИоТ<br>
-                 - версия ТС ПИоТ
-            </div>`,
-            height: 160,
-            borderless: true,
-        };
-
-        let elements = [
-            enaledCheckBox,
-            alertSettings,
-            {
-                cols: [
-                    this._saveButton,
-                    this._testButton,
-                    this._sendAllertsButton,
-                    {}
-                ]
-            },
-            info,
-            {}
-        ];
-
-        const alertSettingsForm = {
-            view: "form",
-            elements: elements
+        const channelFields = {
+            id: this.alertSettingsElementsId,
+            disabled: !this.alertSettings.isEnabled,
+            rows: [
+                {
+                    view: "richselect",
+                    label: this.labels.botProtocol,
+                    name: "provider",
+                    value: this.alertSettings.provider,
+                    options: [
+                        { id: "telegram", value: "telegram" },
+                        { id: "max", value: "max" },
+                        { id: "ntfy", value: "ntfy" }
+                    ]
+                },
+                Number(this.labels.chatId, "chatId", this.alertSettings.chatId),
+                Text(this.labels.botToken, "botToken", this.alertSettings.botToken)
+            ]
         };
 
         return {
-            id: "alertSettingsTabBody",
+            id: "alertChannelTabBody",
             rows: [
-                alertSettingsForm,
-            ],
+                {
+                    view: "form",
+                    id: this.channelFormId,
+                    elements: [
+                        enabledCheckBox,
+                        channelFields,
+                        {}
+                    ]
+                }
+            ]
+        };
+    }
+
+    renderStandardTab() {
+        const standardFields = {
+            id: this.standardSettingsElementsId,
+            disabled: !this.alertSettings.isEnabled,
+            rows: [
+                {
+                    rows: [
+                        { view: "label", label: this.labels.scheduler },
+                        {
+                            cols: [
+                                {
+                                    view: "button",
+                                    value: this.labels.addScheduleTime,
+                                    width: 180,
+                                    click: () => {
+                                        const grid = $$("alertSchedulerGrid");
+                                        grid.add({
+                                            id: this._getNextScheduleId(),
+                                            time: "09:00:00"
+                                        });
+                                    }
+                                },
+                                {
+                                    view: "button",
+                                    value: this.labels.remove,
+                                    width: 180,
+                                    click: () => {
+                                        const grid = $$("alertSchedulerGrid");
+                                        this._removeSchedulerRow(grid, grid.getSelectedId());
+                                    }
+                                },
+                                {}
+                            ]
+                        },
+                        {
+                            view: "datatable",
+                            id: "alertSchedulerGrid",
+                            height: 220,
+                            editable: true,
+                            editaction: "click",
+                            select: "row",
+                            data: this.alertSettings.scheduler,
+                            columns: [
+                                { id: "id", header: "№", hidden: false, width: 80 },
+                                {
+                                    id: "time",
+                                    header: "Время (HH:mm:ss)",
+                                    fillspace: true,
+                                    editor: "dateTime",
+                                    format: webix.Date.dateToStr("%H:%i:%s")
+                                }
+                            ],
+                            on: {
+                                onBeforeDelete: function () {
+                                    if (this.getEditor && this.getEditor()) {
+                                        this.editCancel();
+                                    }
+                                    return true;
+                                }
+                            },
+                            onClick: {
+                                "remove-schedule-row": function (e, cell) {
+                                    this.remove(cell.row);
+                                    return false;
+                                }
+                            }
+                        }
+                    ]
+                },
+                Number(this.labels.offlineNodeAlertInterval, "offlineNodeAlertInterval", this.alertSettings.offlineNodeAlertInterval),
+                Text(this.labels.localModuleVersionAlert, "localModuleVersionAlert", this.alertSettings.localModuleVersionAlert),
+                Number(this.labels.localModuleDaysWithoutSynchronization, "localModuleDaysWithoutSynchronization", this.alertSettings.localModuleDaysWithoutSynchronization),
+                CheckBox(this.labels.tsPiotStatusAlertEnabled, "tsPiotStatusAlertEnabled", {
+                    value: this.alertSettings.tsPiotStatusAlertEnabled
+                }),
+                CheckBox(this.labels.tsPiotLicenseAlertEnabled, "tsPiotLicenseAlertEnabled", {
+                    value: this.alertSettings.tsPiotLicenseAlertEnabled
+                }),
+                Number(this.labels.tsPiotLicenseAlertDays, "tsPiotLicenseAlertDays", this.alertSettings.tsPiotLicenseAlertDays),
+                Text(this.labels.tsPiotVersionAlert, "tsPiotVersionAlert", this.alertSettings.tsPiotVersionAlert)
+            ]
+        };
+
+        return {
+            id: "alertStandardTabBody",
+            rows: [
+                {
+                    view: "form",
+                    id: this.standardFormId,
+                    elements: [
+                        standardFields,
+                        {}
+                    ]
+                }
+            ]
         };
     }
 
@@ -298,12 +291,21 @@ class AlertSettingsView {
         css: "webix_primary",
         width: 120,
         click: async function () {
-            const form = this.getFormView();
-
-            if (!form.validate()) return;
-
-            const values = form.getValues();
+            const channelForm = $$("alertChannelForm");
+            const standardForm = $$("alertStandardForm");
             const schedulerGrid = $$("alertSchedulerGrid");
+
+            if (!channelForm || !standardForm || !schedulerGrid) {
+                webix.message({ type: "error", text: "Форма настроек ещё не загружена" });
+                return;
+            }
+
+            if (!channelForm.validate() || !standardForm.validate()) return;
+
+            const values = {
+                ...channelForm.getValues(),
+                ...standardForm.getValues()
+            };
             const schedulerRows = [];
 
             const toTimeString = webix.Date.dateToStr("%H:%i:%s");
@@ -436,15 +438,30 @@ export default async function createAlertSettingsView(id) {
         rows: [
             {
                 view: "tabview",
+                gravity: 1,
+                multiview: { keepViews: true },
                 cells: [
                     {
-                        header: "Настройки",
-                        body: view.renderView()
+                        header: view.labels.channelTab,
+                        body: view.renderChannelTab()
                     },
                     {
-                        header: "Шаблоны",
+                        header: view.labels.templatesTab,
                         body: createAlertTemplatesTab("alertTemplatesTab")
+                    },
+                    {
+                        header: view.labels.standardTab,
+                        body: view.renderStandardTab()
                     }
+                ]
+            },
+            {
+                padding: 10,
+                cols: [
+                    view._saveButton,
+                    view._testButton,
+                    view._sendAllertsButton,
+                    {}
                 ]
             }
         ]
