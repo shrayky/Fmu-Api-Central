@@ -1,4 +1,3 @@
-using CouchDb.Dto;
 using CouchDB.Driver.Extensions;
 using CSharpFunctionalExtensions;
 using Domain.Dto.Responces;
@@ -185,7 +184,7 @@ public class InstanceGroupsRepository : BaseCouchDbRepository<InstanceGroupEntit
             foreach (var document in groups)
                 document.Data.SettingsSchemaId = string.Empty;
 
-            await _database.AddOrUpdateRangeAsync(groups);
+            await SaveExistingDocumentsAsync(groups);
             return Result.Success();
         }
         catch (Exception ex)

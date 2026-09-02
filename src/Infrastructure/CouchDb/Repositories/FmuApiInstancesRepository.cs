@@ -203,7 +203,7 @@ public class FmuApiInstancesRepository : BaseCouchDbRepository<InstanceEntity>, 
             foreach (var document in instances)
                 document.Data.GroupId = string.Empty;
 
-            await _database.AddOrUpdateRangeAsync(instances);
+            await SaveExistingDocumentsAsync(instances);
             return Result.Success();
         }
         catch (Exception ex)

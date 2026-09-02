@@ -1,3 +1,4 @@
+using CouchDb.DatabaseScheme;
 using CouchDb.Http;
 using CouchDB.Driver.Extensions;
 using CSharpFunctionalExtensions;
@@ -28,14 +29,12 @@ public class SoftwareUpdateFilesRepository : BaseCouchDbRepository<SoftwareUpdat
         if (!_appState.DbState())
             return Result.Failure<bool>(DatabaseUnavailable);
 
-        var doc = await _database.FindAsync(entityId);
+        var response = await _database.ReadItemAsync(entityId);
 
-        if (doc == null)
+        if (response == null)
             return Result.Failure<bool>($"Обновление ПО с id {entityId} не найдено в БД");
 
-        doc.Attachments.AddOrUpdate(filePath, contentType);
-
-        await _database.AddOrUpdateAsync(doc);
+        await _database.UpsertAttachmentAsync(entityId, response.Rev, filePath, contentType);
 
         return Result.Success(true);
     }
@@ -108,12 +107,12 @@ public class SoftwareUpdateFilesRepository : BaseCouchDbRepository<SoftwareUpdat
         if (!_appState.DbState())
             return Result.Failure<bool>(DatabaseUnavailable);
 
-        var doc = await _database.FindAsync(entityId);
+        var response = await _database.ReadItemAsync(entityId);
 
-        if (doc == null)
+        if (response == null)
             return Result.Failure<bool>($"Обновление ПО с id {{entityId}} не найдено в БД");
 
-        await _database.RemoveAsync(doc);
+        await _database.DeleteItemAsync(entityId, response.Rev);
 
         return Result.Success(true);
     }
@@ -166,27 +165,25 @@ public class SoftwareUpdateFilesRepository : BaseCouchDbRepository<SoftwareUpdat
             if (!_appState.DbState())
                 return Result.Failure<SoftwareUpdateFileDownload>(DatabaseUnavailable);
 
-            var existEntity = await _database.FindAsync(updateId);
+            var existEntity = await _database.ReadItemAsync(updateId);
 
             if (existEntity == null)
                 return Result.Failure<SoftwareUpdateFileDownload>($"Обновление ПО с id {updateId} не найдено в БД");
 
-            var attachment = existEntity.Attachments.FirstOrDefault();
+            var attachment = existEntity.Attachments?.FirstOrDefault();
 
             if (attachment == null)
                 return Result.Failure<SoftwareUpdateFileDownload>($"Нет присоединенного файла обновления с id {updateId}");
 
-            if (attachment.Uri == null)
-                return Result.Failure<SoftwareUpdateFileDownload>($"Вложение обновления с id {updateId} ещё не загружено");
-
-            var totalLength = attachment.Length ?? existEntity.Data.FileSize;
+            var totalLength = attachment.Length > 0 ? attachment.Length : existEntity.Document.Data.FileSize;
             if (rangeFrom.HasValue && totalLength > 0 && rangeFrom.Value >= totalLength)
                 return Result.Failure<SoftwareUpdateFileDownload>(
                     $"{SoftwareUpdateFileDownload.RangeNotSatisfiableCode}:{totalLength}");
 
             var settings = await _parameters.Current();
+            var attachmentUri = BuildAttachmentUri(settings.DatabaseConnection.NetAddress, updateId, attachment.Name);
             var httpClient = _httpClientFactory.CreateClient(AttachmentHttpClientName);
-            using var request = new HttpRequestMessage(HttpMethod.Get, attachment.Uri);
+            using var request = new HttpRequestMessage(HttpMethod.Get, attachmentUri);
 
             var authToken = Convert.ToBase64String(
                 Encoding.ASCII.GetBytes($"{settings.DatabaseConnection.UserName}:{settings.DatabaseConnection.Password}"));
@@ -242,5 +239,14 @@ public class SoftwareUpdateFilesRepository : BaseCouchDbRepository<SoftwareUpdat
             return Result.Failure<SoftwareUpdateFileDownload>(
                 $"Ошибка загрузки файла обновления {updateId}: {ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// В 4.x у вложения нет Uri — собираем GET /{db}/{doc}/{att} сами.
+    /// </summary>
+    private static string BuildAttachmentUri(string netAddress, string documentId, string attachmentName)
+    {
+        var baseAddress = netAddress.TrimEnd('/');
+        return $"{baseAddress}/{DatabaseNames.SoftwareUpdateFiles}/{Uri.EscapeDataString(documentId)}/{Uri.EscapeDataString(attachmentName)}";
     }
 }

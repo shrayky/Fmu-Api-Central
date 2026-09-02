@@ -1,11 +1,12 @@
 using CouchDb.DatabaseScheme;
-using CSharpFunctionalExtensions;
 using Domain.AppState.Interfaces;
 using Domain.Attributes;
+using Domain.Configuration.Interfaces;
 using Domain.Database.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Shared.Http;
+using System.Text;
 
 namespace CouchDb.Services;
 
@@ -13,53 +14,66 @@ namespace CouchDb.Services;
 public class DataBaseMaintenanceService(
     ILogger<DataBaseMaintenanceService> logger,
     IApplicationState appState,
-    Context dbContext,
+    IParametersService parametersService,
     IHttpClientFactory httpClientFactory) : IDataBaseMaintenanceService
 {
-     private readonly ILogger<DataBaseMaintenanceService> _logger = logger;
-     private readonly IApplicationState _appState = appState;
-     private readonly IHttpClientFactory _httpClientFactory = httpClientFactory;
-     private readonly Context _dbContext = dbContext;
+    private readonly ILogger<DataBaseMaintenanceService> _logger = logger;
+    private readonly IApplicationState _appState = appState;
+    private readonly IParametersService _parametersService = parametersService;
+    private readonly IHttpClientFactory _httpClientFactory = httpClientFactory;
 
     public async Task<bool> CompactDatabase()
     {
         if (!_appState.DbState())
             return false;
 
-        try
-        {
-            await _dbContext.Users.CompactAsync();
-            await _dbContext.FmuApiInstances.CompactAsync();
-            await _dbContext.SoftwareUpdateFiles.CompactAsync();
-            await _dbContext.MarkCheckStatistics.CompactAsync();
-        }
-        catch (Exception e)
-        {
-            _logger.LogError("Ошибка сжатия БД: {err}", e.Message);
-            return false;
-        }
-
-        return true;
-    }
-
-    public async Task<Result> CompactDatabases()
-    {
-        if (!_appState.DbState())
-            return Result.Failure("База данных недоступна");
-
+        var connection = (await _parametersService.Current()).DatabaseConnection;
         var httpClientResult = _httpClientFactory.CreateClientSafely("CouchDbCompact", _logger);
 
         if (httpClientResult.IsFailure)
         {
-            var err = $"Не удалось создать HttpClient: {httpClientResult.Error}";
-            return Result.Failure(err);
+            _logger.LogError("Ошибка сжатия БД: {err}", httpClientResult.Error);
+            return false;
         }
 
-        foreach (var dbName in DatabaseNames.All())
+        using var httpClient = httpClientResult.Value;
+        httpClient.BaseAddress = new Uri(connection.NetAddress);
+
+        var authToken = Convert.ToBase64String(Encoding.ASCII.GetBytes($"{connection.UserName}:{connection.Password}"));
+        httpClient.DefaultRequestHeaders.Authorization = new("Basic", authToken);
+
+        var allSucceeded = true;
+
+        foreach (var databaseName in DatabaseNames.All())
         {
-
+            if (!await CompactSingleDatabase(httpClient, databaseName))
+                allSucceeded = false;
         }
 
-        return Result.Success();
+        return allSucceeded;
+    }
+
+    /// <summary>
+    /// POST /{db}/_compact по всем именам, не только по четырём коллекциям старого Context.
+    /// </summary>
+    private async Task<bool> CompactSingleDatabase(HttpClient httpClient, string databaseName)
+    {
+        try
+        {
+            using var content = new StringContent("{}", Encoding.UTF8, "application/json");
+            using var response = await httpClient.PostAsync($"/{databaseName}/_compact", content);
+
+            if (response.IsSuccessStatusCode)
+                return true;
+
+            var body = await response.Content.ReadAsStringAsync();
+            _logger.LogError("Ошибка сжатия БД {DatabaseName}: {StatusCode} {Body}", databaseName, response.StatusCode, body);
+            return false;
+        }
+        catch (Exception e)
+        {
+            _logger.LogError("Ошибка сжатия БД {DatabaseName}: {err}", databaseName, e.Message);
+            return false;
+        }
     }
 }

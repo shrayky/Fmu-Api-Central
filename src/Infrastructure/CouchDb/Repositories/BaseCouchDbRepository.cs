@@ -1,15 +1,13 @@
 ﻿using CouchDb.Dto;
-using CouchDb.Models;
 using CouchDB.Driver;
+using CouchDB.Driver.Types;
 using CSharpFunctionalExtensions;
 using Domain.AppState.Interfaces;
 using Domain.Configuration.Interfaces;
 using Domain.Database.Interfaces;
 using Domain.Entitys.Interfaces;
-using Flurl.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json;
 
 namespace CouchDb.Repositories
 {
@@ -19,7 +17,7 @@ namespace CouchDb.Repositories
         protected readonly ICouchDatabase<UniversalDocument<T>> _database;
         protected readonly IParametersService _parameters;
         protected readonly IApplicationState _appState;
-        
+
         protected const string DatabaseUnavailable = "БД недоступна сейчас";
 
         protected BaseCouchDbRepository(ICouchDatabase<UniversalDocument<T>> database, IServiceProvider services)
@@ -39,9 +37,8 @@ namespace CouchDb.Repositories
 
         public async Task<T?> GetByIdAsync(string id)
         {
-            var doc = await _database.FindAsync(id);
-
-            return doc?.ToDomain();
+            var response = await _database.ReadItemAsync(id);
+            return response?.Document.ToDomain();
         }
 
         public async Task<bool> CreateAsync(T entity)
@@ -60,31 +57,19 @@ namespace CouchDb.Repositories
             return await SaveDocumentAsync(entity);
         }
 
-        private async Task<bool> SaveDocumentAsync(T entity)
-        {
-            var existingDoc = await _database.FindAsync(entity.Id);
-            var doc = UniversalDocument<T>.FromDomain(entity, entity.Id);
-
-            if (existingDoc != null)
-            {
-                doc.Rev = existingDoc.Rev;
-            }
-
-            await _database.AddOrUpdateAsync(doc);
-            return true;
-        }
-
         public async Task<bool> DeleteAsync(string id)
         {
-            var doc = await _database.FindAsync(id);
+            var response = await _database.ReadItemAsync(id);
 
-            if (doc == null)
+            if (response == null)
                 return true;
 
+            var doc = response.Document;
             if (doc.Id == "")
                 return false;
 
-            await _database.RemoveAsync(doc);
+            var rev = string.IsNullOrEmpty(doc.Rev) ? response.Rev : doc.Rev;
+            await _database.DeleteItemAsync(doc.Id, rev);
 
             return true;
         }
@@ -95,30 +80,29 @@ namespace CouchDb.Repositories
             int BATCH_SIZE = configuration.DatabaseConnection.BulkBatchSize;
             int MAX_PARALLEL_TASKS = configuration.DatabaseConnection.BulkParallelTasks;
 
-            var ids = entities.Select(e => e.Id).ToList();
-            var existingDocs = await _database.FindManyAsync(ids);
+            var entityList = entities
+                .GroupBy(e => e.Id)
+                .Select(g => g.Last())
+                .ToList();
+            var ids = entityList.Select(e => e.Id).ToList();
+            var existingDocs = await _database.ReadItemsAsync(ids);
+            var existingById = existingDocs
+                .GroupBy(doc => doc.Id)
+                .ToDictionary(g => g.Key, g => g.Last());
 
-            var documentBatches = entities
-               .Join(
-                   existingDocs,
-                   entity => entity.Id,
-                   doc => doc.Id,
-                   (entity, existingDoc) =>
-                   {
-                       var doc = UniversalDocument<T>.FromDomain(entity, entity.Id);
-                       doc.Rev = existingDoc.Rev;
-                       return doc;
-                   })
-               .Union(entities
-                   .Where(entity => !existingDocs.Any(doc => doc.Id == entity.Id))
-                   .Select(entity => UniversalDocument<T>.FromDomain(entity, entity.Id)))
-               .GroupBy(e => e.Id)
-               .Select(g => g.Last())
-               .Chunk(BATCH_SIZE);
+            var documentBatches = entityList
+                .Select(entity =>
+                {
+                    var doc = UniversalDocument<T>.FromDomain(entity, entity.Id);
+                    if (existingById.TryGetValue(entity.Id, out var existingDoc))
+                        doc.Rev = existingDoc.Rev;
+                    return doc;
+                })
+                .Chunk(BATCH_SIZE);
 
             var dbName = typeof(T).Name.ToLower();
 
-            _logger.LogInformation("Начинаю массовое добавление в {Database}: {Count} документов", dbName, entities.Count());
+            _logger.LogInformation("Начинаю массовое добавление в {Database}: {Count} документов", dbName, entityList.Count);
 
             using var semaphore = new SemaphoreSlim(MAX_PARALLEL_TASKS);
 
@@ -127,7 +111,13 @@ namespace CouchDb.Repositories
                 await semaphore.WaitAsync();
                 try
                 {
-                    await _database.AddOrUpdateRangeAsync(batch);
+                    var operations = batch
+                        .Select(doc => string.IsNullOrEmpty(doc.Rev)
+                            ? BulkItemOperation.Add(doc)
+                            : BulkItemOperation.Update(doc, doc.Id, doc.Rev))
+                        .ToList();
+
+                    await _database.ExecuteBulkItemOperationsAsync(operations);
                     await Task.Delay(100);
                 }
                 finally
@@ -143,7 +133,7 @@ namespace CouchDb.Repositories
 
         public async Task<List<T>> GetListByIdAsync(List<string> ids)
         {
-            var docs = await _database.FindManyAsync(ids);
+            var docs = await _database.ReadItemsAsync(ids);
 
             List<T> entityData = [];
 
@@ -161,9 +151,14 @@ namespace CouchDb.Repositories
         public async Task<int> RecordCount()
         {
             var info = await _database.GetInfoAsync();
-            var designDocCount = await CountDesignDocumentsAsync();
+            var indexes = await _database.GetIndexesAsync();
+            var designDocCount = indexes
+                .Where(index => !string.IsNullOrWhiteSpace(index.DesignDocument))
+                .Select(index => index.DesignDocument)
+                .Distinct(StringComparer.Ordinal)
+                .Count();
 
-            return Math.Max(0, info.DocCount - designDocCount);
+            return Math.Max(0, (int)info.DocCount - designDocCount);
         }
 
         /// <summary>
@@ -173,16 +168,11 @@ namespace CouchDb.Repositories
         {
             try
             {
-                var json = await _database.NewRequest()
-                    .AppendPathSegment("_find")
-                    .PostJsonAsync(mangoQuery)
-                    .ReceiveString();
-
-                var response = JsonConvert.DeserializeObject<MangoFindResponse<UniversalDocument<T>>>(json);
-                var list = response?.Docs
+                var result = await _database.QueryAsync(mangoQuery, throwExceptionOnWarning: false);
+                var list = result
                     .Where(doc => doc.Data != null)
                     .Select(doc => doc.Data)
-                    .ToList() ?? [];
+                    .ToList();
                 return Result.Success(list);
             }
             catch (Exception ex)
@@ -193,17 +183,18 @@ namespace CouchDb.Repositories
         }
 
         /// <summary>
-        /// Число _design документов в текущей базе.
+        /// Сохраняет уже прочитанные документы с текущим Rev.
         /// </summary>
-        private async Task<int> CountDesignDocumentsAsync()
+        protected async Task SaveExistingDocumentsAsync(IEnumerable<UniversalDocument<T>> documents)
         {
-            var json = await _database.NewRequest()
-                .AppendPathSegment("_design_docs")
-                .SetQueryParam("limit", 0)
-                .GetStringAsync();
+            var operations = documents
+                .Select(doc => BulkItemOperation.Update(doc, doc.Id, doc.Rev))
+                .ToList();
 
-            var response = System.Text.Json.JsonSerializer.Deserialize<CouchDesignDocsResponse>(json);
-            return response?.TotalRows ?? 0;
+            if (operations.Count == 0)
+                return;
+
+            await _database.ExecuteBulkItemOperationsAsync(operations);
         }
 
         public async Task<bool> IsHealthy()
@@ -217,6 +208,19 @@ namespace CouchDb.Repositories
             {
                 return false;
             }
+        }
+
+        private async Task<bool> SaveDocumentAsync(T entity)
+        {
+            var existingResponse = await _database.ReadItemAsync(entity.Id);
+            var doc = UniversalDocument<T>.FromDomain(entity, entity.Id);
+
+            if (existingResponse != null)
+                await _database.UpdateItemAsync(doc, entity.Id, existingResponse.Rev);
+            else
+                await _database.CreateItemAsync(doc);
+
+            return true;
         }
     }
 }

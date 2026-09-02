@@ -1,7 +1,6 @@
 ﻿using CouchDb.DatabaseScheme;
 using CouchDb.Dto;
 using CouchDB.Driver;
-using CouchDB.Driver.Options;
 using Domain.Entitys;
 using Domain.Entitys.Instance;
 using Domain.Entitys.InstanceGroup;
@@ -12,42 +11,32 @@ using Domain.Entitys.SettingsSchema;
 using Domain.GisMt.Entity;
 using Domain.Entitys.SoftwareUpdateFiles;
 
-namespace CouchDb
+namespace CouchDb;
+
+public class Context
 {
-    public class Context : CouchContext
+    public ICouchDatabase<UniversalDocument<UserEntity>> Users { get; }
+    public ICouchDatabase<UniversalDocument<InstanceEntity>> FmuApiInstances { get; }
+    public ICouchDatabase<UniversalDocument<InstanceGroupEntity>> InstanceGroups { get; }
+    public ICouchDatabase<UniversalDocument<SettingsSchemaEntity>> SettingsSchemas { get; }
+    public ICouchDatabase<UniversalDocument<OrganizationEntity>> Organizations { get; }
+    public ICouchDatabase<UniversalDocument<SoftwareUpdateFilesEntity>> SoftwareUpdateFiles { get; }
+    public ICouchDatabase<UniversalDocument<MarkCheckStatisticsEntity>> MarkCheckStatistics { get; }
+    public ICouchDatabase<UniversalDocument<GisMtDocumentEntity>> GisMtDocuments { get; }
+    public ICouchDatabase<UniversalDocument<GisMtMarkEntity>> GisMtMarks { get; }
+    public ICouchDatabase<UniversalDocument<AlertTemplateEntity>> AlertTemplates { get; }
+
+    public Context(CouchClient client)
     {
-        public required CouchDatabase<UniversalDocument<UserEntity>> Users { get; set; }
-        public required CouchDatabase<UniversalDocument<InstanceEntity>> FmuApiInstances { get; set; }
-        public required CouchDatabase<UniversalDocument<InstanceGroupEntity>> InstanceGroups { get; set; }
-        public required CouchDatabase<UniversalDocument<SettingsSchemaEntity>> SettingsSchemas { get; set; }
-        public required CouchDatabase<UniversalDocument<OrganizationEntity>> Organizations { get; set; }
-        public required CouchDatabase<UniversalDocument<SoftwareUpdateFilesEntity>> SoftwareUpdateFiles { get; set; }
-        public required CouchDatabase<UniversalDocument<MarkCheckStatisticsEntity>> MarkCheckStatistics { get; set; }
-        public required CouchDatabase<UniversalDocument<GisMtDocumentEntity>> GisMtDocuments { get; set; }
-        public required CouchDatabase<UniversalDocument<GisMtMarkEntity>> GisMtMarks { get; set; }
-        public required CouchDatabase<UniversalDocument<AlertTemplateEntity>> AlertTemplates { get; set; }
-
-        public Context(CouchOptions<Context> options) : base(options)
-        {
-        }
-
-        protected override void OnConfiguring(CouchOptionsBuilder optionsBuilder)
-        {
-        }
-
-        protected override void OnDatabaseCreating(CouchDatabaseBuilder databaseBuilder)
-        {
-            databaseBuilder.Document<UniversalDocument<UserEntity>>().ToDatabase(DatabaseNames.Users);
-            databaseBuilder.Document<UniversalDocument<InstanceEntity>>().ToDatabase(DatabaseNames.Instance);
-            databaseBuilder.Document<UniversalDocument<InstanceGroupEntity>>().ToDatabase(DatabaseNames.InstanceGroup);
-            databaseBuilder.Document<UniversalDocument<SettingsSchemaEntity>>().ToDatabase(DatabaseNames.SettingsSchema);
-            databaseBuilder.Document<UniversalDocument<OrganizationEntity>>().ToDatabase(DatabaseNames.Organization);
-            databaseBuilder.Document<UniversalDocument<SoftwareUpdateFilesEntity>>().ToDatabase(DatabaseNames.SoftwareUpdateFiles);
-            databaseBuilder.Document<UniversalDocument<MarkCheckStatisticsEntity>>().ToDatabase(DatabaseNames.MarkCheckingStatistic);
-            databaseBuilder.Document<UniversalDocument<GisMtDocumentEntity>>().ToDatabase(DatabaseNames.GisMtDocuments);
-            databaseBuilder.Document<UniversalDocument<GisMtMarkEntity>>().ToDatabase(DatabaseNames.GisMtMarks);
-            databaseBuilder.Document<UniversalDocument<AlertTemplateEntity>>().ToDatabase(DatabaseNames.AlertTemplates);
-        }
-
+        Users = client.GetDatabase<UniversalDocument<UserEntity>>(DatabaseNames.Users);
+        FmuApiInstances = client.GetDatabase<UniversalDocument<InstanceEntity>>(DatabaseNames.Instance);
+        InstanceGroups = client.GetDatabase<UniversalDocument<InstanceGroupEntity>>(DatabaseNames.InstanceGroup);
+        SettingsSchemas = client.GetDatabase<UniversalDocument<SettingsSchemaEntity>>(DatabaseNames.SettingsSchema);
+        Organizations = client.GetDatabase<UniversalDocument<OrganizationEntity>>(DatabaseNames.Organization);
+        SoftwareUpdateFiles = client.GetDatabase<UniversalDocument<SoftwareUpdateFilesEntity>>(DatabaseNames.SoftwareUpdateFiles);
+        MarkCheckStatistics = client.GetDatabase<UniversalDocument<MarkCheckStatisticsEntity>>(DatabaseNames.MarkCheckingStatistic);
+        GisMtDocuments = client.GetDatabase<UniversalDocument<GisMtDocumentEntity>>(DatabaseNames.GisMtDocuments);
+        GisMtMarks = client.GetDatabase<UniversalDocument<GisMtMarkEntity>>(DatabaseNames.GisMtMarks);
+        AlertTemplates = client.GetDatabase<UniversalDocument<AlertTemplateEntity>>(DatabaseNames.AlertTemplates);
     }
 }
