@@ -40,7 +40,7 @@ class Build : NukeBuild
     Target PublishHost => _ => _
         .Executes(() =>
         {
-            PublishApp(HostAppProject, "win-x64", HostWinX64);
+            PublishHostApp(HostAppProject, "win-x64", HostWinX64);
         });
 
     Target ResolveVersion => _ => _
@@ -98,6 +98,21 @@ class Build : NukeBuild
             .SetRuntime(runtime)
             .SetSelfContained(true)
             .SetPublishSingleFile(true)
+            .SetOutput(output));
+    }
+
+    /// <summary>
+    /// Native AOT нельзя совмещать с PublishSingleFile — SDK выдаёт ошибку линковки.
+    /// </summary>
+    void PublishHostApp(AbsolutePath project, string runtime, AbsolutePath output)
+    {
+        output.CreateOrCleanDirectory();
+        DotNetPublish(s => s
+            .SetProject(project)
+            .SetConfiguration("Release")
+            .SetRuntime(runtime)
+            .SetSelfContained(true)
+            .SetProperty("PublishAot", true)
             .SetOutput(output));
     }
 
