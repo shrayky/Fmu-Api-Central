@@ -54,6 +54,11 @@ export const MENU_ITEMS = {
         value: "Логи работы",
         icon: "mdi mdi-file-log"
     },
+    USERS: {
+        id: "usersList",
+        value: "Пользователи",
+        icon: "mdi mdi-account-group"
+    },
     SERVICE: {
         id: "service",
         value: "Сервис",

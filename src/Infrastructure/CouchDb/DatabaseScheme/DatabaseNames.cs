@@ -15,5 +15,5 @@ public class DatabaseNames
 
     public static string[] All() => [Users, Instance, InstanceGroup, SettingsSchema, Organization, SoftwareUpdateFiles, MarkCheckingStatistic, GisMtDocuments, GisMtMarks, AlertTemplates];
 
-    public static string[] ExcludedFromExport() => [Users, SoftwareUpdateFiles];
+    public static string[] ExcludedFromExport() => [Users, SoftwareUpdateFiles, MarkCheckingStatistic, GisMtDocuments, GisMtMarks];
 }

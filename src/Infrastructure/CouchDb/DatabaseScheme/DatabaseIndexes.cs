@@ -8,6 +8,7 @@ public class DatabaseIndexes
     {
         return new Dictionary<string, CouchDbIndexDefinition[]>
             {
+                { DatabaseNames.Users, UsersIndexSchema() },
                 { DatabaseNames.Instance, InstanceIndexSchema() },
                 { DatabaseNames.InstanceGroup, InstanceGroupIndexSchema() },
                 { DatabaseNames.SettingsSchema, SettingsSchemaIndexSchema() },
@@ -19,6 +20,12 @@ public class DatabaseIndexes
                 { DatabaseNames.AlertTemplates, AlertTemplatesIndexSchema() }
             };
     }
+
+    private static CouchDbIndexDefinition[] UsersIndexSchema() =>
+        [
+            new("id-idx", new(["data.id"])),
+            new("name-idx", new(["data.name"])),
+        ];
 
     private static CouchDbIndexDefinition[] InstanceIndexSchema() =>
         [

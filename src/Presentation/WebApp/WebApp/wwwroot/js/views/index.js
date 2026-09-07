@@ -21,6 +21,7 @@ import createOrganizationListView from '../modules/organization/organizationList
 import createMarkCheckStatisticsListView from '../modules/markCheckStatistics/markCheckStatisticsListView.js';
 import createAlertSettingsView from '../modules/alertSettingsView.js';
 import createServiceView from '../modules/serviceView.js';
+import createUsersListView from '../modules/users/usersListView.js';
 
 registerWebixEditors();
 
@@ -45,6 +46,7 @@ class App {
         this.router.register("markCheckStatistics", async (id) => await createMarkCheckStatisticsListView(id));
         this.router.register("telegramBotSettings", async (id) => await createAlertSettingsView(id));
         this.router.register("service", async (id) => await createServiceView(id));
+        this.router.register("usersList", async (id) => await createUsersListView(id));
     }
 
     isMobile = () => window.innerWidth <= 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
