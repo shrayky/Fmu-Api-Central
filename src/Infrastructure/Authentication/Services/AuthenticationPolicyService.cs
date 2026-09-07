@@ -1,4 +1,5 @@
 ﻿using Domain.Attributes;
+using Domain.Authentication;
 using Domain.Authentication.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -21,7 +22,7 @@ namespace Authentication.Services
 
             await Task.Delay(1);
             
-            return login == "admin" && password == "admin";
+            return login == DefaultUserCredentials.Login && password == DefaultUserCredentials.Password;
         }
 
         public bool IsFallbackModeEnabled()

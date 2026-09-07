@@ -29,30 +29,29 @@ namespace Authentication.Services
             _userRepository = userRepository;
         }
 
-        public async Task<bool> ValidateCredentials(string login, string password)
+        public async Task<bool> IsFallbackActive()
         {
             var dbEnabled = await _dbHealthService.Value.IsDatabaseEnabled();
-            var haseUsers = await _repositoryHealthService.Value.HasRecords(_userRepository.DatabaseName());
-            bool isValid;
+            if (!dbEnabled)
+                return true;
 
-            if (dbEnabled && haseUsers)
+            return !await _repositoryHealthService.Value.HasRecords(_userRepository.DatabaseName());
+        }
+
+        public async Task<bool> ValidateCredentials(string login, string password)
+        {
+            if (await IsFallbackActive())
+                return await _authenticationPolicyService.Value.ValidateFallbackCredentials(login, password);
+
+            var userResult = await _userCredentialService.Value.GetUserByLogin(login);
+
+            if (userResult.IsFailure)
             {
-                var userResult = await _userCredentialService.Value.GetUserByLogin(login);
-
-                if (userResult.IsFailure)
-                {
-                    _logger.LogWarning("Пользователь {Login} не найден в БД", login);
-                    return false;
-                }
-
-                isValid = await _userCredentialService.Value.ValidatePassword(userResult.Value, password);
-            }
-            else
-            {
-                isValid = await _authenticationPolicyService.Value.ValidateFallbackCredentials(login, password);
+                _logger.LogWarning("Пользователь {Login} не найден в БД", login);
+                return false;
             }
 
-            return isValid;
+            return await _userCredentialService.Value.ValidatePassword(userResult.Value, password);
         }
 
     }

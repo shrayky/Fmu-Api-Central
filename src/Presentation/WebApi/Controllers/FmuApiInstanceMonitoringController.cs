@@ -1,12 +1,14 @@
 using System.Text.Json;
 using Domain.Entitys.Instance.Interfaces;
 using Domain.Entitys.SoftwareUpdateFiles;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace WebApi.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
+[AllowAnonymous]
 public class FmuApiInstanceMonitoringController : ControllerBase
 {
     private readonly IInstanceManagerService  _managerService;

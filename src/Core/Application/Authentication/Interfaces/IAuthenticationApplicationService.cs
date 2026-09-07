@@ -7,6 +7,7 @@ namespace Application.Authentication.Interfaces
     {
         Task<Result<AuthenticationResult>> Authenticate(string login, string password);
         Result<AuthenticationResult> RefreshToken(string refreshToken);
+        Task<Result> ChangePassword(string login, string currentPassword, string newPassword);
         Result Logout(string refreshToken);
     }
 }

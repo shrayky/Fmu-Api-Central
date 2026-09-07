@@ -122,14 +122,7 @@ class App {
     }
 
     showAuthWindow() {
-        webix.ui(createAuthView(async (serverUrl, login, password) => {
-            try {
-                await AuthService.login(serverUrl, login, password);
-                this.switchToMainApp();
-            } catch (error) {
-                webix.message({ text: error.message, type: "error" });
-            }
-        })).show();
+        webix.ui(createAuthView(() => this.switchToMainApp())).show();
     }
 
     switchToMainApp() {

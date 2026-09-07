@@ -5,6 +5,7 @@ using Domain.Attributes;
 using Domain.Configuration;
 using Domain.Configuration.Constants;
 using Domain.Configuration.Interfaces;
+using Domain.Configuration.Options;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -58,11 +59,18 @@ public class ConfigurationApplicationService : IConfigurationApplicationService
             stream.Position = 0;
 
             var parameters = await JsonSerializer.DeserializeAsync<Parameters>(stream, JsonSerializeOptionsProvider.Default());
-            if (parameters != null) return await _parametersService.Update(parameters);
-            
-            _logger.LogError("Не удалось десериализовать конфигурацию из входящего json");
-            
-            return false;
+            if (parameters == null)
+            {
+                _logger.LogError("Не удалось десериализовать конфигурацию из входящего json");
+                return false;
+            }
+
+            var current = await _parametersService.Current();
+            parameters.Security ??= new();
+            current.Security ??= new();
+            parameters.Security.PasswordConfigured = current.Security.PasswordConfigured;
+
+            return await _parametersService.Update(parameters);
 
         }
         catch (JsonException ex)

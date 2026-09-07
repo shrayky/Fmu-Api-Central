@@ -3,5 +3,6 @@
     public interface IUserAuthenticationService
     {
         Task<bool> ValidateCredentials(string login, string password);
+        Task<bool> IsFallbackActive();
     }
 }

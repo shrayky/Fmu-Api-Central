@@ -27,6 +27,9 @@ public class Parameters
     [JsonPropertyName("gisMtSettings")]
     public GisMtSettings GisMtSettings { get; set; } = new();
 
+    [JsonPropertyName("security")]
+    public SecuritySettings Security { get; set; } = new();
+
     public override string ToString()
     {
         return JsonSerializer.Serialize(this);

@@ -57,7 +57,7 @@ export const MENU_ITEMS = {
     USERS: {
         id: "usersList",
         value: "Пользователи",
-        icon: "mdi mdi-account-group"
+        icon: "mdi mdi-accounts"
     },
     SERVICE: {
         id: "service",

@@ -1,5 +1,7 @@
 using CSharpFunctionalExtensions;
 using Domain.Attributes;
+using Domain.Authentication;
+using Domain.Authentication.Interfaces;
 using Domain.Dto.Responces;
 using Domain.Entitys;
 using Domain.Entitys.Users.Dto;
@@ -11,10 +13,12 @@ namespace Application.Users.Services;
 public class UsersManagerService : IUsersManagerService
 {
     private readonly IUserRepository _repository;
+    private readonly IPasswordHasher _passwordHasher;
 
-    public UsersManagerService(IUserRepository repository)
+    public UsersManagerService(IUserRepository repository, IPasswordHasher passwordHasher)
     {
         _repository = repository;
+        _passwordHasher = passwordHasher;
     }
 
     public async Task<Result> Create(UserView data)
@@ -25,6 +29,10 @@ public class UsersManagerService : IUsersManagerService
 
         if (string.IsNullOrWhiteSpace(data.Password))
             return Result.Failure("Укажите пароль");
+
+        var passwordResult = ValidateNewPassword(data.Password);
+        if (passwordResult.IsFailure)
+            return passwordResult;
 
         var uniqueNameResult = await EnsureUniqueName(data.Id, data.Name);
         if (uniqueNameResult.IsFailure)
@@ -59,11 +67,16 @@ public class UsersManagerService : IUsersManagerService
         if (string.IsNullOrWhiteSpace(password))
             return Result.Failure("Укажите пароль");
 
+        var passwordResult = ValidateNewPassword(password);
+        if (passwordResult.IsFailure)
+            return passwordResult;
+
         var existing = await _repository.GetById(id);
         if (existing.IsFailure)
             return Result.Failure(existing.Error);
 
-        existing.Value.Password = password;
+        existing.Value.Password = _passwordHasher.Hash(password.Trim());
+        existing.Value.MustChangePassword = false;
         return await _repository.Update(existing.Value);
     }
 
@@ -105,7 +118,14 @@ public class UsersManagerService : IUsersManagerService
     {
         entity.Name = data.Name.Trim();
         if (!string.IsNullOrWhiteSpace(data.Password))
-            entity.Password = data.Password;
+        {
+            var passwordResult = ValidateNewPassword(data.Password);
+            if (passwordResult.IsFailure)
+                return passwordResult;
+
+            entity.Password = _passwordHasher.Hash(data.Password.Trim());
+            entity.MustChangePassword = false;
+        }
 
         return await _repository.Update(entity);
     }
@@ -127,10 +147,19 @@ public class UsersManagerService : IUsersManagerService
         return Result.Success();
     }
 
-    private static UserEntity ToEntity(UserView data) => new()
+    private UserEntity ToEntity(UserView data) => new()
     {
         Id = string.IsNullOrWhiteSpace(data.Id) ? Guid.NewGuid().ToString() : data.Id,
         Name = data.Name.Trim(),
-        Password = data.Password
+        Password = _passwordHasher.Hash(data.Password.Trim()),
+        MustChangePassword = false
     };
+
+    private static Result ValidateNewPassword(string password)
+    {
+        if (string.Equals(password.Trim(), DefaultUserCredentials.Password, StringComparison.Ordinal))
+            return Result.Failure("Нельзя оставить пароль по умолчанию");
+
+        return Result.Success();
+    }
 }

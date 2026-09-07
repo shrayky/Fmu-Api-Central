@@ -12,10 +12,12 @@ namespace Authentication.Services
     public class UserCredentialService : IUserCredentialService
     {
         private readonly IUserRepository _usersRepository;
+        private readonly IPasswordHasher _passwordHasher;
 
-        public UserCredentialService(IUserRepository usersRepository)
+        public UserCredentialService(IUserRepository usersRepository, IPasswordHasher passwordHasher)
         {
             _usersRepository = usersRepository;
+            _passwordHasher = passwordHasher;
         }
 
         public async Task<Result<UserEntity>> GetUserByLogin(string login)
@@ -25,12 +27,8 @@ namespace Authentication.Services
 
         public async Task<bool> ValidatePassword(UserEntity user, string password)
         {
-            // функция асинхронная потому что в будующем возможна более долгая и сложная валидация
-
-            // что бы компиляторо не ругался
             await Task.Delay(1);
-            
-            return user.Password == password;
+            return _passwordHasher.Verify(password, user.Password);
         }
     }
 }

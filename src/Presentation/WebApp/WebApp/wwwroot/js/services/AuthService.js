@@ -12,7 +12,12 @@ export const AuthService = {
             throw new Error('Ошибка авторизации');
         }
         const data = await response.json();
-        
+
+        if (data.mustChangePassword) {
+            localStorage.setItem('serverUrl', serverUrl);
+            return data;
+        }
+
         localStorage.setItem('jwtToken', data.accessToken);
         localStorage.setItem('refreshToken', data.refreshToken);
         localStorage.setItem('tokenExpiresAt', data.expiresAt);
@@ -20,6 +25,21 @@ export const AuthService = {
         localStorage.setItem('serverUrl', serverUrl);
         
         return data;
+    },
+
+    async changePassword(serverUrl, login, currentPassword, newPassword) {
+        const url = `${serverUrl}/api/Auth/change-password`;
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ login, currentPassword, newPassword })
+        });
+        if (!response.ok) {
+            const text = await response.text();
+            throw new Error(text || 'Не удалось сменить пароль');
+        }
     },
 
     async refreshToken() {

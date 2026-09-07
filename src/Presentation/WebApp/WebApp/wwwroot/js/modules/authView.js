@@ -1,4 +1,5 @@
 import { AuthService } from '../services/AuthService.js';
+import createChangePasswordView from './changePasswordView.js';
 
 export default function createAuthView(onLoginSuccess) {
     const savedServer = localStorage.getItem('serverUrl') || 'http://localhost:2579';
@@ -45,6 +46,18 @@ export default function createAuthView(onLoginSuccess) {
 
                                 form.hideProgress();
 
+                                if (result && result.mustChangePassword) {
+                                    localStorage.setItem('serverUrl', values.server);
+                                    $$('authWindow').close();
+                                    webix.ui(createChangePasswordView({
+                                        serverUrl: values.server,
+                                        login: values.login,
+                                        currentPassword: values.password,
+                                        onDone: () => webix.ui(createAuthView(onLoginSuccess)).show()
+                                    })).show();
+                                    return;
+                                }
+
                                 if (result && result.accessToken) {
                                     localStorage.setItem('serverUrl', values.server);
                                     webix.message({ type: "success", text: "Успешный вход" });
@@ -52,7 +65,7 @@ export default function createAuthView(onLoginSuccess) {
                                     $$('authWindow').close();
 
                                     if (onLoginSuccess) {
-                                        onLoginSuccess(values.server, values.login, values.password);
+                                        onLoginSuccess();
                                     }
                                 } else {
                                     webix.message({ type: "error", text: "Неверный формат ответа сервера" });

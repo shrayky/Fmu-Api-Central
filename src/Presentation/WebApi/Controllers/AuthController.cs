@@ -1,11 +1,13 @@
 ﻿using Application.Authentication.DTO;
 using Application.Authentication.Interfaces;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace WebApi.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [AllowAnonymous]
     public class AuthController : ControllerBase
     {
         private readonly IAuthenticationApplicationService _authService;
@@ -35,6 +37,23 @@ namespace WebApi.Controllers
                 return Ok(result.Value);
 
             return Unauthorized(result.Error);
+        }
+
+        [HttpPost("change-password")]
+        public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
+        {
+            var result = await _authService.ChangePassword(
+                request.Login,
+                request.CurrentPassword,
+                request.NewPassword);
+
+            if (result.IsSuccess)
+                return Ok();
+
+            if (result.Error == "Неверный логин или пароль")
+                return Unauthorized(result.Error);
+
+            return BadRequest(result.Error);
         }
 
         [HttpPost("logout")]

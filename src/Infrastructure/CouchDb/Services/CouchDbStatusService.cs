@@ -1,12 +1,15 @@
 ﻿using CouchDb.Repositories;
 using Domain.Attributes;
+using Domain.Authentication;
+using Domain.Authentication.Interfaces;
+using Domain.Configuration.Interfaces;
 using Domain.Configuration.Options;
 using Domain.Database.Interfaces;
+using Domain.Entitys;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Shared.Http;
 using System.Net;
-using Domain.Entitys;
 
 namespace CouchDb.Services;
 
@@ -108,12 +111,18 @@ public class CouchDbStatusService : IDbStatusService
         var usersRepository = scope.ServiceProvider.GetRequiredService<UsersRepository>();
 
         if (await usersRepository.RecordCount() > 0)
+        {
+            await MarkPasswordConfigured(scope.ServiceProvider);
             return true;
+        }
+
+        var passwordHasher = scope.ServiceProvider.GetRequiredService<IPasswordHasher>();
 
         UserEntity userEntity = new()
         {
-            Name = "admin",
-            Password = "admin",
+            Name = DefaultUserCredentials.Login,
+            Password = passwordHasher.Hash(DefaultUserCredentials.Password),
+            MustChangePassword = true,
         };
 
         try
@@ -128,5 +137,17 @@ public class CouchDbStatusService : IDbStatusService
         }
 
         return true;
+    }
+
+    private static async Task MarkPasswordConfigured(IServiceProvider services)
+    {
+        var parametersService = services.GetRequiredService<IParametersService>();
+        var parameters = await parametersService.Current();
+        parameters.Security ??= new();
+        if (parameters.Security.PasswordConfigured)
+            return;
+
+        parameters.Security.PasswordConfigured = true;
+        await parametersService.Update(parameters);
     }
 }

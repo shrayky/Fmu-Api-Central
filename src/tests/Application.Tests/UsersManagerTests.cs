@@ -1,5 +1,6 @@
 using Application.Users.Services;
 using CSharpFunctionalExtensions;
+using Domain.Authentication.Interfaces;
 using Domain.Dto.Responces;
 using Domain.Entitys;
 using Domain.Entitys.Users.Dto;
@@ -22,7 +23,7 @@ public class UsersManagerTests
             Name = "admin",
             Password = "secret"
         };
-        var sut = new UsersManagerService(repository);
+        var sut = new UsersManagerService(repository, new FakePasswordHasher());
 
         var result = await sut.List(1, 50);
 
@@ -41,7 +42,7 @@ public class UsersManagerTests
         var repository = new FakeUserRepository();
         repository.Store["u1"] = new UserEntity { Id = "u1", Name = "a1", Password = "p" };
         repository.Store["u2"] = new UserEntity { Id = "u2", Name = "a2", Password = "p" };
-        var sut = new UsersManagerService(repository);
+        var sut = new UsersManagerService(repository, new FakePasswordHasher());
 
         var result = await sut.List(1, 50);
 
@@ -56,7 +57,7 @@ public class UsersManagerTests
     {
         var repository = new FakeUserRepository();
         repository.Store["u1"] = new UserEntity { Id = "u1", Name = "admin", Password = "p" };
-        var sut = new UsersManagerService(repository);
+        var sut = new UsersManagerService(repository, new FakePasswordHasher());
 
         var result = await sut.Create(new UserView
         {
@@ -75,7 +76,7 @@ public class UsersManagerTests
     [Fact]
     public async Task Create_требует_пароль()
     {
-        var sut = new UsersManagerService(new FakeUserRepository());
+        var sut = new UsersManagerService(new FakeUserRepository(), new FakePasswordHasher());
 
         var result = await sut.Create(new UserView
         {
@@ -94,7 +95,7 @@ public class UsersManagerTests
     [Fact]
     public async Task Create_требует_имя()
     {
-        var sut = new UsersManagerService(new FakeUserRepository());
+        var sut = new UsersManagerService(new FakeUserRepository(), new FakePasswordHasher());
 
         var result = await sut.Create(new UserView
         {
@@ -114,7 +115,7 @@ public class UsersManagerTests
     public async Task Create_сохраняет_пользователя()
     {
         var repository = new FakeUserRepository();
-        var sut = new UsersManagerService(repository);
+        var sut = new UsersManagerService(repository, new FakePasswordHasher());
 
         var result = await sut.Create(new UserView
         {
@@ -126,7 +127,7 @@ public class UsersManagerTests
         Assert.True(result.IsSuccess);
         var saved = repository.Store["u1"];
         Assert.Equal("user", saved.Name);
-        Assert.Equal("secret", saved.Password);
+        Assert.Equal("h:secret", saved.Password);
     }
 
     /// <summary>
@@ -142,7 +143,7 @@ public class UsersManagerTests
             Name = "admin",
             Password = "old"
         };
-        var sut = new UsersManagerService(repository);
+        var sut = new UsersManagerService(repository, new FakePasswordHasher());
 
         var result = await sut.Update(new UserView
         {
@@ -168,7 +169,7 @@ public class UsersManagerTests
             Name = "admin",
             Password = "p"
         };
-        var sut = new UsersManagerService(repository);
+        var sut = new UsersManagerService(repository, new FakePasswordHasher());
 
         var result = await sut.Delete("u1");
 
@@ -185,7 +186,7 @@ public class UsersManagerTests
         var repository = new FakeUserRepository();
         repository.Store["u1"] = new UserEntity { Id = "u1", Name = "admin", Password = "p" };
         repository.Store["u2"] = new UserEntity { Id = "u2", Name = "user", Password = "p" };
-        var sut = new UsersManagerService(repository);
+        var sut = new UsersManagerService(repository, new FakePasswordHasher());
 
         var result = await sut.Delete("u2");
 
@@ -206,12 +207,12 @@ public class UsersManagerTests
             Name = "admin",
             Password = "old"
         };
-        var sut = new UsersManagerService(repository);
+        var sut = new UsersManagerService(repository, new FakePasswordHasher());
 
         var result = await sut.ChangePassword("u1", "secret1");
 
         Assert.True(result.IsSuccess);
-        Assert.Equal("secret1", repository.Store["u1"].Password);
+        Assert.Equal("h:secret1", repository.Store["u1"].Password);
         Assert.Equal("admin", repository.Store["u1"].Name);
     }
 
@@ -268,5 +269,13 @@ public class UsersManagerTests
         }
 
         public Task<List<UserEntity>> All() => Task.FromResult(Store.Values.ToList());
+    }
+
+    private sealed class FakePasswordHasher : IPasswordHasher
+    {
+        public string Hash(string password) => "h:" + password;
+        public bool IsHashed(string stored) => stored.StartsWith("h:");
+        public bool Verify(string password, string stored)
+            => IsHashed(stored) ? stored == "h:" + password : stored == password;
     }
 }

@@ -44,6 +44,8 @@ namespace Authentication
             });
 
             services.AddSingleton(jwtSettngs);
+            services.AddSingleton(TimeProvider.System);
+            services.AddSingleton(new LoginAttemptOptions());
             services.AddAutoRegisteredServices([Assembly.GetExecutingAssembly()]);
 
             return services;
