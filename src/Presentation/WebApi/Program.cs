@@ -58,12 +58,12 @@ builder.Services.AddAuthorization(options =>
         policy.RequireAuthenticatedUser()
             .RequireClaim(Domain.Authentication.AgentAuthClaims.Type, Domain.Authentication.AgentAuthClaims.Agent));
 
-    options.FallbackPolicy = new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder()
+    var usersOnly = new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder()
         .RequireAuthenticatedUser()
-        .RequireAssertion(context =>
-            context.User.FindFirst(Domain.Authentication.AgentAuthClaims.Type)?.Value
-            != Domain.Authentication.AgentAuthClaims.Agent)
+        .RequireAssertion(context => Domain.Authentication.UserAuthPolicy.IsUser(context.User))
         .Build();
+    options.DefaultPolicy = usersOnly;
+    options.FallbackPolicy = usersOnly;
 });
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
