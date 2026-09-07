@@ -53,14 +53,15 @@ namespace Authentication.Services
                 return Result.Failure<TokenPair>(refreshLloginResult.Error);
 
             var login = refreshLloginResult.Value;
+            _refreshTokenService.RemoveRefreshToken(refreshToken);
 
+            var refreshTokenExpiresAt = DateTime.UtcNow.AddDays(_settings.RefreshTokenLifetimeDays);
             var jwtExpiresAt = DateTime.UtcNow.AddMinutes(_settings.LifetimeMinutes);
+            var accessToken = GenerateJwtToken(login, jwtExpiresAt);
+            var nextRefresh = GenerateRefreshToken(login);
+            _refreshTokenService.SaveRefreshToken(nextRefresh, login, refreshTokenExpiresAt);
 
-            string accessToken = GenerateJwtToken(login, jwtExpiresAt);
-
-            TokenPair data = new(accessToken, refreshToken, jwtExpiresAt);
-
-            return Result.Success(data);
+            return Result.Success(new TokenPair(accessToken, nextRefresh, jwtExpiresAt));
         }
 
         public bool ValidateRefreshToken(string refreshToken) => _refreshTokenService.IsRefreshTokenValid(refreshToken);

@@ -66,6 +66,8 @@ export const AuthService = {
 
         const data = await response.json();
         localStorage.setItem('jwtToken', data.accessToken);
+        if (data.refreshToken)
+            localStorage.setItem('refreshToken', data.refreshToken);
         localStorage.setItem('tokenExpiresAt', data.expiresAt);
         
         return data;

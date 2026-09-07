@@ -31,16 +31,7 @@ namespace Authentication
             })
             .AddJwtBearer(options =>
             {
-                options.TokenValidationParameters = new TokenValidationParameters
-                {
-                    ValidateIssuer = true,
-                    ValidIssuer = jwtSettngs.Issuer,
-                    ValidateAudience = true,
-                    ValidAudience = jwtSettngs.Audience,
-                    ValidateLifetime = true,
-                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettngs.Key)),
-                    ValidateIssuerSigningKey = true
-                };
+                options.TokenValidationParameters = CreateTokenValidationParameters(jwtSettngs);
                 options.SaveToken = true;
             });
 
@@ -62,7 +53,11 @@ namespace Authentication
             if (!Directory.Exists(configFolder))
                 Directory.CreateDirectory(configFolder);
 
-            if (File.Exists(keyFile)) return File.ReadAllText(keyFile);
+            if (File.Exists(keyFile))
+            {
+                JwtKeyFileAccess.RestrictToCurrentUserAndSystem(keyFile);
+                return File.ReadAllText(keyFile);
+            }
             
             var keyBytes = new byte[64];
             using var rng = System.Security.Cryptography.RandomNumberGenerator.Create();
@@ -70,8 +65,22 @@ namespace Authentication
             var key = Convert.ToBase64String(keyBytes);
 
             File.WriteAllText(keyFile, key);
+            JwtKeyFileAccess.RestrictToCurrentUserAndSystem(keyFile);
             return key;
 
         }
+
+        public static TokenValidationParameters CreateTokenValidationParameters(JwtSettings settings)
+            => new()
+            {
+                ValidateIssuer = true,
+                ValidIssuer = settings.Issuer,
+                ValidateAudience = true,
+                ValidAudience = settings.Audience,
+                ValidateLifetime = true,
+                ClockSkew = TimeSpan.Zero,
+                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(settings.Key)),
+                ValidateIssuerSigningKey = true
+            };
     }
 }

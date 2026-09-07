@@ -23,17 +23,19 @@ namespace Authentication.Services
         {
             string? login;
             
-            if (!_cache.TryGetValue($"refresh_{refreshToken}", out login) || login == null)
+            if (!_cache.TryGetValue(CacheKey(refreshToken), out login) || login == null)
                 return Result.Failure<string>("Не найден refresh токен");
 
             return Result.Success(login);
         }
 
-        public bool IsRefreshTokenValid(string refreshToken) 
-            => _cache.TryGetValue($"refresh_{refreshToken}", out _);
-        public void RemoveRefreshToken(string refreshToken) 
-            => _cache.Remove(refreshToken);
-        public void SaveRefreshToken(string refreshToken, string login, DateTime expiresAt) 
-            => _cache.Set($"refresh_{refreshToken}", login, expiresAt);
+        public bool IsRefreshTokenValid(string refreshToken)
+            => _cache.TryGetValue(CacheKey(refreshToken), out _);
+        public void RemoveRefreshToken(string refreshToken)
+            => _cache.Remove(CacheKey(refreshToken));
+        public void SaveRefreshToken(string refreshToken, string login, DateTime expiresAt)
+            => _cache.Set(CacheKey(refreshToken), login, expiresAt);
+
+        private static string CacheKey(string refreshToken) => $"refresh_{refreshToken}";
     }
 }
