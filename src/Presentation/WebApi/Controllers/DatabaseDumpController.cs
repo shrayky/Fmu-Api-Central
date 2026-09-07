@@ -1,6 +1,5 @@
 using Application.Database.Interfaces;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Server.Kestrel.Core.Features;
 
@@ -33,12 +32,8 @@ public class DatabaseDumpController : ControllerBase
     }
 
     [HttpPost("import")]
-    [DisableRequestSizeLimit]
-    [RequestFormLimits(MultipartBodyLengthLimit = long.MaxValue, ValueLengthLimit = int.MaxValue)]
     public async Task<IActionResult> Import(IFormFile file, CancellationToken cancellationToken)
     {
-        DisableMaxRequestBodySize();
-
         if (file == null || file.Length == 0)
             return BadRequest("Не выбран файл архива");
 
@@ -51,12 +46,5 @@ public class DatabaseDumpController : ControllerBase
         var minRate = HttpContext.Features.Get<IHttpMinResponseDataRateFeature>();
         if (minRate != null)
             minRate.MinDataRate = null;
-    }
-
-    private void DisableMaxRequestBodySize()
-    {
-        var maxSize = HttpContext.Features.Get<IHttpMaxRequestBodySizeFeature>();
-        if (maxSize is { IsReadOnly: false })
-            maxSize.MaxRequestBodySize = null;
     }
 }

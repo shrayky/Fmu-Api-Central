@@ -53,6 +53,9 @@ public class DatabaseExportImportService : IDatabaseExportImportService
             if (file.Length == 0)
                 return Result.Failure<DatabaseDumpImportResult>("Файл импорта пуст");
 
+            if (file.Length > DatabaseDumpLimits.MaxImportBytes)
+                return Result.Failure<DatabaseDumpImportResult>("Файл импорта больше 100 МБ");
+
             var dumpFolder = Path.Combine(Path.GetTempPath(), "fmu-central-dumps");
             Directory.CreateDirectory(dumpFolder);
             tempPath = Path.Combine(dumpFolder, $"{Guid.NewGuid():N}.zip");

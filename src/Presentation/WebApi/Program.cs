@@ -3,6 +3,7 @@ using Authentication;
 using Configuration;
 using CouchDb;
 using Domain.Configuration;
+using Domain.Database;
 using Logger;
 using Messages.Extensions;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
@@ -82,7 +83,7 @@ builder.Services.AddCors(options =>
 
 builder.Services.Configure<KestrelServerOptions>(options =>
 {
-    options.Limits.MaxRequestBodySize = 100 * 1024 * 1024;
+    options.Limits.MaxRequestBodySize = DatabaseDumpLimits.MaxImportBytes;
     options.Limits.KeepAliveTimeout = TimeSpan.FromMinutes(10);
     options.Limits.RequestHeadersTimeout = TimeSpan.FromMinutes(10);
 });
