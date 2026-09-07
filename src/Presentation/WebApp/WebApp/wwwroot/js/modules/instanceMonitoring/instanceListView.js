@@ -4,6 +4,7 @@ import softwareUpdatesService from '../../services/softwareUpdatesService.js';
 import instanceElementView from './instanceElementView.js';
 import instanceFilterView from './instanceFilterView.js';
 import { pollingManager } from '../../services/PollingManager.js';
+import { formatInstanceName } from '../../utils/formatInstanceName.js';
 
 const style = document.createElement('style');
 
@@ -389,7 +390,7 @@ class InstanceListView {
                     header: [this.LABELS.instanceName],
                     fillspace: true,
                     sort: "string",
-                    template: (obj) => this._formatInstanceName(obj)
+                    template: (obj) => formatInstanceName(obj)
                 },
                 {
                     id: this.NAMES.hostAddress,
@@ -845,17 +846,6 @@ class InstanceListView {
 
         this._assignRowHeightsToRecords([createdRecord]);
         table.add(createdRecord);
-    }
-
-    /**
-     * Имя инстанса и иконка принудительной установки, если пакет назначен.
-     */
-    _formatInstanceName(obj) {
-        const name = webix.template.escape(obj.name || "");
-        if (!obj.forcedUpdateId)
-            return name;
-
-        return `${name} <span class="webix_icon wxi-download" style="color: #0d6efd;" title="${this.LABELS.forceInstall}"></span>`;
     }
 
     _formatLocalModules(localModules) {

@@ -9,27 +9,31 @@ class MarkCheckStatisticsFilterView {
         this.LABELS = {
             formTitle: "Фильтр статистики проверок",
             instanceName: "Имя инстанса",
+            group: "Группа",
             successRateMin: "Min. % success",
             offlineRateMin: "Min. % offline",
             dateFrom: "Дата с",
             dateTo: "Дата по",
             applyButton: "Применить",
             resetButton: "Сбросить",
-            cancelButton: "Отмена"
+            cancelButton: "Отмена",
+            allOption: "— все —"
         };
 
         this.NAMES = {
             windowId: "markCheckStatisticsFilterWindow",
             formId: "markCheckStatisticsFilterForm",
             name: "filterName",
+            group: "filterGroup",
             successRateMin: "filterSuccessRateMin",
             offlineRateMin: "filterOfflineRateMin",
             dateFrom: "filterDateFrom",
-            dateTo: "filterDateTo"
+            dateTo: "filterDateTo",
+            allValue: "__all__"
         };
     }
 
-    showDialog(currentFilters = {}, onApply, onClose) {
+    showDialog(currentFilters = {}, onApply, onClose, groups = []) {
         if ($$(this.NAMES.windowId)) {
             $$(this.NAMES.windowId).destructor();
         }
@@ -49,6 +53,12 @@ class MarkCheckStatisticsFilterView {
                         this.LABELS.instanceName,
                         this.NAMES.name,
                         currentFilters.name
+                    ),
+                    this._createGroupSelect(
+                        this.LABELS.group,
+                        this.NAMES.group,
+                        groups,
+                        currentFilters.groupId
                     ),
                     this._createNumberInput(
                         this.LABELS.successRateMin,
@@ -82,6 +92,24 @@ class MarkCheckStatisticsFilterView {
 
     getPresetDates(preset) {
         return getPresetDates(preset);
+    }
+
+    _createGroupSelect(label, name, groups, selectedValue) {
+        const items = [{ id: this.NAMES.allValue, value: this.LABELS.allOption }];
+
+        (groups || []).forEach((group) => {
+            items.push({ id: group.id, value: group.name });
+        });
+
+        return {
+            view: "richselect",
+            label,
+            labelPosition: "top",
+            name,
+            id: name,
+            value: selectedValue ? String(selectedValue) : this.NAMES.allValue,
+            options: items
+        };
     }
 
     _createTextInput(label, name, value) {
@@ -180,8 +208,11 @@ class MarkCheckStatisticsFilterView {
         const form = $$(this.NAMES.formId);
         const values = form.getValues();
 
+        const groupValue = values[this.NAMES.group];
+
         return {
             name: (values[this.NAMES.name] || "").trim(),
+            groupId: groupValue === this.NAMES.allValue ? "" : (groupValue || ""),
             successRateMin: (values[this.NAMES.successRateMin] || "").trim(),
             offlineRateMin: (values[this.NAMES.offlineRateMin] || "").trim(),
             dateFrom: this._formatDateParam(values[this.NAMES.dateFrom]),

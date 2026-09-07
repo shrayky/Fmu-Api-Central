@@ -3,12 +3,14 @@ using Domain.Entitys.Instance.Interfaces;
 using Domain.Entitys.SoftwareUpdateFiles;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using WebApi.Filters;
 
 namespace WebApi.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
 [AllowAnonymous]
+[ServiceFilter(typeof(LegacyAgentApiFilter))]
 public class FmuApiInstanceMonitoringController : ControllerBase
 {
     private readonly IInstanceManagerService  _managerService;
@@ -23,7 +25,7 @@ public class FmuApiInstanceMonitoringController : ControllerBase
     {
         var informationPacket = packet.RootElement.GetRawText();
 
-        var updateResult = await _managerService.UpdateFmuApiInstanceInformation(informationPacket);
+        var updateResult = await _managerService.UpdateFmuApiInstanceInformation(informationPacket, markLegacyAccess: true);
         
         return updateResult.IsSuccess ? Ok(updateResult.Value) : BadRequest(updateResult.Error);
     }
@@ -31,6 +33,7 @@ public class FmuApiInstanceMonitoringController : ControllerBase
     [HttpGet("settings/{token}")]
     public async Task<IActionResult> SoftwareSettings(string token)
     {
+        await _managerService.MarkLegacyAccess(token);
         var settings = await _managerService.InstanceSettings(token);
         
         return Ok(settings);
@@ -39,6 +42,7 @@ public class FmuApiInstanceMonitoringController : ControllerBase
     [HttpPut("settings/updated/{token}")]
     public async Task<IActionResult> SoftwareSettings(string token, [FromBody] JsonDocument packet)
     {
+        await _managerService.MarkLegacyAccess(token);
         var updateResult = await _managerService.SettingsUploaded(token);
 
         if (updateResult.IsSuccess)
@@ -50,6 +54,7 @@ public class FmuApiInstanceMonitoringController : ControllerBase
     [HttpGet("fmuApiUpdate/{token}")]
     public async Task<IActionResult> DownloadFmuApiUpdate(string token)
     {
+        await _managerService.MarkLegacyAccess(token);
         var rangeFrom = ParseBytesRangeFrom(Request.Headers.Range.ToString());
         var updateData = await _managerService.FmuApiUpdate(token, rangeFrom);
 

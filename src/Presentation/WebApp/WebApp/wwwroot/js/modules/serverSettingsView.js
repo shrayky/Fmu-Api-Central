@@ -16,6 +16,7 @@ class SettingsView {
             isEnabled: "Включено",
             logDepth: "Глубина логирования (дней)",
             logLevel: "Уровень логирования",
+            allowLegacyAgentApi: "Разрешить старый API узлов (без handshake)",
         }
     }
 
@@ -40,6 +41,9 @@ class SettingsView {
             logLevel: configuration.loggerSettings.logLevel,
             logDepth: configuration.loggerSettings.logDepth,
         };
+        this.security = {
+            allowLegacyAgentApi: configuration.security?.allowLegacyAgentApi !== false,
+        };
 
         return this;
     }
@@ -55,6 +59,9 @@ class SettingsView {
         serverSettings.rows.push(
             Label("serverSettingsTitle", this.labels.serverSettings),
             Number(this.labels.apiIpPort, "apiIpPort", this.serverSettings.apiIpPort),
+            CheckBox(this.labels.allowLegacyAgentApi, "allowLegacyAgentApi", {
+                value: this.security.allowLegacyAgentApi
+            }),
         );
 
         const loggerSettings = {
@@ -143,6 +150,10 @@ class SettingsView {
                   isEnabled: !!values.isEnabled,
                   logDepth: parseInt(values.logDepth),
                   logLevel: values.logLevel
+                }),
+                security: prev => ({
+                  ...prev,
+                  allowLegacyAgentApi: !!values.allowLegacyAgentApi
                 })
               });
     

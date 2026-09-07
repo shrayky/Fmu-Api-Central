@@ -20,6 +20,7 @@ namespace Authentication
                 Audience = "api",
                 Key = SigningKey(),
                 LifetimeMinutes = 60,
+                AgentLifetimeMinutes = 15,
                 RefreshTokenLifetimeDays = 30
             };
 
@@ -46,6 +47,7 @@ namespace Authentication
             services.AddSingleton(jwtSettngs);
             services.AddSingleton(TimeProvider.System);
             services.AddSingleton(new LoginAttemptOptions());
+            services.AddSingleton(new AgentNonceOptions());
             services.AddAutoRegisteredServices([Assembly.GetExecutingAssembly()]);
 
             return services;

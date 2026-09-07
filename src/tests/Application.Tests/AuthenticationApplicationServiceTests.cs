@@ -286,6 +286,8 @@ public class AuthenticationApplicationServiceTests
             => Result.Success(new TokenPair("access", refreshToken, DateTime.UtcNow.AddHours(1)));
 
         public bool ValidateRefreshToken(string refreshToken) => true;
+
+        public AgentAccessToken GenerateAgentToken(string instanceId) => new("agent", DateTime.UtcNow.AddMinutes(15));
     }
 
     private sealed class FakeRefreshTokenService : IRefreshTokenService

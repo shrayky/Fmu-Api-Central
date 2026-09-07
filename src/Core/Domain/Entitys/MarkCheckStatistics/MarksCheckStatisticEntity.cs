@@ -9,7 +9,19 @@ public class MarkCheckStatisticsEntity : IHaveStringId
     public string Id { get; set; } = string.Empty;
 
     [JsonPropertyName("nodeId")]
-    public string NodeId = string.Empty;
+    public string NodeId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// В документах без nodeId (запись через STJ) id = {nodeId}_{unixDate}.
+    /// </summary>
+    public string ResolvedNodeId()
+    {
+        if (!string.IsNullOrWhiteSpace(NodeId))
+            return NodeId;
+
+        var separator = Id.LastIndexOf('_');
+        return separator > 0 ? Id[..separator] : Id;
+    }
 
     [JsonPropertyName("date")]
     public long Date { get; set; }

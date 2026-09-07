@@ -58,15 +58,13 @@ public class InstanceManagerService : IInstanceManagerService
         _parametersService = parametersService;
     }
 
-    public async Task<Result<FmuApiCentralResponse>> UpdateFmuApiInstanceInformation(string instanceData)
+    public async Task<Result<FmuApiCentralResponse>> UpdateFmuApiInstanceInformation(string instanceData, bool markLegacyAccess = false)
     {
-        _logger.LogInformation("Обрабатываю пакет от fmu-api {InstanceData}", instanceData);
-
         using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(instanceData));
         var packet = await JsonSerializer.DeserializeAsync<DataPacket>(stream);
 
         if (packet == null)
-            return Result.Failure<FmuApiCentralResponse>($"Не удалось преобразовать входящий пакет {instanceData}!");
+            return Result.Failure<FmuApiCentralResponse>("Не удалось преобразовать входящий пакет");
 
         var entitySearchResult = await _instanceRepository.ByToken(packet.Token);
 
@@ -93,14 +91,17 @@ public class InstanceManagerService : IInstanceManagerService
         catch (Exception e)
         {
             return Result.Failure<FmuApiCentralResponse>(
-                $"Входящий пакет {instanceData} не соответствует ожидаемой структуре! {e.Message}");
+                $"Входящий пакет не соответствует ожидаемой структуре! {e.Message}");
         }
 
         if (fmuApiState == null)
             return Result.Failure<FmuApiCentralResponse>(
-                $"Входящий пакет {instanceData} не соответствует ожидаемой структуре!");
+                "Входящий пакет не соответствует ожидаемой структуре!");
 
         instanceEntity.UpdatedAt = DateTime.Now;
+
+        if (markLegacyAccess)
+            instanceEntity.LastLegacyAccessUtc = DateTime.UtcNow;
 
         instanceEntity.Cdn = fmuApiState.CdnInformation;
         instanceEntity.LocalModules = fmuApiState.LocalModuleInformation;
@@ -287,6 +288,16 @@ public class InstanceManagerService : IInstanceManagerService
         }
 
         return settings;
+    }
+
+    public async Task MarkLegacyAccess(string token)
+    {
+        var entitySearch = await _instanceRepository.ByToken(token);
+        if (entitySearch.IsFailure)
+            return;
+
+        entitySearch.Value.LastLegacyAccessUtc = DateTime.UtcNow;
+        await _instanceRepository.Update(entitySearch.Value);
     }
 
     public async Task<Result> SettingsUploaded(string token)

@@ -10,6 +10,9 @@ public record MarkCheckStatisticsPeriodRow
     [JsonPropertyName("instanceName")]
     public string InstanceName { get; init; } = string.Empty;
 
+    [JsonPropertyName("groupId")]
+    public string GroupId { get; init; } = string.Empty;
+
     [JsonPropertyName("lastUpdated")]
     public DateTime? LastUpdated { get; init; }
 

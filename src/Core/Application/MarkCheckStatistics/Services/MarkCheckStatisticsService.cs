@@ -47,7 +47,7 @@ public class MarkCheckStatisticsService : IMarkCheckStatisticsService
 
         var instances = instancesResult.Value.ToDictionary(i => i.Id);
         var recordsByInstance = statisticsResult.Value
-            .GroupBy(entity => entity.NodeId)
+            .GroupBy(entity => entity.ResolvedNodeId())
             .ToDictionary(group => group.Key, group => group.ToList());
 
         var rows = recordsByInstance.Keys
@@ -105,6 +105,7 @@ public class MarkCheckStatisticsService : IMarkCheckStatisticsService
         {
             Id = nodeId,
             InstanceName = instance?.Name ?? nodeId,
+            GroupId = instance?.GroupId ?? string.Empty,
             LastUpdated = instance?.UpdatedAt,
             Total = total,
             SuccessfulOnlineChecks = online,
@@ -118,6 +119,12 @@ public class MarkCheckStatisticsService : IMarkCheckStatisticsService
     {
         if (!string.IsNullOrWhiteSpace(filter.Name) &&
             !row.InstanceName.Contains(filter.Name, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(filter.GroupId) &&
+            !string.Equals(row.GroupId, filter.GroupId, StringComparison.OrdinalIgnoreCase))
         {
             return false;
         }

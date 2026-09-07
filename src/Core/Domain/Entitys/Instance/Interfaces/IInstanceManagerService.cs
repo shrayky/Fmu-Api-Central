@@ -8,7 +8,7 @@ namespace Domain.Entitys.Instance.Interfaces;
 
 public interface IInstanceManagerService
 {
-    Task<Result<FmuApiCentralResponse>> UpdateFmuApiInstanceInformation(string instanceData);
+    Task<Result<FmuApiCentralResponse>> UpdateFmuApiInstanceInformation(string instanceData, bool markLegacyAccess = false);
     Task<PaginatedResponse<InstanceMonitoringInformation>> InstancesList(int pageNumber, int pageSize, InstanceListFilter filter);
     Task<bool> CreateNew(InstanceMonitoringInformation instanceInformation);
     Task<bool> Delete(string instance);
@@ -18,4 +18,5 @@ public interface IInstanceManagerService
     Task<Result<ForceUpdateResult>> AssignForcedUpdate(IReadOnlyList<string> tokens, string updateId);
     Task<Result<List<InstanceMonitoringInformation>>> OfflineInstance(DateTime toDate);
     Task<Result<List<InstanceMonitoringInformation>>> All();
+    Task MarkLegacyAccess(string token);
 }

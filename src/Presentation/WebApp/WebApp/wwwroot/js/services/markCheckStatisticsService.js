@@ -16,6 +16,10 @@ class MarkCheckStatisticsService {
             params.append("name", filters.name);
         }
 
+        if (filters.groupId) {
+            params.append("groupId", filters.groupId);
+        }
+
         if (filters.successRateMin != null && filters.successRateMin !== "") {
             params.append("successRateMin", filters.successRateMin);
         }

@@ -27,6 +27,26 @@ public class ConfigurationApplicationServiceTests
         Assert.True(parameters.CurrentValue.Security.PasswordConfigured);
     }
 
+    /// <summary>
+    /// Флаг старого агентского API можно выключить из настроек.
+    /// </summary>
+    [Fact]
+    public async Task Update_принимает_allowLegacyAgentApi()
+    {
+        var parameters = new FakeParametersService
+        {
+            CurrentValue = new Parameters()
+        };
+        parameters.CurrentValue.Security.AllowLegacyAgentApi = true;
+        var sut = new ConfigurationApplicationService(parameters, NullLogger<ConfigurationApplicationService>.Instance);
+
+        var json = """{"security":{"allowLegacyAgentApi":false},"databaseConnection":{"enable":false},"loggerSettings":{},"serverSettings":{}}""";
+        var ok = await sut.Update(json);
+
+        Assert.True(ok);
+        Assert.False(parameters.CurrentValue.Security.AllowLegacyAgentApi);
+    }
+
     private sealed class FakeParametersService : IParametersService
     {
         public Parameters CurrentValue { get; set; } = new();

@@ -50,16 +50,25 @@ builder.Services.AddGisMtExchange();
 builder.Services.AddBotService(appSettings.BotSettings);
 
 builder.Services.AddControllers();
+builder.Services.AddScoped<WebApi.Filters.LegacyAgentApiFilter>();
 builder.Services.AddAuthorization(options =>
 {
+    options.AddPolicy(Domain.Authentication.AgentAuthClaims.Policy, policy =>
+        policy.RequireAuthenticatedUser()
+            .RequireClaim(Domain.Authentication.AgentAuthClaims.Type, Domain.Authentication.AgentAuthClaims.Agent));
+
     options.FallbackPolicy = new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder()
         .RequireAuthenticatedUser()
+        .RequireAssertion(context =>
+            context.User.FindFirst(Domain.Authentication.AgentAuthClaims.Type)?.Value
+            != Domain.Authentication.AgentAuthClaims.Agent)
         .Build();
 });
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 builder.Services.AddHostedService<AfterStartWorker>();
+builder.Services.AddHostedService<LegacyAgentApiDisableWorker>();
 
 builder.Services.AddCors(options =>
 {

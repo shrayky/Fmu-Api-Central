@@ -1,4 +1,5 @@
 import markCheckStatisticsService from '../../services/markCheckStatisticsService.js';
+import instanceGroupService from '../../services/instanceGroupService.js';
 import markCheckStatisticsFilterView from './markCheckStatisticsFilterView.js';
 import {
     detectPreset,
@@ -18,6 +19,7 @@ class MarkCheckStatisticsListView {
         this.pageSize = formSettings.pageSize;
         this.pageNumber = 1;
         this.filters = this._loadFilters();
+        this.groups = [];
         this.activePreset = this.filters.periodPreset || PERIOD_PRESETS.today;
 
         this.LABELS = {
@@ -39,6 +41,7 @@ class MarkCheckStatisticsListView {
             filterActive: "Фильтр *",
             filterSummaryPrefix: "Установлены фильтры:",
             filterName: "имя инстанса",
+            filterGroup: "группа",
             filterSuccessRateMin: "мин. % success",
             filterOfflineRateMin: "мин. % offline",
             filterDateFrom: "дата с",
@@ -374,6 +377,8 @@ class MarkCheckStatisticsListView {
         this._disableHotkeys();
 
         try {
+            await this._loadGroups();
+
             const data = await markCheckStatisticsService.list(
                 this.pageNumber,
                 this.pageSize,
@@ -458,8 +463,18 @@ class MarkCheckStatisticsListView {
         }
     }
 
-    _showFilterDialog() {
+    async _loadGroups() {
+        try {
+            this.groups = await instanceGroupService.allLinks();
+        } catch {
+            this.groups = [];
+        }
+    }
+
+    async _showFilterDialog() {
         this._disableHotkeys();
+
+        await this._loadGroups();
 
         markCheckStatisticsFilterView.showDialog(
             this.filters,
@@ -474,13 +489,15 @@ class MarkCheckStatisticsListView {
                 this._loadData();
                 this._enableHotkeys();
             },
-            () => this._enableHotkeys()
+            () => this._enableHotkeys(),
+            this.groups
         );
     }
 
     _hasServerFilters() {
         return !!(
             this.filters?.name ||
+            this.filters?.groupId ||
             this.filters?.successRateMin ||
             this.filters?.offlineRateMin ||
             this.activePreset === PERIOD_PRESETS.custom
@@ -513,6 +530,11 @@ class MarkCheckStatisticsListView {
 
         if (this.filters?.name) {
             parts.push(`${this.LABELS.filterName} = ${this.filters.name}`);
+        }
+
+        if (this.filters?.groupId) {
+            const group = (this.groups || []).find((item) => item.id === this.filters.groupId);
+            parts.push(`${this.LABELS.filterGroup} = ${group?.name || this.filters.groupId}`);
         }
 
         if (this.filters?.successRateMin) {

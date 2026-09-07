@@ -20,4 +20,6 @@ public class InstanceEntity : IHaveStringId
     public bool SettingsModified { get; set; } = false;
     public string ForcedUpdateId { get; set; } = string.Empty;
     public string GroupId { get; set; } = string.Empty;
+    public DateTime? HandshakeAtUtc { get; set; }
+    public DateTime? LastLegacyAccessUtc { get; set; }
 }

@@ -9,5 +9,6 @@ namespace Domain.Authentication.Interfaces
         Result<TokenPair> GenerateTokenPair(string login);
         Result<TokenPair> RefreshAccessToken(string refreshToken);
         bool ValidateRefreshToken(string refreshToken);
+        AgentAccessToken GenerateAgentToken(string instanceId);
     }
 }

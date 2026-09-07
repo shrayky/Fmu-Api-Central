@@ -65,6 +65,20 @@ namespace Authentication.Services
 
         public bool ValidateRefreshToken(string refreshToken) => _refreshTokenService.IsRefreshTokenValid(refreshToken);
 
+        public AgentAccessToken GenerateAgentToken(string instanceId)
+        {
+            var minutes = _settings.AgentLifetimeMinutes > 0 ? _settings.AgentLifetimeMinutes : 15;
+            var expires = DateTime.UtcNow.AddMinutes(minutes);
+            var claims = new[]
+            {
+                new Claim(ClaimTypes.Name, instanceId),
+                new Claim(AgentAuthClaims.Type, AgentAuthClaims.Agent),
+                new Claim(AgentAuthClaims.InstanceId, instanceId)
+            };
+
+            return new AgentAccessToken(WriteToken(claims, expires), expires);
+        }
+
         private string GenerateJwtToken(string login, DateTime expires)
         {
             var claims = new[]
@@ -72,6 +86,11 @@ namespace Authentication.Services
                 new Claim(ClaimTypes.Name, login)
             };
 
+            return WriteToken(claims, expires);
+        }
+
+        private string WriteToken(IEnumerable<Claim> claims, DateTime expires)
+        {
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_settings.Key));
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 

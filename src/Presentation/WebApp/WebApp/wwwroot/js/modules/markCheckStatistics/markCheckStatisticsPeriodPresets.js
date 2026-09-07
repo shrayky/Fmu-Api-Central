@@ -80,6 +80,7 @@ export function getDefaultFilters() {
 
     return {
         name: "",
+        groupId: "",
         successRateMin: "",
         offlineRateMin: "",
         periodPreset: PERIOD_PRESETS.today,

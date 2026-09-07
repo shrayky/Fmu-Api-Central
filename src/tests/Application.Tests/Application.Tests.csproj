@@ -23,6 +23,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\Core\Application\Application.csproj" />
+    <ProjectReference Include="..\..\Core\Shared\Shared.csproj" />
     <ProjectReference Include="..\..\Infrastructure\Authentication\Authentication.csproj" />
   </ItemGroup>
 
