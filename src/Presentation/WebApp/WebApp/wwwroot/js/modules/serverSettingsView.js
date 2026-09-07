@@ -13,6 +13,7 @@ class SettingsView {
             serverSettings: "Настройки сервера",
             loggerSettings: "Настройки логирования",
             apiIpPort: "IP-порт API",
+            corsOrigins: "Дополнительные origin WebApp (по одному в строке). localhost:2580 уже разрешён",
             isEnabled: "Включено",
             logDepth: "Глубина логирования (дней)",
             logLevel: "Уровень логирования",
@@ -35,6 +36,7 @@ class SettingsView {
 
         this.serverSettings = {
             apiIpPort: configuration.serverSettings.apiIpPort,
+            corsOrigins: (configuration.serverSettings.corsOrigins || []).join("\n"),
         };
         this.logger = {
             isEnabled: configuration.loggerSettings.isEnabled,
@@ -59,6 +61,14 @@ class SettingsView {
         serverSettings.rows.push(
             Label("serverSettingsTitle", this.labels.serverSettings),
             Number(this.labels.apiIpPort, "apiIpPort", this.serverSettings.apiIpPort),
+            {
+                view: "textarea",
+                label: this.labels.corsOrigins,
+                labelPosition: "top",
+                name: "corsOrigins",
+                height: 90,
+                value: this.serverSettings.corsOrigins
+            },
             CheckBox(this.labels.allowLegacyAgentApi, "allowLegacyAgentApi", {
                 value: this.security.allowLegacyAgentApi
             }),
@@ -144,7 +154,11 @@ class SettingsView {
     
             const saveResult = await saveConfigurationSections({
                 serverSettings: _ => ({
-                  apiIpPort: parseInt(values.apiIpPort)
+                  apiIpPort: parseInt(values.apiIpPort),
+                  corsOrigins: String(values.corsOrigins || "")
+                    .split(/\r?\n/)
+                    .map(item => item.trim())
+                    .filter(item => item.length > 0)
                 }),
                 loggerSettings: _ => ({
                   isEnabled: !!values.isEnabled,

@@ -75,7 +75,7 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowWebApp",
         policy => policy
-            .AllowAnyOrigin()
+            .WithOrigins(CorsOrigins.Resolve(appSettings.ServerSettings.CorsOrigins))
             .AllowAnyHeader()
             .AllowAnyMethod()
             .WithExposedHeaders("Content-Disposition"));
