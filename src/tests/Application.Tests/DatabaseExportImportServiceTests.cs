@@ -31,6 +31,24 @@ public class DatabaseExportImportServiceTests
         Assert.False(file.Copied);
     }
 
+    /// <summary>
+    /// EXE не импортируется, даже если расширение .zip.
+    /// </summary>
+    [Fact]
+    public async Task Import_отклоняет_не_zip()
+    {
+        var dump = new FakeDumpService();
+        var sut = CreateSut(dump);
+        var file = new FakeFormFile([0x4D, 0x5A, 0x90, 0x00]);
+
+        var result = await sut.Import(file, CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Contains("ZIP", result.Error, StringComparison.OrdinalIgnoreCase);
+        Assert.False(dump.ImportCalled);
+        Assert.False(file.Copied);
+    }
+
     private static DatabaseExportImportService CreateSut(FakeDumpService dump)
     {
         var services = new ServiceCollection();
@@ -68,27 +86,43 @@ public class DatabaseExportImportServiceTests
         public void ClearGisMtPushPending() { }
     }
 
-    private sealed class FakeFormFile(long length) : IFormFile
+    private sealed class FakeFormFile : IFormFile
     {
+        private readonly byte[]? _content;
+
+        public FakeFormFile(long length) => Length = length;
+
+        public FakeFormFile(byte[] content)
+        {
+            _content = content;
+            Length = content.Length;
+        }
+
         public bool Copied { get; private set; }
         public string ContentType => "application/zip";
         public string ContentDisposition => string.Empty;
         public IHeaderDictionary Headers { get; } = new HeaderDictionary();
-        public long Length { get; } = length;
+        public long Length { get; }
         public string Name => "file";
         public string FileName => "dump.zip";
 
         public void CopyTo(Stream target)
         {
             Copied = true;
+            if (_content != null)
+                target.Write(_content);
         }
 
         public Task CopyToAsync(Stream target, CancellationToken cancellationToken = default)
         {
             Copied = true;
-            return Task.CompletedTask;
+            return _content == null
+                ? Task.CompletedTask
+                : target.WriteAsync(_content, cancellationToken).AsTask();
         }
 
-        public Stream OpenReadStream() => Stream.Null;
+        public Stream OpenReadStream() => _content == null
+            ? Stream.Null
+            : new MemoryStream(_content, writable: false);
     }
 }

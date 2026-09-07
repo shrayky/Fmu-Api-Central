@@ -66,6 +66,9 @@ public class SoftwareUpdatesManagerService : ISoftwareUpdatesManagerService
         if (entitySearch.IsFailure)
             return Result.Failure<bool>(entitySearch.Error);
 
+        if (!await file.IsZipAsync())
+            return Result.Failure<bool>("Файл обновления должен быть ZIP-архивом");
+
         if (!await file.VerifyHashAsync(entitySearch.Value.Sha256))
         {
             return Result.Failure<bool>($"Не совпал хэш файла для загрузки с id {id}");

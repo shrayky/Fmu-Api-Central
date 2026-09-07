@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using Microsoft.AspNetCore.Http;
+using Shared.Files;
 
 namespace Shared.Extensions;
 
@@ -13,6 +14,17 @@ public static class FormFileExtension
         return Convert.ToHexString(hashBytes).ToLowerInvariant();
     }
 
+    public static async Task<bool> IsZipAsync(this IFormFile file, CancellationToken cancellationToken = default)
+    {
+        if (file.Length < 4)
+            return false;
+
+        await using var stream = file.OpenReadStream();
+        var header = new byte[4];
+        var read = await stream.ReadAsync(header.AsMemory(0, 4), cancellationToken);
+        return read == 4 && ZipSignature.Matches(header);
+    }
+
     public static async Task<string> SaveToTempAsync(this IFormFile file, string? subDirectory = null)
     {
         var tempPath = Path.GetTempPath();
@@ -23,7 +35,7 @@ public static class FormFileExtension
 
         Directory.CreateDirectory(tempPath);
 
-        var tempFilePath = Path.Combine(tempPath, file.FileName);
+        var tempFilePath = Path.Combine(tempPath, $"{Guid.NewGuid():N}.zip");
 
         await using var stream = new FileStream(tempFilePath, FileMode.Create);
         await file.CopyToAsync(stream);

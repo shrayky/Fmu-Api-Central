@@ -7,6 +7,7 @@ using Domain.Database.Interfaces;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Shared.Extensions;
 
 namespace Application.Database.Services;
 
@@ -55,6 +56,9 @@ public class DatabaseExportImportService : IDatabaseExportImportService
 
             if (file.Length > DatabaseDumpLimits.MaxImportBytes)
                 return Result.Failure<DatabaseDumpImportResult>("Файл импорта больше 100 МБ");
+
+            if (!await file.IsZipAsync(cancellationToken))
+                return Result.Failure<DatabaseDumpImportResult>("Файл импорта должен быть ZIP-архивом");
 
             var dumpFolder = Path.Combine(Path.GetTempPath(), "fmu-central-dumps");
             Directory.CreateDirectory(dumpFolder);
