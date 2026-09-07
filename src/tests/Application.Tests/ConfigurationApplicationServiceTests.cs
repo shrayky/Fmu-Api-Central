@@ -47,6 +47,74 @@ public class ConfigurationApplicationServiceTests
         Assert.False(parameters.CurrentValue.Security.AllowLegacyAgentApi);
     }
 
+    /// <summary>
+    /// GET отдаёт маску, кэш Parameters остаётся с настоящими секретами.
+    /// </summary>
+    [Fact]
+    public async Task Current_маскирует_пароль_и_botToken()
+    {
+        var parameters = new FakeParametersService
+        {
+            CurrentValue = new Parameters()
+        };
+        parameters.CurrentValue.DatabaseConnection.Password = "couch-secret";
+        parameters.CurrentValue.BotSettings.BotToken = "telegram-secret";
+        var sut = new ConfigurationApplicationService(parameters, NullLogger<ConfigurationApplicationService>.Instance);
+
+        var json = await sut.Current();
+
+        Assert.DoesNotContain("couch-secret", json);
+        Assert.DoesNotContain("telegram-secret", json);
+        Assert.Contains("\"password\": \"***\"", json);
+        Assert.Contains("\"botToken\": \"***\"", json);
+        Assert.Equal("couch-secret", parameters.CurrentValue.DatabaseConnection.Password);
+        Assert.Equal("telegram-secret", parameters.CurrentValue.BotSettings.BotToken);
+    }
+
+    /// <summary>
+    /// POST с маской не затирает текущие секреты.
+    /// </summary>
+    [Fact]
+    public async Task Update_не_затирает_секреты_если_маска()
+    {
+        var parameters = new FakeParametersService
+        {
+            CurrentValue = new Parameters()
+        };
+        parameters.CurrentValue.DatabaseConnection.Password = "couch-secret";
+        parameters.CurrentValue.BotSettings.BotToken = "telegram-secret";
+        var sut = new ConfigurationApplicationService(parameters, NullLogger<ConfigurationApplicationService>.Instance);
+
+        var json = """{"databaseConnection":{"password":"***"},"telegramBotSettings":{"botToken":"***"}}""";
+        var ok = await sut.Update(json);
+
+        Assert.True(ok);
+        Assert.Equal("couch-secret", parameters.CurrentValue.DatabaseConnection.Password);
+        Assert.Equal("telegram-secret", parameters.CurrentValue.BotSettings.BotToken);
+    }
+
+    /// <summary>
+    /// Явная новая строка перезаписывает секрет.
+    /// </summary>
+    [Fact]
+    public async Task Update_принимает_новый_секрет()
+    {
+        var parameters = new FakeParametersService
+        {
+            CurrentValue = new Parameters()
+        };
+        parameters.CurrentValue.DatabaseConnection.Password = "couch-secret";
+        parameters.CurrentValue.BotSettings.BotToken = "telegram-secret";
+        var sut = new ConfigurationApplicationService(parameters, NullLogger<ConfigurationApplicationService>.Instance);
+
+        var json = """{"databaseConnection":{"password":"new-couch"},"telegramBotSettings":{"botToken":"new-bot"}}""";
+        var ok = await sut.Update(json);
+
+        Assert.True(ok);
+        Assert.Equal("new-couch", parameters.CurrentValue.DatabaseConnection.Password);
+        Assert.Equal("new-bot", parameters.CurrentValue.BotSettings.BotToken);
+    }
+
     private sealed class FakeParametersService : IParametersService
     {
         public Parameters CurrentValue { get; set; } = new();

@@ -1,6 +1,7 @@
 using CSharpFunctionalExtensions;
 using Domain.AppState.Interfaces;
 using Domain.Attributes;
+using Domain.Configuration;
 using Domain.Dto.Responces;
 using Domain.Entitys.Organization;
 using Domain.Entitys.Organization.Dto;
@@ -170,7 +171,11 @@ public class OrganizationManagerService : IOrganizationManagerService
     {
         entity.Name = data.Name;
         entity.Inn = data.Inn;
-        entity.TrueApiIntegrationSettings = data.TrueApiIntegrationSettings ?? new TrueApiIntegrationSettings();
+        var incoming = data.TrueApiIntegrationSettings ?? new TrueApiIntegrationSettings();
+        incoming.Password = SecretMask.Restore(
+            incoming.Password,
+            entity.TrueApiIntegrationSettings?.Password ?? string.Empty);
+        entity.TrueApiIntegrationSettings = incoming;
     }
 
     private OrganizationView ToView(OrganizationEntity entity)
@@ -189,7 +194,18 @@ public class OrganizationManagerService : IOrganizationManagerService
             TrueApiTokenExpired = received ? cached.LiveUntil : null,
             GisMtLastStatus = CopyStatus(entity.GisMtLastStatus),
             GisMtProductGroups = CopyGroups(entity.GisMtProductGroups),
-            TrueApiIntegrationSettings = entity.TrueApiIntegrationSettings ?? new TrueApiIntegrationSettings()
+            TrueApiIntegrationSettings = ForClient(entity.TrueApiIntegrationSettings)
+        };
+    }
+
+    private static TrueApiIntegrationSettings ForClient(TrueApiIntegrationSettings? settings)
+    {
+        settings ??= new();
+        return new TrueApiIntegrationSettings
+        {
+            Enable = settings.Enable,
+            Password = SecretMask.ForClient(settings.Password),
+            DigitalSignature = settings.DigitalSignature
         };
     }
 

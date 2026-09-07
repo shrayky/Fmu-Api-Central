@@ -32,10 +32,12 @@ public class ConfigurationApplicationService : IConfigurationApplicationService
     public async Task<string> Current()
     {
         var parameters = await _parametersService.Current();
+        var forClient = Clone(parameters);
+        MaskSecrets(forClient);
 
         var packet = new
         {
-            Content = parameters
+            Content = forClient
         };
 
         using var stream = new MemoryStream();
@@ -69,6 +71,7 @@ public class ConfigurationApplicationService : IConfigurationApplicationService
             parameters.Security ??= new();
             current.Security ??= new();
             parameters.Security.PasswordConfigured = current.Security.PasswordConfigured;
+            RestoreMaskedSecrets(parameters, current);
 
             return await _parametersService.Update(parameters);
 
@@ -146,5 +149,28 @@ public class ConfigurationApplicationService : IConfigurationApplicationService
             _logger.LogError(ex, "Ошибка импорта настроек приложения");
             return Result.Failure($"Ошибка импорта настроек: {ex.Message}");
         }
+    }
+
+    private static Parameters Clone(Parameters source)
+    {
+        var json = JsonSerializer.Serialize(source, JsonSerializeOptionsProvider.Default());
+        return JsonSerializer.Deserialize<Parameters>(json, JsonSerializeOptionsProvider.Default())
+               ?? new Parameters();
+    }
+
+    private static void MaskSecrets(Parameters parameters)
+    {
+        parameters.DatabaseConnection.Password = SecretMask.ForClient(parameters.DatabaseConnection.Password);
+        parameters.BotSettings.BotToken = SecretMask.ForClient(parameters.BotSettings.BotToken);
+    }
+
+    private static void RestoreMaskedSecrets(Parameters incoming, Parameters current)
+    {
+        incoming.DatabaseConnection.Password = SecretMask.Restore(
+            incoming.DatabaseConnection.Password,
+            current.DatabaseConnection.Password);
+        incoming.BotSettings.BotToken = SecretMask.Restore(
+            incoming.BotSettings.BotToken,
+            current.BotSettings.BotToken);
     }
 }
