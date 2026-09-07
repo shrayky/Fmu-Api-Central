@@ -18,4 +18,10 @@ public class GisMtProductMapping
 
     [JsonPropertyName("checkSmp")]
     public bool CheckSmp { get; set; }
+
+    [JsonPropertyName("checkMrp")]
+    public bool CheckMrp { get; set; }
+
+    [JsonPropertyName("checkExpireDate")]
+    public bool CheckExpireDate { get; set; }
 }

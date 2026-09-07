@@ -20,6 +20,8 @@ class SettingsSchemaElementView {
             trueApiGroupId: "Код ЧЗ",
             mappingName: "Название",
             checkSmp: "ЕМЦ",
+            checkMrp: "Контроль МРЦ",
+            checkExpireDate: "Срок годности",
             addMapping: "Добавить",
             removeMapping: "Удалить",
             fillDefaults: "Заполнить по умолчанию",
@@ -42,6 +44,13 @@ class SettingsSchemaElementView {
             mappingTable: "settingsSchemaMappingTable",
             hostsTable: "settingsSchemaHostsTable"
         };
+
+        webix.html.addStyle(
+            "#settingsSchemaMappingTable .webix_ss_header .webix_hcell{line-height:48px;}" +
+            ".pg-header-twoline{display:flex;flex-direction:column;justify-content:center;" +
+            "line-height:18px !important;white-space:normal;text-align:center;height:48px;box-sizing:border-box;}",
+            "pg-header-twoline"
+        );
     }
 
     async showDialog(editedData = {}, onSuccess, onClose) {
@@ -62,7 +71,7 @@ class SettingsSchemaElementView {
             view: "window",
             id: this.NAMES.windowId,
             modal: true,
-            width: 820,
+            width: 980,
             position: "center",
             head: this.LABELS.formTitle,
             body: {
@@ -172,8 +181,27 @@ class SettingsSchemaElementView {
                     template: "{common.checkbox()}",
                     checkValue: true,
                     uncheckValue: false
+                },
+                {
+                    id: "checkMrp",
+                    header: { text: "Контроль<br>МРЦ", css: "pg-header-twoline" },
+                    width: 90,
+                    css: { "text-align": "center" },
+                    template: "{common.checkbox()}",
+                    checkValue: true,
+                    uncheckValue: false
+                },
+                {
+                    id: "checkExpireDate",
+                    header: { text: "Срок<br>годности", css: "pg-header-twoline" },
+                    width: 90,
+                    css: { "text-align": "center" },
+                    template: "{common.checkbox()}",
+                    checkValue: true,
+                    uncheckValue: false
                 }
             ],
+            headerRowHeight: 48,
             checkboxRefresh: true,
             data: mappings.map((row) => this._toRow(row)),
             on: {
@@ -189,7 +217,9 @@ class SettingsSchemaElementView {
             atolCode,
             trueApiGroupId: this._toInt(row.trueApiGroupId),
             name: row.name || "",
-            checkSmp: !!row.checkSmp
+            checkSmp: !!row.checkSmp,
+            checkMrp: !!row.checkMrp,
+            checkExpireDate: !!row.checkExpireDate
         };
     }
 
@@ -206,7 +236,9 @@ class SettingsSchemaElementView {
             atolCode: 0,
             trueApiGroupId: 0,
             name: "",
-            checkSmp: false
+            checkSmp: false,
+            checkMrp: false,
+            checkExpireDate: false
         });
         table.select(id);
         table.showItem(id);
@@ -307,7 +339,9 @@ class SettingsSchemaElementView {
             atolCode,
             trueApiGroupId: preset.trueApiGroupId,
             name: preset.name,
-            checkSmp: !!preset.checkSmp
+            checkSmp: !!preset.checkSmp,
+            checkMrp: !!preset.checkMrp,
+            checkExpireDate: !!preset.checkExpireDate
         });
     }
 
@@ -389,7 +423,9 @@ class SettingsSchemaElementView {
                 atolCode,
                 trueApiGroupId: this._toInt(item.trueApiGroupId),
                 name: item.name || "",
-                checkSmp: !!item.checkSmp
+                checkSmp: !!item.checkSmp,
+                checkMrp: !!item.checkMrp,
+                checkExpireDate: !!item.checkExpireDate
             });
         });
 

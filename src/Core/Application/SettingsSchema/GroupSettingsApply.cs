@@ -31,7 +31,9 @@ public static class GroupSettingsApply
                     AtolCode = item.AtolCode,
                     TrueApiGroupId = item.TrueApiGroupId,
                     Name = item.Name,
-                    CheckSmp = item.CheckSmp
+                    CheckSmp = item.CheckSmp,
+                    CheckMrp = item.CheckMrp,
+                    CheckExpireDate = item.CheckExpireDate
                 })
                 .ToList(),
             HostsToPing = hostsToPing
