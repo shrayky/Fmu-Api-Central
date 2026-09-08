@@ -1,4 +1,4 @@
-import { Text, CheckBox } from '../../utils/ui.js';
+import { Text, CheckBox, Number } from '../../utils/ui.js';
 import instanceGroupService from '../../services/instanceGroupService.js';
 import settingsSchemaService from '../../services/settingsSchemaService.js';
 
@@ -14,14 +14,31 @@ class InstanceGroupElementView {
             cancelButton: "Отмена",
             autoUpdateAllowed: "Автообновление разрешено",
             settingsSchema: "Схема настроек",
-            selectSchema: "Выберите схему"
+            selectSchema: "Выберите схему",
+            mainTab: "Основная",
+            channelTab: "Канал оповещения",
+            channelEnabled: "Использовать",
+            provider: "Протокол",
+            chatId: "ID чата",
+            botToken: "Токен бота",
+            test: "Тест",
+            botNotConnected: "Бот не подключен",
+            chatIdZero: "ID чата не может быть 0",
+            testSuccess: "Тест выполнен"
         };
 
         this.NAMES = {
+            windowId: "instanceGroupWindow",
             formId: "instanceGroupElement",
+            channelFormId: "instanceGroupChannelForm",
             name: "instanceGroupName",
             autoUpdateAllowed: "instanceGroupAutoUpdateAllowed",
-            settingsSchema: "instanceGroupSettingsSchema"
+            settingsSchema: "instanceGroupSettingsSchema",
+            channelEnabled: "instanceGroupChannelEnabled",
+            channelFields: "instanceGroupChannelFields",
+            provider: "instanceGroupProvider",
+            chatId: "instanceGroupChatId",
+            botToken: "instanceGroupBotToken"
         };
     }
 
@@ -29,35 +46,100 @@ class InstanceGroupElementView {
         this.elementId = editedData.id || crypto.randomUUID();
         const schemaOptions = await this._loadSchemaOptions();
         const currentSchemaId = editedData.settingsSchema?.id || "";
+        const channel = editedData.alertChannel || {};
+        const isEnabled = !!channel.isEnabled;
+
+        if ($$(this.NAMES.windowId)) {
+            $$(this.NAMES.windowId).destructor();
+        }
 
         webix.ui({
             view: "window",
-            id: this.NAMES.formId,
+            id: this.NAMES.windowId,
             modal: true,
-            width: 480,
+            width: 640,
             position: "center",
             head: this.LABELS.formTitle,
             body: {
-                view: "form",
-                id: this.NAMES.formId,
-                elements: [
-                    Text(
-                        this.LABELS.name,
-                        this.NAMES.name,
-                        editedData.name,
-                        { required: true, invalidMessage: this.LABELS.invalidNameMessage }
-                    ),
-                    CheckBox(this.LABELS.autoUpdateAllowed, this.NAMES.autoUpdateAllowed, {
-                        value: !!editedData.autoUpdateAllowed
-                    }),
+                rows: [
                     {
-                        view: "richselect",
-                        label: this.LABELS.settingsSchema,
-                        labelPosition: "top",
-                        id: this.NAMES.settingsSchema,
-                        name: this.NAMES.settingsSchema,
-                        value: currentSchemaId,
-                        options: schemaOptions
+                        view: "tabview",
+                        cells: [
+                            {
+                                header: this.LABELS.mainTab,
+                                body: {
+                                    view: "form",
+                                    id: this.NAMES.formId,
+                                    elements: [
+                                        Text(
+                                            this.LABELS.name,
+                                            this.NAMES.name,
+                                            editedData.name,
+                                            { required: true, invalidMessage: this.LABELS.invalidNameMessage }
+                                        ),
+                                        CheckBox(this.LABELS.autoUpdateAllowed, this.NAMES.autoUpdateAllowed, {
+                                            value: !!editedData.autoUpdateAllowed
+                                        }),
+                                        {
+                                            view: "richselect",
+                                            label: this.LABELS.settingsSchema,
+                                            labelPosition: "top",
+                                            id: this.NAMES.settingsSchema,
+                                            name: this.NAMES.settingsSchema,
+                                            value: currentSchemaId,
+                                            options: schemaOptions
+                                        }
+                                    ]
+                                }
+                            },
+                            {
+                                header: this.LABELS.channelTab,
+                                body: {
+                                    view: "form",
+                                    id: this.NAMES.channelFormId,
+                                    elements: [
+                                        CheckBox(this.LABELS.channelEnabled, this.NAMES.channelEnabled, {
+                                            value: isEnabled,
+                                            on: {
+                                                onChange: (enabled) => this._setChannelFieldsEnabled(enabled)
+                                            }
+                                        }),
+                                        {
+                                            id: this.NAMES.channelFields,
+                                            disabled: !isEnabled,
+                                            rows: [
+                                                {
+                                                    view: "richselect",
+                                                    label: this.LABELS.provider,
+                                                    labelPosition: "top",
+                                                    id: this.NAMES.provider,
+                                                    name: this.NAMES.provider,
+                                                    value: channel.provider || "telegram",
+                                                    options: [
+                                                        { id: "telegram", value: "telegram" },
+                                                        { id: "max", value: "max" },
+                                                        { id: "ntfy", value: "ntfy" }
+                                                    ]
+                                                },
+                                                Number(this.LABELS.chatId, this.NAMES.chatId, channel.chatId || 0),
+                                                Text(this.LABELS.botToken, this.NAMES.botToken, channel.botToken || "")
+                                            ]
+                                        },
+                                        {
+                                            cols: [
+                                                {
+                                                    view: "button",
+                                                    value: this.LABELS.test,
+                                                    width: 120,
+                                                    click: () => this._testChannel()
+                                                },
+                                                {}
+                                            ]
+                                        }
+                                    ]
+                                }
+                            }
+                        ]
                     },
                     this._createButtons(onSuccess, onClose)
                 ]
@@ -70,6 +152,49 @@ class InstanceGroupElementView {
                 nameField.focus();
             }
         }, 100);
+    }
+
+    _setChannelFieldsEnabled(enabled) {
+        const view = $$(this.NAMES.channelFields);
+        if (!view) {
+            return;
+        }
+
+        if (enabled) {
+            view.enable();
+        } else {
+            view.disable();
+        }
+    }
+
+    _readChannel() {
+        return {
+            isEnabled: !!$$(this.NAMES.channelEnabled).getValue(),
+            provider: $$(this.NAMES.provider).getValue() || "telegram",
+            chatId: parseInt($$(this.NAMES.chatId).getValue()) || 0,
+            botToken: $$(this.NAMES.botToken).getValue() || ""
+        };
+    }
+
+    async _testChannel() {
+        const channel = this._readChannel();
+
+        if (!channel.isEnabled) {
+            webix.message({ text: this.LABELS.botNotConnected, type: "error" });
+            return;
+        }
+
+        if (channel.chatId == 0) {
+            webix.message({ text: this.LABELS.chatIdZero, type: "error" });
+            return;
+        }
+
+        try {
+            await instanceGroupService.testChannel(channel);
+            webix.message({ text: this.LABELS.testSuccess, type: "success" });
+        } catch (error) {
+            webix.message({ text: error.message, type: "error" });
+        }
     }
 
     _createButtons(onSuccess, onClose) {
@@ -90,7 +215,7 @@ class InstanceGroupElementView {
                             onClose();
                         }
 
-                        $$(this.NAMES.formId).close();
+                        $$(this.NAMES.windowId).close();
                     },
                     hotkey: "esc"
                 }
@@ -99,14 +224,14 @@ class InstanceGroupElementView {
     }
 
     async _send(onSuccess) {
-        const form = $$(this.NAMES.formId);
+        const win = $$(this.NAMES.windowId);
         if (!this._validate()) {
             return;
         }
 
-        webix.extend(form, webix.ProgressBar);
-        form.showProgress({ type: "icon" });
-        form.disable();
+        webix.extend(win, webix.ProgressBar);
+        win.showProgress({ type: "icon" });
+        win.disable();
 
         const schemaId = $$(this.NAMES.settingsSchema).getValue() || "";
         const schemaList = $$(this.NAMES.settingsSchema).getList();
@@ -119,7 +244,8 @@ class InstanceGroupElementView {
             settingsSchema: {
                 id: schemaId,
                 name: schemaId ? (schemaItem?.value || "") : ""
-            }
+            },
+            alertChannel: this._readChannel()
         };
 
         try {
@@ -129,11 +255,11 @@ class InstanceGroupElementView {
                 onSuccess(data);
             }
 
-            $$(this.NAMES.formId).close();
+            $$(this.NAMES.windowId).close();
         } catch (error) {
             webix.message({ text: error.message, type: "error" });
-            form.enable();
-            form.hideProgress();
+            win.enable();
+            win.hideProgress();
         }
     }
 
@@ -141,6 +267,12 @@ class InstanceGroupElementView {
         const name = $$(this.NAMES.name).getValue();
         if (!name || name === "") {
             webix.message({ text: this.LABELS.invalidNameMessage, type: "error" });
+            return false;
+        }
+
+        const channel = this._readChannel();
+        if (channel.isEnabled && channel.chatId == 0) {
+            webix.message({ text: this.LABELS.chatIdZero, type: "error" });
             return false;
         }
 

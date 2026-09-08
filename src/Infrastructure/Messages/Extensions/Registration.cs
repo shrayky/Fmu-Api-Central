@@ -12,14 +12,15 @@ public static class Registration
     {
         //services.AddAutoRegisteredServices([Assembly.GetExecutingAssembly()]);
 
-        if (settings.Provider == BotProvidersEnum.telegram)
-            services.AddSingleton<IMessageService, TelegramBotService>();
-        else if (settings.Provider == BotProvidersEnum.max)
-            services.AddSingleton<IMessageService, MaxBotService>();
-        else if (settings.Provider == BotProvidersEnum.ntfy)
-            services.AddSingleton<IMessageService, NtfyBotService>();
+        services.AddSingleton<TelegramBotService>();
+        services.AddSingleton<MaxBotService>();
+        services.AddSingleton<NtfyBotService>();
+        services.AddSingleton<IMessageServiceFactory>(sp => new MessageServiceFactory(
+            sp.GetRequiredService<TelegramBotService>(),
+            sp.GetRequiredService<MaxBotService>(),
+            sp.GetRequiredService<NtfyBotService>()));
 
-        services.AddSingleton<IAlertMessageConstructor, AlertsConstuctor>();
+        services.AddScoped<IAlertMessageConstructor, AlertsConstuctor>();
 
         services.AddHostedService<MessagesSendWorker>();
         services.AddHostedService<AlertTemplateSendWorker>();

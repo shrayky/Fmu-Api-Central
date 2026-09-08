@@ -1,4 +1,5 @@
 using CSharpFunctionalExtensions;
+using Domain.Bot;
 using Domain.Dto.Responces;
 using Domain.Entitys.Instance.Dto;
 using Domain.Entitys.InstanceGroup.Dto;
@@ -14,4 +15,5 @@ public interface IInstanceGroupManagerService
     Task<List<GroupLink>> AllLinks();
     Task<Result<ForceUpdateResult>> AssignForcedUpdate(IReadOnlyList<string> groupIds, string updateId);
     Task<Result<ForceUpdateResult>> ExportSettings(IReadOnlyList<string> groupIds);
+    Task<Result> TestChannel(AlertChannel channel);
 }

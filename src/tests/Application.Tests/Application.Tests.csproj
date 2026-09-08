@@ -25,6 +25,7 @@
     <ProjectReference Include="..\..\Core\Application\Application.csproj" />
     <ProjectReference Include="..\..\Core\Shared\Shared.csproj" />
     <ProjectReference Include="..\..\Infrastructure\Authentication\Authentication.csproj" />
+    <ProjectReference Include="..\..\Infrastructure\Messages\Messages.csproj" />
   </ItemGroup>
 
 </Project>

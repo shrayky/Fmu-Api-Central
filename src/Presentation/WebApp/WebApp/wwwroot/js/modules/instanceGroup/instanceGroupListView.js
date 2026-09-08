@@ -26,6 +26,7 @@ class InstanceGroupListView {
             forceInstallTitle: "Принудительная установка",
             exportSettings: "Выгрузить настройки",
             settingsSchema: "Схема настроек",
+            channel: "Канал",
             selectGroup: "Выберите группу",
             selectedGroup: "Группа",
             selectVersion: "Версия",
@@ -317,6 +318,12 @@ class InstanceGroupListView {
                     header: this.LABELS.settingsSchema,
                     width: 220,
                     template: (obj) => obj.settingsSchema?.name || ""
+                },
+                {
+                    id: "alertChannel",
+                    header: this.LABELS.channel,
+                    width: 120,
+                    template: (obj) => obj.alertChannel?.isEnabled ? (obj.alertChannel.provider || "") : ""
                 },
                 {
                     id: "autoUpdateAllowed",

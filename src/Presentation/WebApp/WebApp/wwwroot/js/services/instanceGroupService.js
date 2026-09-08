@@ -86,6 +86,20 @@ class InstanceGroupService {
 
         return true;
     }
+
+    async testChannel(channel) {
+        const data = await this.authService.makeAuthenticatedRequest(`${this.apiEndpoint}/test-channel`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(channel)
+        });
+
+        if (!data.result) {
+            throw new Error(data.error || data.value);
+        }
+
+        return true;
+    }
 }
 
 export default new InstanceGroupService();

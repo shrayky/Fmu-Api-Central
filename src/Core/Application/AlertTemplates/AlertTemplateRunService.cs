@@ -2,10 +2,14 @@ using CSharpFunctionalExtensions;
 using Domain.Attributes;
 using Domain.Bot;
 using Domain.Configuration.Interfaces;
+using Domain.Entitys.AlertTemplates;
 using Domain.Entitys.AlertTemplates.Dto;
 using Domain.Entitys.AlertTemplates.Interfaces;
+using Domain.Entitys.Instance;
 using Domain.Entitys.Interfaces;
+using Domain.Configuration.Options;
 using Domain.Entitys.MarkCheckStatistics.Interfaces;
+using Domain.Entitys.MarksCheckStatistic;
 using Microsoft.Extensions.Logging;
 
 namespace Application.AlertTemplates;
@@ -22,7 +26,8 @@ public class AlertTemplateRunService : IAlertTemplateRunService
     private readonly IInstanceRepository _instances;
     private readonly IMarksCheckStatisticRepository _statistics;
     private readonly IParametersService _parameters;
-    private readonly IMessageService _messageService;
+    private readonly IInstanceGroupRepository _groups;
+    private readonly IMessageServiceFactory _messageServiceFactory;
 
     public AlertTemplateRunService(
         ILogger<AlertTemplateRunService> logger,
@@ -32,7 +37,8 @@ public class AlertTemplateRunService : IAlertTemplateRunService
         IInstanceRepository instances,
         IMarksCheckStatisticRepository statistics,
         IParametersService parameters,
-        IMessageService messageService)
+        IInstanceGroupRepository groups,
+        IMessageServiceFactory messageServiceFactory)
     {
         _logger = logger;
         _templates = templates;
@@ -41,7 +47,8 @@ public class AlertTemplateRunService : IAlertTemplateRunService
         _instances = instances;
         _statistics = statistics;
         _parameters = parameters;
-        _messageService = messageService;
+        _groups = groups;
+        _messageServiceFactory = messageServiceFactory;
     }
 
     public async Task<Result> RunDueTemplates(DateTime now)
@@ -55,48 +62,38 @@ public class AlertTemplateRunService : IAlertTemplateRunService
         if (due.Count == 0)
             return Result.Success();
 
-        var parameters = await _parameters.Current();
-        var bot = parameters.BotSettings;
-        if (!bot.IsEnabled)
-            return Result.Success();
+        var instancesResult = await _instances.All();
+        if (instancesResult.IsFailure)
+            return Result.Failure(instancesResult.Error);
 
-        var contextResult = await BuildContext();
-        if (contextResult.IsFailure)
-            return Result.Failure(contextResult.Error);
+        var instances = instancesResult.Value;
+        var groups = await _groups.All();
+        var bot = (await _parameters.Current()).BotSettings;
+        var global = AlertChannel.FromBotSettings(bot);
+        var statistics = await LoadStatistics();
 
-        var context = contextResult.Value;
-
-        foreach (var template in due)
+        foreach (var group in groups)
         {
-            var executeResult = _executor.Execute(template.Script, context);
-            if (executeResult.IsFailure)
-            {
-                _logger.LogError(
-                    "Шаблон оповещения {Name} ({Id}) завершился ошибкой: {Error}",
-                    template.Name, template.Id, executeResult.Error);
-                continue;
-            }
-
-            var dataset = executeResult.Value;
-            if (!dataset.HasContent)
+            var channel = group.AlertChannel ?? AlertChannel.Disabled();
+            if (!channel.IsEnabled)
                 continue;
 
-            var messages = MessagesToSend(dataset, template.Name);
-            foreach (var message in messages)
-            {
-                var sendResult = await _messageService.Send(
-                    bot.BotToken,
-                    bot.ChatId,
-                    AlertMessageFormatter.ToTelegramText(message));
-
-                if (sendResult.IsFailure)
-                {
-                    _logger.LogError(
-                        "Не удалось отправить оповещение шаблона {Name}: {Error}",
-                        template.Name, sendResult.Error);
-                }
-            }
+            var groupInstances = instances.Where(instance => instance.GroupId == group.Id).ToList();
+            var sendResult = await RunTemplatesForChannel(due, groupInstances, channel, statistics, bot);
+            if (sendResult.IsFailure)
+                return sendResult;
         }
+
+        var enabledGroupIds = groups
+            .Where(group => (group.AlertChannel ?? AlertChannel.Disabled()).IsEnabled)
+            .Select(group => group.Id)
+            .ToHashSet();
+        var fallback = instances
+            .Where(instance => !enabledGroupIds.Contains(instance.GroupId))
+            .ToList();
+
+        if (global.IsEnabled)
+            return await RunTemplatesForChannel(due, fallback, global, statistics, bot);
 
         return Result.Success();
     }
@@ -116,30 +113,84 @@ public class AlertTemplateRunService : IAlertTemplateRunService
         return Result.Success(WithFormattedMessage(executeResult.Value, "Просмотр"));
     }
 
+    private async Task<Result> RunTemplatesForChannel(
+        List<AlertTemplateEntity> due,
+        List<InstanceEntity> instances,
+        AlertChannel channel,
+        IReadOnlyList<MarkCheckStatisticsEntity> statistics,
+        TelegramBotSetting bot)
+    {
+        var contextResult = BuildContext(instances, statistics, bot);
+        if (contextResult.IsFailure)
+            return Result.Failure(contextResult.Error);
+
+        var senderResult = _messageServiceFactory.For(channel.Provider);
+        if (senderResult.IsFailure)
+        {
+            _logger.LogError("Не удалось получить сервис сообщений: {Error}", senderResult.Error);
+            return Result.Success();
+        }
+
+        foreach (var template in due)
+        {
+            var executeResult = _executor.Execute(template.Script, contextResult.Value);
+            if (executeResult.IsFailure)
+            {
+                _logger.LogError(
+                    "Шаблон оповещения {Name} ({Id}) завершился ошибкой: {Error}",
+                    template.Name, template.Id, executeResult.Error);
+                continue;
+            }
+
+            var dataset = executeResult.Value;
+            if (!dataset.HasContent)
+                continue;
+
+            foreach (var message in MessagesToSend(dataset, template.Name))
+            {
+                var sendResult = await senderResult.Value.Send(
+                    channel.BotToken,
+                    channel.ChatId,
+                    AlertMessageFormatter.ToTelegramText(message));
+
+                if (sendResult.IsFailure)
+                {
+                    _logger.LogError(
+                        "Не удалось отправить оповещение шаблона {Name}: {Error}",
+                        template.Name, sendResult.Error);
+                }
+            }
+        }
+
+        return Result.Success();
+    }
+
     private async Task<Result<AlertDatasetContext>> BuildContext()
     {
         var instancesResult = await _instances.All();
         if (instancesResult.IsFailure)
             return Result.Failure<AlertDatasetContext>(instancesResult.Error);
 
+        var bot = (await _parameters.Current()).BotSettings;
+        return BuildContext(instancesResult.Value, await LoadStatistics(), bot);
+    }
+
+    private Result<AlertDatasetContext> BuildContext(
+        IReadOnlyList<InstanceEntity> entities,
+        IReadOnlyList<MarkCheckStatisticsEntity> statisticsEntities,
+        TelegramBotSetting bot)
+    {
         var now = DateTimeOffset.Now;
-        var instances = instancesResult.Value
+        var instances = entities
             .Select(entity => ToInstanceSnapshot(entity, now))
             .ToList();
         var names = instances.ToDictionary(instance => instance.Id, instance => instance.Name);
+        var instanceIds = names.Keys.ToHashSet();
 
-        var statisticsResult = await _statistics.GetByDateRange(
-            now.Date.AddDays(-StatisticsLookbackDays),
-            now.Date);
-
-        var statistics = statisticsResult.IsSuccess
-            ? statisticsResult.Value.Select(entity => ToStatisticSnapshot(entity, names)).ToList()
-            : [];
-
-        if (statisticsResult.IsFailure)
-            _logger.LogWarning("Статистика проверок для шаблонов недоступна: {Error}", statisticsResult.Error);
-
-        var bot = (await _parameters.Current()).BotSettings;
+        var statistics = statisticsEntities
+            .Where(entity => instanceIds.Contains(entity.NodeId))
+            .Select(entity => ToStatisticSnapshot(entity, names))
+            .ToList();
 
         return Result.Success(new AlertDatasetContext
         {
@@ -165,6 +216,22 @@ public class AlertTemplateRunService : IAlertTemplateRunService
         });
     }
 
+    private async Task<IReadOnlyList<MarkCheckStatisticsEntity>> LoadStatistics()
+    {
+        var now = DateTimeOffset.Now;
+        var statisticsResult = await _statistics.GetByDateRange(
+            now.Date.AddDays(-StatisticsLookbackDays),
+            now.Date);
+
+        if (statisticsResult.IsFailure)
+        {
+            _logger.LogWarning("Статистика проверок для шаблонов недоступна: {Error}", statisticsResult.Error);
+            return [];
+        }
+
+        return statisticsResult.Value;
+    }
+
     /// <summary>
     /// Элементы набора уходят отдельными сообщениями, как в AlertsConstuctor.
     /// </summary>
@@ -185,7 +252,7 @@ public class AlertTemplateRunService : IAlertTemplateRunService
         return dataset with { Message = AlertMessageFormatter.Format(dataset, fallbackTitle) };
     }
 
-    private static AlertInstanceSnapshot ToInstanceSnapshot(Domain.Entitys.Instance.InstanceEntity entity, DateTimeOffset now)
+    private static AlertInstanceSnapshot ToInstanceSnapshot(InstanceEntity entity, DateTimeOffset now)
     {
         var hoursSinceUpdate = Math.Max(0, (now.LocalDateTime - entity.UpdatedAt).TotalHours);
 
@@ -193,6 +260,7 @@ public class AlertTemplateRunService : IAlertTemplateRunService
         {
             Id = entity.Id,
             Name = entity.Name,
+            GroupId = entity.GroupId,
             Address = entity.Address,
             Version = $"{entity.Settings.Version}.{entity.Settings.Assembly}",
             LastUpdated = entity.UpdatedAt.ToString("G"),

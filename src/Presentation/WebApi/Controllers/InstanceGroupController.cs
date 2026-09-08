@@ -1,3 +1,4 @@
+using Domain.Bot;
 using Domain.Entitys.InstanceGroup.Dto;
 using Domain.Entitys.InstanceGroup.Interfaces;
 using Domain.Entitys.SettingsSchema.Dto;
@@ -59,5 +60,12 @@ public class InstanceGroupController : ControllerBase
     {
         var result = await _manager.ExportSettings(request.GroupIds);
         return result.IsSuccess ? Ok(result.Value) : BadRequest(result.Error);
+    }
+
+    [HttpPost("test-channel")]
+    public async Task<IActionResult> TestChannel([FromBody] AlertChannel channel)
+    {
+        var result = await _manager.TestChannel(channel);
+        return result.IsSuccess ? Ok() : BadRequest(result.Error);
     }
 }

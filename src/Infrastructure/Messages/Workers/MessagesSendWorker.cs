@@ -1,6 +1,7 @@
 ﻿using Domain.Bot;
 using Domain.Configuration.Interfaces;
 using Domain.Configuration.Options;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -10,15 +11,15 @@ public class MessagesSendWorker : BackgroundService
 {
     private readonly ILogger<MessagesSendWorker> _logger;
     private readonly IParametersService _settings;
-    private readonly IAlertMessageConstructor _alertMessageConstructor;
+    private readonly IServiceScopeFactory _scopeFactory;
 
     private const int StartDelayMinutes = 1;
 
-    public MessagesSendWorker(ILogger<MessagesSendWorker> logger, IParametersService settings, IAlertMessageConstructor alertMessageConstructor)
+    public MessagesSendWorker(ILogger<MessagesSendWorker> logger, IParametersService settings, IServiceScopeFactory scopeFactory)
     {
         _logger = logger;
         _settings = settings;
-        _alertMessageConstructor = alertMessageConstructor;
+        _scopeFactory = scopeFactory;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -33,12 +34,6 @@ public class MessagesSendWorker : BackgroundService
             var settings = await _settings.Current().ConfigureAwait(false);
             var bot = settings.BotSettings;
 
-            if (!bot.IsEnabled)
-            {
-                await Task.Delay(TimeSpan.FromMinutes(10), stoppingToken);
-                continue;
-            }
-
             var delay = GetDelayToNextSchedule(bot);
             _logger.LogInformation("Следующая отправка сообщений запланирована через {delay}", delay);
 
@@ -47,7 +42,9 @@ public class MessagesSendWorker : BackgroundService
             if (stoppingToken.IsCancellationRequested)
                 break;
 
-            await _alertMessageConstructor.SendNodesStatus(bot);
+            using var scope = _scopeFactory.CreateScope();
+            var constructor = scope.ServiceProvider.GetRequiredService<IAlertMessageConstructor>();
+            await constructor.SendNodesStatus(bot);
         }
     }
 

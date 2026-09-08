@@ -13,16 +13,16 @@ public class TelegramMessagingWorker : BackgroundService
 {
     private readonly ILogger<TelegramMessagingWorker> _logger;
     private readonly IParametersService _settings;
-    private readonly IMessageService _messageService;
+    private readonly IMessageServiceFactory _factory;
 
     private readonly IInstanceManagerService  _instanceManager;
     private const int StartDelayMinutes = 1;
 
-    public TelegramMessagingWorker(ILogger<TelegramMessagingWorker> logger, IParametersService settings, IMessageService messageService, IServiceProvider serviceProvider)
+    public TelegramMessagingWorker(ILogger<TelegramMessagingWorker> logger, IParametersService settings, IMessageServiceFactory factory, IServiceProvider serviceProvider)
     {
         _logger = logger;
         _settings = settings;
-        _messageService = messageService;
+        _factory = factory;
 
         _instanceManager = serviceProvider.CreateScope().ServiceProvider.GetRequiredService<IInstanceManagerService>();
     }
@@ -61,7 +61,14 @@ public class TelegramMessagingWorker : BackgroundService
 
                 foreach (var message in messages)
                 {
-                    var sendResult = await _messageService.Send(bot.BotToken, bot.ChatId, message);
+                    var service = _factory.For(bot.Provider);
+                    if (service.IsFailure)
+                    {
+                        _logger.LogError("Телеграмм бот: {err}", service.Error);
+                        continue;
+                    }
+
+                    var sendResult = await service.Value.Send(bot.BotToken, bot.ChatId, message);
 
                     if (sendResult.IsFailure)
                         _logger.LogError("Телеграмм бот: не удалось отправить сообщение {message} боту: {err}!",

@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Domain.Bot;
 using Domain.Entitys.SettingsSchema.Dto;
 
 namespace Domain.Entitys.InstanceGroup.Dto;
@@ -22,4 +23,7 @@ public record InstanceGroupView
 
     [JsonPropertyName("settingsSchema")]
     public SettingsSchemaLink SettingsSchema { get; set; } = new();
+
+    [JsonPropertyName("alertChannel")]
+    public AlertChannel AlertChannel { get; set; } = new();
 }

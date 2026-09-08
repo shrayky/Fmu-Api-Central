@@ -1,5 +1,6 @@
 using CSharpFunctionalExtensions;
 using Domain.Attributes;
+using Domain.Bot;
 using Domain.Configuration.Interfaces;
 using Domain.Dto.Responces;
 using Domain.Entitys.Instance.Dto;
@@ -24,23 +25,30 @@ public class InstanceGroupManagerService : IInstanceGroupManagerService
     private readonly IInstanceManagerService _instanceManagerService;
     private readonly ISettingsSchemaRepository _settingsSchemaRepository;
     private readonly IParametersService _parametersService;
+    private readonly IMessageServiceFactory _messageServiceFactory;
 
     public InstanceGroupManagerService(
         IInstanceGroupRepository repository,
         IInstanceRepository instanceRepository,
         IInstanceManagerService instanceManagerService,
         ISettingsSchemaRepository settingsSchemaRepository,
-        IParametersService parametersService)
+        IParametersService parametersService,
+        IMessageServiceFactory messageServiceFactory)
     {
         _repository = repository;
         _instanceRepository = instanceRepository;
         _instanceManagerService = instanceManagerService;
         _settingsSchemaRepository = settingsSchemaRepository;
         _parametersService = parametersService;
+        _messageServiceFactory = messageServiceFactory;
     }
 
     public async Task<Result> Create(InstanceGroupView data)
     {
+        data.AlertChannel ??= AlertChannel.Disabled();
+        if (data.AlertChannel.IsEnabled && data.AlertChannel.ChatId == 0)
+            return Result.Failure("ID чата не может быть 0");
+
         var exist = await _repository.GetById(data.Id);
 
         if (exist.IsSuccess)
@@ -56,6 +64,10 @@ public class InstanceGroupManagerService : IInstanceGroupManagerService
 
     public async Task<Result> Update(InstanceGroupView data)
     {
+        data.AlertChannel ??= AlertChannel.Disabled();
+        if (data.AlertChannel.IsEnabled && data.AlertChannel.ChatId == 0)
+            return Result.Failure("ID чата не может быть 0");
+
         var exist = await _repository.GetById(data.Id);
         if (exist.IsFailure)
             return Result.Failure(exist.Error);
@@ -196,11 +208,29 @@ public class InstanceGroupManagerService : IInstanceGroupManagerService
         }).ToList();
     }
 
+    public async Task<Result> TestChannel(AlertChannel channel)
+    {
+        if (!channel.IsEnabled)
+            return Result.Failure("Бот не подключен");
+        if (channel.ChatId == 0)
+            return Result.Failure("ID чата не может быть 0");
+
+        var service = _messageServiceFactory.For(channel.Provider);
+        if (service.IsFailure)
+            return Result.Failure(service.Error);
+
+        return await service.Value.Send(
+            channel.BotToken,
+            channel.ChatId,
+            "Халло, мир!%0AСЧАСТЬЕ ДЛЯ ВСЕХ, ДАРОМ, И ПУСТЬ НИКТО НЕ УЙДЁТ ОБИЖЕННЫМ!");
+    }
+
     private static void Apply(InstanceGroupEntity entity, InstanceGroupView data)
     {
         entity.Name = data.Name;
         entity.AutoUpdateAllowed = data.AutoUpdateAllowed;
         entity.SettingsSchemaId = data.SettingsSchema?.Id ?? string.Empty;
+        entity.AlertChannel = data.AlertChannel ?? AlertChannel.Disabled();
     }
 
     private static InstanceGroupView ToView(
@@ -217,7 +247,8 @@ public class InstanceGroupManagerService : IInstanceGroupManagerService
         {
             Id = entity.SettingsSchemaId,
             Name = schemaName
-        }
+        },
+        AlertChannel = entity.AlertChannel ?? AlertChannel.Disabled()
     };
 
     private async Task<Dictionary<string, string>> ResolveSchemaNames(IEnumerable<string> schemaIds)

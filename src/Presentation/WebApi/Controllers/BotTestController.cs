@@ -11,13 +11,13 @@ namespace WebApi.Controllers;
 public class BotTestController : ControllerBase
 {
     private readonly IParametersService _parametersService;
-    private readonly IMessageService _messageService;
+    private readonly IMessageServiceFactory _factory;
     private readonly IAlertMessageConstructor _alertMessageConstructor;
 
-    public BotTestController(IParametersService parametersService, IMessageService messageService, IAlertMessageConstructor alertMessageConstructor)
+    public BotTestController(IParametersService parametersService, IMessageServiceFactory factory, IAlertMessageConstructor alertMessageConstructor)
     {
         _parametersService = parametersService;
-        _messageService = messageService;
+        _factory = factory;
         _alertMessageConstructor = alertMessageConstructor;
     }
 
@@ -25,11 +25,15 @@ public class BotTestController : ControllerBase
     public async Task<IActionResult> Get()
     {
         var settings = await _parametersService.Current();
-        
-        if (!settings.BotSettings.IsEnabled)
+        var bot = settings.BotSettings;
+        if (!bot.IsEnabled)
             return BadRequest("Бот не подключен");
 
-        var sendResult = await _messageService.Send(settings.BotSettings.BotToken, settings.BotSettings.ChatId,
+        var service = _factory.For(bot.Provider);
+        if (service.IsFailure)
+            return BadRequest(service.Error);
+
+        var sendResult = await service.Value.Send(bot.BotToken, bot.ChatId,
             "Халло, мир!%0AСЧАСТЬЕ ДЛЯ ВСЕХ, ДАРОМ, И ПУСТЬ НИКТО НЕ УЙДЁТ ОБИЖЕННЫМ!");
         
         if (sendResult.IsSuccess)
