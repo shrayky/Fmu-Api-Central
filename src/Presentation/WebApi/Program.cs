@@ -6,7 +6,11 @@ using Domain.Configuration;
 using Domain.Database;
 using Logger;
 using Messages.Extensions;
+using Domain.Authentication;
+using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
+using System.Threading.RateLimiting;
 using Scalar.AspNetCore;
 using Shared.Installer;
 using TrueApiIntegration;
@@ -65,6 +69,21 @@ builder.Services.AddAuthorization(options =>
     options.DefaultPolicy = usersOnly;
     options.FallbackPolicy = usersOnly;
 });
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    foreach (var proxy in TrustedProxies.Resolve(appSettings.ServerSettings.TrustedProxies))
+        options.KnownProxies.Add(proxy);
+});
+
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy(AuthRateLimit.Login, context => PerClientWindow(context, AuthRateLimit.LoginPerMinute));
+    options.AddPolicy(AuthRateLimit.Refresh, context => PerClientWindow(context, AuthRateLimit.RefreshPerMinute));
+    options.AddPolicy(AuthRateLimit.ChangePassword, context => PerClientWindow(context, AuthRateLimit.ChangePasswordPerMinute));
+});
+
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
@@ -90,7 +109,9 @@ builder.Services.Configure<KestrelServerOptions>(options =>
 
 var app = builder.Build();
 
+app.UseForwardedHeaders();
 app.UseCors("AllowWebApp");
+app.UseRateLimiter();
 
 app.UseSwagger();
 app.UseSwagger(options =>
@@ -105,3 +126,13 @@ app.UseAuthorization();
 app.MapControllers();
 
 await app.RunAsync();
+
+static RateLimitPartition<string> PerClientWindow(HttpContext context, int permitLimit)
+    => RateLimitPartition.GetFixedWindowLimiter(
+        AuthRateLimit.PartitionKey(context.Connection.RemoteIpAddress),
+        _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = permitLimit,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0
+        });

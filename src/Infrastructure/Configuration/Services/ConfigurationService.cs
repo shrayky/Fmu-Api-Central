@@ -82,6 +82,8 @@ namespace Configuration.Services
                     || currentSettings.DatabaseConnection.UserName != newParameters.DatabaseConnection.UserName
                     || currentSettings.DatabaseConnection.Password != newParameters.DatabaseConnection.Password
                     || currentSettings.ServerSettings.ApiIpPort != newParameters.ServerSettings.ApiIpPort
+                    || !SameLines(currentSettings.ServerSettings.CorsOrigins, newParameters.ServerSettings.CorsOrigins)
+                    || !SameLines(currentSettings.ServerSettings.TrustedProxies, newParameters.ServerSettings.TrustedProxies)
                     || currentSettings.LoggerSettings.IsEnabled != newParameters.LoggerSettings.IsEnabled
                     || currentSettings.LoggerSettings.LogLevel != newParameters.LoggerSettings.LogLevel
                     || currentSettings.LoggerSettings.LogDepth != newParameters.LoggerSettings.LogDepth
@@ -102,5 +104,9 @@ namespace Configuration.Services
 
             return Result.Success(await _migrationService.Value.MigrateConfiguration(configResult.Value));
         }
+
+        private static bool SameLines(IEnumerable<string>? left, IEnumerable<string>? right)
+            => (left ?? []).Select(item => item.Trim()).Where(item => item.Length > 0)
+                .SequenceEqual((right ?? []).Select(item => item.Trim()).Where(item => item.Length > 0));
     }
 }

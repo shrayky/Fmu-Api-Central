@@ -1,7 +1,9 @@
 ﻿using Application.Authentication.DTO;
 using Application.Authentication.Interfaces;
+using Domain.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace WebApi.Controllers
 {
@@ -18,6 +20,7 @@ namespace WebApi.Controllers
         }
 
         [HttpPost("login")]
+        [EnableRateLimiting(AuthRateLimit.Login)]
         public async Task<IActionResult> Login([FromBody] LoginRequest loginRequest)
         {
             var result = await _authService.Authenticate(loginRequest.Login, loginRequest.Password);
@@ -29,6 +32,7 @@ namespace WebApi.Controllers
         }
 
         [HttpPost("refresh")]
+        [EnableRateLimiting(AuthRateLimit.Refresh)]
         public IActionResult RefreshToken([FromBody] RefreshTokenRequest request)
         {
             var result = _authService.RefreshToken(request.RefreshToken);
@@ -40,6 +44,7 @@ namespace WebApi.Controllers
         }
 
         [HttpPost("change-password")]
+        [EnableRateLimiting(AuthRateLimit.ChangePassword)]
         public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
         {
             var result = await _authService.ChangePassword(

@@ -14,6 +14,7 @@ class SettingsView {
             loggerSettings: "Настройки логирования",
             apiIpPort: "IP-порт API",
             corsOrigins: "Дополнительные origin WebApp (по одному в строке). localhost:2580 уже разрешён",
+            trustedProxies: "Доверенные прокси (IP Caddy, по одному в строке). 127.0.0.1 уже доверен",
             isEnabled: "Включено",
             logDepth: "Глубина логирования (дней)",
             logLevel: "Уровень логирования",
@@ -37,6 +38,7 @@ class SettingsView {
         this.serverSettings = {
             apiIpPort: configuration.serverSettings.apiIpPort,
             corsOrigins: (configuration.serverSettings.corsOrigins || []).join("\n"),
+            trustedProxies: (configuration.serverSettings.trustedProxies || []).join("\n"),
         };
         this.logger = {
             isEnabled: configuration.loggerSettings.isEnabled,
@@ -68,6 +70,14 @@ class SettingsView {
                 name: "corsOrigins",
                 height: 90,
                 value: this.serverSettings.corsOrigins
+            },
+            {
+                view: "textarea",
+                label: this.labels.trustedProxies,
+                labelPosition: "top",
+                name: "trustedProxies",
+                height: 70,
+                value: this.serverSettings.trustedProxies
             },
             CheckBox(this.labels.allowLegacyAgentApi, "allowLegacyAgentApi", {
                 value: this.security.allowLegacyAgentApi
@@ -156,6 +166,10 @@ class SettingsView {
                 serverSettings: _ => ({
                   apiIpPort: parseInt(values.apiIpPort),
                   corsOrigins: String(values.corsOrigins || "")
+                    .split(/\r?\n/)
+                    .map(item => item.trim())
+                    .filter(item => item.length > 0),
+                  trustedProxies: String(values.trustedProxies || "")
                     .split(/\r?\n/)
                     .map(item => item.trim())
                     .filter(item => item.length > 0)

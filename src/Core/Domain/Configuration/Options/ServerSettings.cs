@@ -9,4 +9,7 @@ public class ServerSettings
 
     [JsonPropertyName("corsOrigins")]
     public List<string> CorsOrigins { get; set; } = [];
+
+    [JsonPropertyName("trustedProxies")]
+    public List<string> TrustedProxies { get; set; } = [];
 }
