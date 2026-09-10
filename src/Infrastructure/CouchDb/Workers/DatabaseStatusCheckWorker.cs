@@ -14,13 +14,15 @@ namespace CouchDb.Workers
         IParametersService parameters,
         IApplicationState applicationState,
         IDbStatusService databaseStatusService,
-        IIndexingService indexingService) : BackgroundService
+        IIndexingService indexingService,
+        ICouchDbConfigurationService couchDbConfigurationService) : BackgroundService
     {
         private readonly ILogger<DatabaseStatusCheckWorker> _logger = logger;
         private readonly IParametersService _parametersService = parameters;
         private readonly IApplicationState _applicationState = applicationState;
         private readonly IDbStatusService _databaseStatusService = databaseStatusService;
         private readonly IIndexingService _indexingService = indexingService;
+        private readonly ICouchDbConfigurationService _couchDbConfigurationService = couchDbConfigurationService;
 
         private readonly TimeSpan _checkInterval = TimeSpan.FromSeconds(10);
 
@@ -50,6 +52,8 @@ namespace CouchDb.Workers
 
                     if (needToEnsureDefaultUser)
                         needToEnsureDefaultUser = !await EnsureDefaultUserExists(stoppingToken);
+
+                    await EnsureCouchDbSettings(databaseConfig, stoppingToken);
                 }
             }
         }
@@ -115,6 +119,14 @@ namespace CouchDb.Workers
                 return false;
 
             return await _databaseStatusService.EnsureDefaultUserExists(cancellationToken);
+        }
+
+        private async Task EnsureCouchDbSettings(DatabaseConnection databaseConfig, CancellationToken stoppingToken)
+        {
+            var settingsResult = await _couchDbConfigurationService.EnsureSettings(databaseConfig, stoppingToken);
+
+            if (settingsResult.IsFailure)
+                _logger.LogWarning("Не удалось применить настройки CouchDB: {err}", settingsResult.Error);
         }
     }
 }

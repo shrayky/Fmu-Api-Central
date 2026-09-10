@@ -25,4 +25,7 @@ public class DatabaseConnection
     public int QueryLimit { get; set; } = 1000000;
     [JsonPropertyName("queryTimeout")]
     public int QueryTimeout { get; set; } = 300;
+
+    [JsonPropertyName("disableDbLog")]
+    public bool DisableDbLog { get; set; } = true;
 }

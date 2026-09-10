@@ -19,6 +19,7 @@ class CouchDbSettingsView {
             bulkParallelTasks: "Количество параллельных задач",
             queryLimit: "Максимальное количество документов для запроса",
             queryTimeout: "Таймаут запроса (секунд)",
+            disableDbLog: "Отключить лог базы данных",
         }
     }
 
@@ -49,6 +50,7 @@ class CouchDbSettingsView {
         this.bulkParallelTasks = settings.bulkParallelTasks;
         this.queryLimit = settings.queryLimit;
         this.queryTimeout = settings.queryTimeout;
+        this.disableDbLog = settings.disableDbLog ?? true;
         return this;
     }
 
@@ -108,6 +110,7 @@ class CouchDbSettingsView {
             },
             
             Number(this.labels.queryLimit, "queryLimit", this.queryLimit),
+            CheckBox(this.labels.disableDbLog, "disableDbLog", { value: this.disableDbLog }),
 
         )
         
@@ -160,6 +163,7 @@ class CouchDbSettingsView {
                 bulkParallelTasks: parseInt(values.bulkParallelTasks),
                 queryLimit: values.queryLimit,
                 queryTimeout: values.queryTimeout,
+                disableDbLog: !!values.disableDbLog,
             }));
     
             if (!saveResult.result) {
