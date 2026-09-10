@@ -1,4 +1,5 @@
 import { ServerAddress } from '../utils/net.js';
+import { openMarkingCalendarWindow } from './markingCalendarWindow.js';
 
 export default function informationView(id) {
     $$("toolbarLabel").setValue("Fmu-Api-Central: Информация о системе");
@@ -35,6 +36,11 @@ export default function informationView(id) {
                          id: "swaggerLink",
                          label: `<a href="${server}/scalar/v1" target="_blank" style=\"color: red">Консоль запросов к api.</a>.`
                      },
+                    {
+                        view: "label",
+                        id: "markingCalendarLink",
+                        label: "• &#128197; <a href=\"#\" class=\"marking-calendar-link\" style=\"color: #0088cc\">Календарь внедрения маркировки в рознице</a>"
+                    },
                     {},
                 ]
             }
@@ -53,3 +59,14 @@ function init(server) {
             $$("appVersion").setValue(_appVersion);
         });
 }
+
+function onInfoLinkClick(event) {
+    const calendarLink = event.target.closest("a.marking-calendar-link");
+    if (!calendarLink)
+        return;
+
+    event.preventDefault();
+    openMarkingCalendarWindow();
+}
+
+document.addEventListener("click", onInfoLinkClick);

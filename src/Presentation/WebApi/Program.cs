@@ -1,4 +1,5 @@
 using Application;
+using Application.MarkingCalendar.Services;
 using Authentication;
 using Configuration;
 using CouchDb;
@@ -10,6 +11,7 @@ using Domain.Authentication;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
+using System.Net.Http.Headers;
 using System.Threading.RateLimiting;
 using Scalar.AspNetCore;
 using Shared.Installer;
@@ -50,6 +52,13 @@ builder.Services.AddConfigurationServices();
 builder.Services.AddConfigureLogger(appSettings.LoggerSettings);
 builder.Services.AddCouchDb(appSettings.DatabaseConnection);
 builder.Services.AddApplicationServices();
+builder.Services.AddHttpClient(MarkingCalendarService.HttpClientName, client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(30);
+    client.DefaultRequestHeaders.UserAgent.ParseAdd(
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+    client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+});
 builder.Services.AddTrueApiIntegration();
 builder.Services.AddGisMtExchange();
 builder.Services.AddBotService(appSettings.BotSettings);
