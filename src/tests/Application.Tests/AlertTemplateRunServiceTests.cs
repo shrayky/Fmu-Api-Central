@@ -12,8 +12,12 @@ using Domain.Entitys.Instance;
 using Domain.Entitys.Instance.Dto;
 using Domain.Entitys.InstanceGroup;
 using Domain.Entitys.Interfaces;
+using Domain.Entitys.CrptViolations;
+using Domain.Entitys.CrptViolations.Interfaces;
 using Domain.Entitys.MarkCheckStatistics.Interfaces;
 using Domain.Entitys.MarksCheckStatistic;
+using Domain.Entitys.Organization;
+using Domain.Entitys.Organization.Interfaces;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Application.Tests;
@@ -87,6 +91,59 @@ public class AlertTemplateRunServiceTests
     }
 
     [Fact]
+    public async Task Preview_violations_вчера_считает_штраф_и_отклонения()
+    {
+        var yesterday = DateOnly.FromDateTime(DateTime.Today.AddDays(-1));
+        var date = new DateTimeOffset(yesterday.ToDateTime(TimeOnly.MinValue)).ToUnixTimeSeconds();
+        const string script =
+            """
+            const today = new Date(now);
+            const y = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1);
+            const pad = function (n) { return n < 10 ? "0" + n : "" + n; };
+            const target = y.getFullYear() + "-" + pad(y.getMonth() + 1) + "-" + pad(y.getDate());
+            const days = violations.filter(function (d) { return d.dateYmd === target; });
+            var total = 0;
+            var penalty = 0;
+            days.forEach(function (d) {
+                penalty += d.penaltyAmountRub;
+                d.violations.forEach(function (v) { total += v.violationNumber; });
+            });
+            return { message: days[0].organizationName + ":" + total + ":" + penalty };
+            """;
+
+        var sender = new FakeMessageService("tg");
+        var now = DateTime.Now;
+        var sut = CreateSut(
+            sender,
+            globalEnabled: true,
+            now,
+            violations:
+            [
+                new CrptViolationsDailyEntity
+                {
+                    Inn = "246412218294",
+                    Date = date,
+                    PenaltyAmountRub = 1500,
+                    Violations =
+                    [
+                        new CrptViolationItem
+                        {
+                            ProductGroup = 8,
+                            ViolationNumber = 2,
+                            ViolationResultName = "Просрочка"
+                        }
+                    ]
+                }
+            ],
+            organizations: [new OrganizationEntity { Inn = "246412218294", Name = "Ромашка" }]);
+
+        var result = await sut.Preview(script);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("Ромашка:2:1500", result.Value.Message);
+    }
+
+    [Fact]
     public async Task RunDueTemplates_null_канал_группы_не_падает()
     {
         var sender = new FakeMessageService("tg");
@@ -104,7 +161,9 @@ public class AlertTemplateRunServiceTests
         DateTime now,
         string? script = null,
         IReadOnlyList<MarkCheckStatisticsEntity>? statistics = null,
-        bool nullGroupChannel = false)
+        bool nullGroupChannel = false,
+        IReadOnlyList<CrptViolationsDailyEntity>? violations = null,
+        IReadOnlyList<OrganizationEntity>? organizations = null)
     {
         var factory = new FakeMessageServiceFactory
         {
@@ -169,6 +228,8 @@ public class AlertTemplateRunServiceTests
             new AlertDatasetScriptExecutor(),
             instances,
             new FakeStatisticsRepository(statistics),
+            new FakeViolationsRepository(violations),
+            new FakeOrganizationRepository(organizations),
             parameters,
             groups,
             factory);
@@ -275,8 +336,49 @@ public class AlertTemplateRunServiceTests
 
         public Task<Result> Delete(string entityId) => throw new NotImplementedException();
 
+        public Task<Result> DeleteByNodeId(string nodeId) => throw new NotImplementedException();
+
         public Task<Result<List<MarkCheckStatisticsEntity>>> GetByDateRange(DateTime dateFrom, DateTime dateTo)
             => Task.FromResult(Result.Success(_items));
+    }
+
+    private sealed class FakeViolationsRepository : ICrptViolationsRepository
+    {
+        private readonly List<CrptViolationsDailyEntity> _items;
+
+        public FakeViolationsRepository(IReadOnlyList<CrptViolationsDailyEntity>? items = null)
+        {
+            _items = items?.ToList() ?? [];
+        }
+
+        public Task<Result<List<DateOnly>>> GetDates(string inn, DateOnly from, DateOnly to)
+            => throw new NotImplementedException();
+
+        public Task<Result<CrptViolationsDailyEntity>> Get(string id) => throw new NotImplementedException();
+
+        public Task<Result> Upsert(CrptViolationsDailyEntity entity) => throw new NotImplementedException();
+
+        public Task<Result<List<CrptViolationsDailyEntity>>> GetByDateRange(DateTime dateFrom, DateTime dateTo)
+            => Task.FromResult(Result.Success(_items));
+    }
+
+    private sealed class FakeOrganizationRepository : IOrganizationRepository
+    {
+        private readonly List<OrganizationEntity> _items;
+
+        public FakeOrganizationRepository(IReadOnlyList<OrganizationEntity>? items = null)
+        {
+            _items = items?.ToList() ?? [];
+        }
+
+        public Task<Result> Create(OrganizationEntity entity) => throw new NotImplementedException();
+        public Task<Result> Update(OrganizationEntity entity) => throw new NotImplementedException();
+        public Task<Result<OrganizationEntity>> GetById(string id) => throw new NotImplementedException();
+        public Task<Result<OrganizationEntity>> GetByInn(string inn) => throw new NotImplementedException();
+        public Task<Result> Delete(string id) => throw new NotImplementedException();
+        public Task<PaginatedResponse<OrganizationEntity>> List(int pageNumber, int pageSize)
+            => throw new NotImplementedException();
+        public Task<List<OrganizationEntity>> All() => Task.FromResult(_items);
     }
 
     private sealed class FakeParametersService : IParametersService

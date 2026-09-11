@@ -261,6 +261,11 @@ public class InstanceManagerService : IInstanceManagerService
     public async Task<bool> Delete(string token)
     {
         var entitySearch = await _instanceRepository.ByToken(token);
+        var nodeId = entitySearch.IsSuccess ? entitySearch.Value.Id : token;
+
+        var statsResult = await _marksCheckStatisticRepository.DeleteByNodeId(nodeId);
+        if (statsResult.IsFailure)
+            return false;
 
         if (entitySearch.IsFailure)
             return true;

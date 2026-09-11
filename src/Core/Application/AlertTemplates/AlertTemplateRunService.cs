@@ -8,8 +8,12 @@ using Domain.Entitys.AlertTemplates.Interfaces;
 using Domain.Entitys.Instance;
 using Domain.Entitys.Interfaces;
 using Domain.Configuration.Options;
+using Domain.Entitys.CrptViolations;
+using Domain.Entitys.CrptViolations.Interfaces;
 using Domain.Entitys.MarkCheckStatistics.Interfaces;
 using Domain.Entitys.MarksCheckStatistic;
+using Domain.Entitys.Organization.Interfaces;
+using Domain.Entitys.SettingsSchema;
 using Microsoft.Extensions.Logging;
 
 namespace Application.AlertTemplates;
@@ -25,6 +29,8 @@ public class AlertTemplateRunService : IAlertTemplateRunService
     private readonly IAlertDatasetScriptExecutor _executor;
     private readonly IInstanceRepository _instances;
     private readonly IMarksCheckStatisticRepository _statistics;
+    private readonly ICrptViolationsRepository _violations;
+    private readonly IOrganizationRepository _organizations;
     private readonly IParametersService _parameters;
     private readonly IInstanceGroupRepository _groups;
     private readonly IMessageServiceFactory _messageServiceFactory;
@@ -36,6 +42,8 @@ public class AlertTemplateRunService : IAlertTemplateRunService
         IAlertDatasetScriptExecutor executor,
         IInstanceRepository instances,
         IMarksCheckStatisticRepository statistics,
+        ICrptViolationsRepository violations,
+        IOrganizationRepository organizations,
         IParametersService parameters,
         IInstanceGroupRepository groups,
         IMessageServiceFactory messageServiceFactory)
@@ -46,6 +54,8 @@ public class AlertTemplateRunService : IAlertTemplateRunService
         _executor = executor;
         _instances = instances;
         _statistics = statistics;
+        _violations = violations;
+        _organizations = organizations;
         _parameters = parameters;
         _groups = groups;
         _messageServiceFactory = messageServiceFactory;
@@ -71,6 +81,7 @@ public class AlertTemplateRunService : IAlertTemplateRunService
         var bot = (await _parameters.Current()).BotSettings;
         var global = AlertChannel.FromBotSettings(bot);
         var statistics = await LoadStatistics();
+        var violations = await LoadViolations();
 
         foreach (var group in groups)
         {
@@ -79,7 +90,7 @@ public class AlertTemplateRunService : IAlertTemplateRunService
                 continue;
 
             var groupInstances = instances.Where(instance => instance.GroupId == group.Id).ToList();
-            var sendResult = await RunTemplatesForChannel(due, groupInstances, channel, statistics, bot);
+            var sendResult = await RunTemplatesForChannel(due, groupInstances, channel, statistics, violations, bot);
             if (sendResult.IsFailure)
                 return sendResult;
         }
@@ -93,7 +104,7 @@ public class AlertTemplateRunService : IAlertTemplateRunService
             .ToList();
 
         if (global.IsEnabled)
-            return await RunTemplatesForChannel(due, fallback, global, statistics, bot);
+            return await RunTemplatesForChannel(due, fallback, global, statistics, violations, bot);
 
         return Result.Success();
     }
@@ -118,9 +129,10 @@ public class AlertTemplateRunService : IAlertTemplateRunService
         List<InstanceEntity> instances,
         AlertChannel channel,
         IReadOnlyList<MarkCheckStatisticsEntity> statistics,
+        IReadOnlyList<AlertViolationDaySnapshot> violations,
         TelegramBotSetting bot)
     {
-        var contextResult = BuildContext(instances, statistics, bot);
+        var contextResult = BuildContext(instances, statistics, violations, bot);
         if (contextResult.IsFailure)
             return Result.Failure(contextResult.Error);
 
@@ -172,12 +184,13 @@ public class AlertTemplateRunService : IAlertTemplateRunService
             return Result.Failure<AlertDatasetContext>(instancesResult.Error);
 
         var bot = (await _parameters.Current()).BotSettings;
-        return BuildContext(instancesResult.Value, await LoadStatistics(), bot);
+        return BuildContext(instancesResult.Value, await LoadStatistics(), await LoadViolations(), bot);
     }
 
     private Result<AlertDatasetContext> BuildContext(
         IReadOnlyList<InstanceEntity> entities,
         IReadOnlyList<MarkCheckStatisticsEntity> statisticsEntities,
+        IReadOnlyList<AlertViolationDaySnapshot> violations,
         TelegramBotSetting bot)
     {
         var now = DateTimeOffset.Now;
@@ -197,6 +210,7 @@ public class AlertTemplateRunService : IAlertTemplateRunService
             Now = now,
             Instances = instances,
             Statistics = statistics,
+            Violations = violations,
             Settings = new AlertSettingsSnapshot
             {
                 OfflineNodeAlertInterval = bot.OfflineNodeAlertInterval,
@@ -230,6 +244,68 @@ public class AlertTemplateRunService : IAlertTemplateRunService
         }
 
         return statisticsResult.Value;
+    }
+
+    /// <summary>
+    /// Берёт дни отклонений ЧЗ за тот же период, что и статистика проверок.
+    /// </summary>
+    private async Task<IReadOnlyList<AlertViolationDaySnapshot>> LoadViolations()
+    {
+        var now = DateTimeOffset.Now;
+        var violationsResult = await _violations.GetByDateRange(
+            now.Date.AddDays(-StatisticsLookbackDays),
+            now.Date);
+
+        if (violationsResult.IsFailure)
+        {
+            _logger.LogWarning("Отклонения ЧЗ для шаблонов недоступны: {Error}", violationsResult.Error);
+            return [];
+        }
+
+        var organizations = await _organizations.All();
+        var names = organizations
+            .Where(item => !string.IsNullOrWhiteSpace(item.Inn))
+            .GroupBy(item => item.Inn.Trim())
+            .ToDictionary(group => group.Key, group => group.First().Name);
+
+        return violationsResult.Value
+            .Select(entity => ToViolationSnapshot(entity, names))
+            .ToList();
+    }
+
+    private static AlertViolationDaySnapshot ToViolationSnapshot(
+        CrptViolationsDailyEntity entity,
+        IReadOnlyDictionary<string, string> names)
+    {
+        names.TryGetValue(entity.Inn, out var organizationName);
+
+        return new AlertViolationDaySnapshot
+        {
+            Inn = entity.Inn,
+            OrganizationName = organizationName ?? entity.Inn,
+            Date = entity.Date,
+            DateIso = ToDateIso(entity.Date),
+            DateYmd = ToDateYmd(entity.Date),
+            PenaltyAmountRub = entity.PenaltyAmountRub,
+            Violations = entity.Violations.Select(item => new AlertViolationItemSnapshot
+            {
+                ProductGroup = item.ProductGroup,
+                ProductGroupName = TrueApiProductGroupCatalog.TitleByCode(item.ProductGroup),
+                Region = item.Region,
+                ViolationResult = item.ViolationResult,
+                ViolationResultName = item.ViolationResultName,
+                ViolationNumber = item.ViolationNumber
+            }).ToList()
+        };
+    }
+
+    /// <summary>
+    /// Календарная дата документа в локальной зоне сервера.
+    /// </summary>
+    private static string ToDateYmd(long unixValue)
+    {
+        var milliseconds = unixValue > 1_000_000_000_000 ? unixValue : unixValue * 1000;
+        return DateTimeOffset.FromUnixTimeMilliseconds(milliseconds).LocalDateTime.ToString("yyyy-MM-dd");
     }
 
     /// <summary>

@@ -12,7 +12,8 @@ public static class AlertTemplateDefaults
         Template("check-lm-sync-date", "Синхронизация локальных модулей", CheckLmSyncDate),
         Template("check-ts-piot-status", "Состояние ТС ПИоТ", CheckTsPiotStatus),
         Template("check-ts-piot-license", "Лицензии ТС ПИоТ", CheckTsPiotLicense),
-        Template("check-ts-piot-versions", "Версии ТС ПИоТ", CheckTsPiotVersions)
+        Template("check-ts-piot-versions", "Версии ТС ПИоТ", CheckTsPiotVersions),
+        Template("crpt-violations-yesterday", "Сводка отклонений ЧЗ", CrptViolationsYesterday)
     ];
 
     private static AlertTemplateEntity Template(string id, string name, string script) => new()
@@ -182,5 +183,43 @@ public static class AlertTemplateDefaults
         });
 
         return { items: items };
+        """;
+
+    private const string CrptViolationsYesterday =
+        """
+        function pad(n) { return n < 10 ? "0" + n : "" + n; }
+        function ymd(d) {
+            return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+        }
+
+        const today = new Date(now);
+        const yesterday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1);
+        const target = ymd(yesterday);
+        const days = (violations || []).filter(function (d) { return d.dateYmd === target; });
+
+        if (days.length === 0)
+            return;
+
+        var total = 0;
+        var penalty = 0;
+        var items = [];
+
+        days.forEach(function (d) {
+            penalty += d.penaltyAmountRub || 0;
+            (d.violations || []).forEach(function (v) {
+                total += v.violationNumber || 0;
+                items.push(
+                    "⚠️<b>" + d.organizationName + "</b> " + (v.productGroupName || v.productGroup) +
+                    "%0A" + (v.region || "") + ": <u>" + (v.violationResultName || v.violationResult) +
+                    "</u> — " + v.violationNumber
+                );
+            });
+        });
+
+        return {
+            title: "Отклонения ЧЗ за " + yesterday.toLocaleDateString("ru-RU"),
+            message: "Отклонений: " + total + ", штрафы: " + penalty + " ₽",
+            items: items
+        };
         """;
 }

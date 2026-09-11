@@ -20,6 +20,7 @@ public static class TrueApiIntegrationRegistration
         });
 
         services.AddHostedService<TrueApiTokenLoaderWorker>();
+        services.AddHostedService<CrptViolationsLoaderWorker>();
 
         return services;
     }

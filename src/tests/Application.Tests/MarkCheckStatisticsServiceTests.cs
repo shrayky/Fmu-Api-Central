@@ -85,6 +85,8 @@ public class MarkCheckStatisticsServiceTests
 
         public Task<Result> Delete(string entityId) => throw new NotImplementedException();
 
+        public Task<Result> DeleteByNodeId(string nodeId) => throw new NotImplementedException();
+
         public Task<Result<List<MarkCheckStatisticsEntity>>> GetByDateRange(DateTime dateFrom, DateTime dateTo)
             => Task.FromResult(Result.Success(Records));
     }

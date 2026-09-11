@@ -12,8 +12,9 @@ public class DatabaseNames
     public const string GisMtDocuments = "fmu-api-central-gismt-documents";
     public const string GisMtMarks = "fmu-api-central-gismt-marks";
     public const string AlertTemplates = "fmu-api-central-alert-templates";
+    public const string CrptViolations = "fmu-api-central-crpt-violations";
 
-    public static string[] All() => [Users, Instance, InstanceGroup, SettingsSchema, Organization, SoftwareUpdateFiles, MarkCheckingStatistic, GisMtDocuments, GisMtMarks, AlertTemplates];
+    public static string[] All() => [Users, Instance, InstanceGroup, SettingsSchema, Organization, SoftwareUpdateFiles, MarkCheckingStatistic, GisMtDocuments, GisMtMarks, AlertTemplates, CrptViolations];
 
-    public static string[] ExcludedFromExport() => [Users, SoftwareUpdateFiles, MarkCheckingStatistic, GisMtDocuments, GisMtMarks];
+    public static string[] ExcludedFromExport() => [Users, SoftwareUpdateFiles, MarkCheckingStatistic, GisMtDocuments, GisMtMarks, CrptViolations];
 }

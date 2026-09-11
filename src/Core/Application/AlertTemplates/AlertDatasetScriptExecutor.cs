@@ -27,6 +27,7 @@ public class AlertDatasetScriptExecutor : IAlertDatasetScriptExecutor
             {
                 instances = context.Instances,
                 statistics = context.Statistics,
+                violations = context.Violations,
                 now = context.Now.ToUniversalTime().ToString("O"),
                 settings = context.Settings
             }, JsonOptions);
@@ -46,6 +47,7 @@ public class AlertDatasetScriptExecutor : IAlertDatasetScriptExecutor
                 var __ctx = JSON.parse(__payload);
                 var instances = __ctx.instances;
                 var statistics = __ctx.statistics;
+                var violations = __ctx.violations;
                 var now = __ctx.now;
                 var settings = __ctx.settings;
                 var result;

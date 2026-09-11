@@ -9,6 +9,11 @@ export const MENU_ITEMS = {
         value: "Статистика проверок",
         icon: "mdi mdi-table-chart"
     },
+    CRPT_VIOLATIONS: {
+        id: "crptViolations",
+        value: "Отклонения ЧЗ",
+        icon: "mdi mdi-frame-exclamation"
+    },
     INSTANCE_GROUPS: {
         id: "instanceGroups",
         value: "Группы инстансов",

@@ -48,6 +48,20 @@ public static class TrueApiProductGroupCatalog
         };
 
     /// <summary>
+    /// Возвращает русское название группы по числовому коду ЧЗ.
+    /// </summary>
+    public static string TitleByCode(int code)
+    {
+        foreach (var item in ByName.Values)
+        {
+            if (item.Code == code)
+                return item.GroupName;
+        }
+
+        return code.ToString();
+    }
+
+    /// <summary>
     /// Собирает объект группы по коду из ответа Честного знака.
     /// </summary>
     public static GisMtConnectedProductGroup Resolve(string raw)

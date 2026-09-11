@@ -8,6 +8,7 @@ using Domain.Entitys.MarksCheckStatistic;
 using Domain.Entitys.Organization;
 using Domain.Entitys.AlertTemplates;
 using Domain.Entitys.SettingsSchema;
+using Domain.Entitys.CrptViolations;
 using Domain.GisMt.Entity;
 using Domain.Entitys.SoftwareUpdateFiles;
 
@@ -25,6 +26,7 @@ public class Context
     public ICouchDatabase<UniversalDocument<GisMtDocumentEntity>> GisMtDocuments { get; }
     public ICouchDatabase<UniversalDocument<GisMtMarkEntity>> GisMtMarks { get; }
     public ICouchDatabase<UniversalDocument<AlertTemplateEntity>> AlertTemplates { get; }
+    public ICouchDatabase<UniversalDocument<CrptViolationsDailyEntity>> CrptViolations { get; }
 
     public Context(CouchClient client)
     {
@@ -38,5 +40,6 @@ public class Context
         GisMtDocuments = client.GetDatabase<UniversalDocument<GisMtDocumentEntity>>(DatabaseNames.GisMtDocuments);
         GisMtMarks = client.GetDatabase<UniversalDocument<GisMtMarkEntity>>(DatabaseNames.GisMtMarks);
         AlertTemplates = client.GetDatabase<UniversalDocument<AlertTemplateEntity>>(DatabaseNames.AlertTemplates);
+        CrptViolations = client.GetDatabase<UniversalDocument<CrptViolationsDailyEntity>>(DatabaseNames.CrptViolations);
     }
 }

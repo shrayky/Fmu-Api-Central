@@ -39,8 +39,10 @@ class AlertTemplateElementView {
             collapseFullscreen: "Свернуть",
             previewEmpty: "Набор пуст — оповещение отправлено не будет",
             previewTitle: "Набор данных",
-            help: "Скрипт получает <code>instances</code>, <code>statistics</code>, <code>now</code>, <code>settings</code> " +
-                "и функцию <code>isVersionBelowThreshold</code>. Верните <code>{ title, items }</code>, массив строк или текст. " +
+            help: "Скрипт получает <code>instances</code>, <code>statistics</code>, <code>violations</code>, <code>now</code>, <code>settings</code> " +
+                "и функцию <code>isVersionBelowThreshold</code>. <code>violations</code> — дни ЧЗ за 30 суток " +
+                "(<code>dateYmd</code>, <code>penaltyAmountRub</code>, строки отклонений). " +
+                "Верните <code>{ title, items }</code>, массив строк или текст. " +
                 "Пустой набор не отправляется. Запуск по расписанию шаблона."
         };
 

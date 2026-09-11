@@ -5,6 +5,7 @@ using CouchDB.Driver.Options;
 using Domain.Attributes;
 using Domain.Configuration.Options;
 using Domain.Entitys.AlertTemplates.Interfaces;
+using Domain.Entitys.CrptViolations.Interfaces;
 using Domain.Entitys.Interfaces;
 using Domain.Entitys.MarkCheckStatistics.Interfaces;
 using Domain.Entitys.Organization.Interfaces;
@@ -74,6 +75,7 @@ public static class DatabaseRegistrationExtensions
         services.AddScoped<IGisMtDocumentRepository, GisMtDocumentRepository>();
         services.AddScoped<IGisMtMarkRepository, GisMtMarkRepository>();
         services.AddScoped<IAlertTemplateRepository, AlertTemplateRepository>();
+        services.AddScoped<ICrptViolationsRepository, CrptViolationsRepository>();
 
         services.AddHttpClient("CouchDbState", client =>
         {

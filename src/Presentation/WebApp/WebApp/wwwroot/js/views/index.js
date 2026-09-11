@@ -19,6 +19,7 @@ import createInstanceGroupListView from '../modules/instanceGroup/instanceGroupL
 import createSettingsSchemaListView from '../modules/settingsSchema/settingsSchemaListView.js';
 import createOrganizationListView from '../modules/organization/organizationListView.js';
 import createMarkCheckStatisticsListView from '../modules/markCheckStatistics/markCheckStatisticsListView.js';
+import createCrptViolationsListView from '../modules/crptViolations/crptViolationsListView.js';
 import createAlertSettingsView from '../modules/alertSettingsView.js';
 import createServiceView from '../modules/serviceView.js';
 import createUsersListView from '../modules/users/usersListView.js';
@@ -44,6 +45,7 @@ class App {
         this.router.register("settingsSchemas", async (id) => await createSettingsSchemaListView(id));
         this.router.register("organizations", async (id) => await createOrganizationListView(id));
         this.router.register("markCheckStatistics", async (id) => await createMarkCheckStatisticsListView(id));
+        this.router.register("crptViolations", async (id) => await createCrptViolationsListView(id));
         this.router.register("telegramBotSettings", async (id) => await createAlertSettingsView(id));
         this.router.register("service", async (id) => await createServiceView(id));
         this.router.register("usersList", async (id) => await createUsersListView(id));

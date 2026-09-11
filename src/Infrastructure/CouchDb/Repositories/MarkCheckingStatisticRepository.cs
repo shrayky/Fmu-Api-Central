@@ -66,6 +66,55 @@ public class MarkCheckStatisticsRepository : BaseCouchDbRepository<MarkCheckStat
         }
     }
 
+    public async Task<Result> DeleteByNodeId(string nodeId)
+    {
+        if (!_appState.DbState())
+            return Result.Failure(DatabaseUnavailable);
+
+        try
+        {
+            var queryLimit = (await _parameters.Current()).DatabaseConnection.QueryLimit;
+            var idPrefix = $"{nodeId}_";
+
+            while (true)
+            {
+                var byNodeId = await _database
+                    .Where(document => document.Data.NodeId == nodeId)
+                    .Take(queryLimit)
+                    .ToListAsync();
+
+                // Документы без nodeId: id = {nodeId}_{unixDate}
+                var byIdPrefix = await _database
+                    .Where(document => document.Id.StartsWith(idPrefix))
+                    .Take(queryLimit)
+                    .ToListAsync();
+
+                var ids = byNodeId
+                    .Concat(byIdPrefix)
+                    .Select(document => document.Data.Id)
+                    .Where(id => !string.IsNullOrEmpty(id))
+                    .Distinct()
+                    .ToList();
+
+                if (ids.Count == 0)
+                    return Result.Success();
+
+                foreach (var id in ids)
+                {
+                    if (!await DeleteAsync(id))
+                        return Result.Failure($"Не удалось удалить статистику с Id {id} из БД");
+                }
+
+                if (ids.Count < queryLimit)
+                    return Result.Success();
+            }
+        }
+        catch (Exception ex)
+        {
+            return Result.Failure($"Ошибка при удалении статистики узла из БД: {ex.Message}");
+        }
+    }
+
     /// <summary>
     /// Возвращает записи статистики проверок за указанный период.
     /// </summary>

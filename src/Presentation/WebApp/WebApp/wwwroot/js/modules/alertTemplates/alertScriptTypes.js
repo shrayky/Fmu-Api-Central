@@ -38,6 +38,25 @@ interface AlertStatistic {
     successRatePercentage: number;
 }
 
+interface AlertViolationItem {
+    productGroup: number;
+    productGroupName: string;
+    region: string;
+    violationResult: string;
+    violationResultName: string;
+    violationNumber: number;
+}
+
+interface AlertViolationDay {
+    inn: string;
+    organizationName: string;
+    date: number;
+    dateIso: string;
+    dateYmd: string;
+    penaltyAmountRub: number;
+    violations: AlertViolationItem[];
+}
+
 interface AlertLocalModuleSettings {
     versionAlert: string;
     daysWithoutSynchronization: number;
@@ -64,6 +83,7 @@ interface AlertDataset {
 
 declare const instances: AlertInstance[];
 declare const statistics: AlertStatistic[];
+declare const violations: AlertViolationDay[];
 declare const now: string;
 declare const settings: AlertSettings;
 declare function isVersionBelowThreshold(currentVersion: string, thresholdVersion: string): boolean;

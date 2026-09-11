@@ -17,7 +17,8 @@ public class DatabaseIndexes
                 { DatabaseNames.MarkCheckingStatistic, MarkCheckingStatisticIndexSchema() },
                 { DatabaseNames.GisMtDocuments, GisMtDocumentsIndexSchema() },
                 { DatabaseNames.GisMtMarks, GisMtMarksIndexSchema() },
-                { DatabaseNames.AlertTemplates, AlertTemplatesIndexSchema() }
+                { DatabaseNames.AlertTemplates, AlertTemplatesIndexSchema() },
+                { DatabaseNames.CrptViolations, CrptViolationsIndexSchema() }
             };
     }
 
@@ -63,6 +64,7 @@ public class DatabaseIndexes
     private static CouchDbIndexDefinition[] MarkCheckingStatisticIndexSchema() =>
         [
             new("date-idx", new(["data.date"])),
+            new("node-id-idx", new(["data.nodeId"])),
         ];
 
     private static CouchDbIndexDefinition[] GisMtDocumentsIndexSchema() =>
@@ -84,5 +86,12 @@ public class DatabaseIndexes
     private static CouchDbIndexDefinition[] AlertTemplatesIndexSchema() =>
         [
             new("name-idx", new(["data.name"])),
+        ];
+
+    private static CouchDbIndexDefinition[] CrptViolationsIndexSchema() =>
+        [
+            new("inn-idx", new(["data.inn"])),
+            new("date-idx", new(["data.date"])),
+            new("inn-date-idx", new(["data.inn", "data.date"])),
         ];
 }
