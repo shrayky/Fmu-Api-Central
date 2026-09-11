@@ -97,6 +97,30 @@ class InstanceMonitoringService {
         return data.value;
     }
 
+    async downloadCheckerDistribution(token) {
+        const jwt = await this.authService.getValidToken();
+        const url = `${this.authService.getServerUrl()}${this.apiEndpoint}/${encodeURIComponent(token)}/checker-distribution`;
+        const response = await fetch(url, {
+            method: "GET",
+            headers: {
+                Authorization: `Bearer ${jwt}`
+            }
+        });
+
+        if (response.status === 401) {
+            this.authService.redirectToLogin();
+            return { result: false, error: "Unauthorized", value: null };
+        }
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            return { result: false, error: errorText || "Не удалось скачать дистрибутив", value: null };
+        }
+
+        const blob = await response.blob();
+        return { result: true, error: null, value: blob };
+    }
+
 }
 
 export default new InstanceMonitoringService();

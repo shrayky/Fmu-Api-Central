@@ -12,4 +12,7 @@ public class ServerSettings
 
     [JsonPropertyName("trustedProxies")]
     public List<string> TrustedProxies { get; set; } = [];
+
+    [JsonPropertyName("publicAddress")]
+    public string PublicAddress { get; set; } = string.Empty;
 }

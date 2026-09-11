@@ -1,7 +1,7 @@
 // js/modules/serverSettingsView.js
 
 import { loadConfiguration, saveConfigurationSections } from '../services/ConfigurationService.js';
-import { Label, Number, CheckBox } from '../utils/ui.js';
+import { Label, Number, CheckBox, Text } from '../utils/ui.js';
 
 class SettingsView {
     constructor(id) {
@@ -13,6 +13,7 @@ class SettingsView {
             serverSettings: "Настройки сервера",
             loggerSettings: "Настройки логирования",
             apiIpPort: "IP-порт API",
+            publicAddress: "Публичный адрес сервера (для checker)",
             corsOrigins: "Дополнительные origin WebApp (по одному в строке). localhost:2580 уже разрешён",
             trustedProxies: "Доверенные прокси (IP Caddy, по одному в строке). 127.0.0.1 уже доверен",
             isEnabled: "Включено",
@@ -37,6 +38,7 @@ class SettingsView {
 
         this.serverSettings = {
             apiIpPort: configuration.serverSettings.apiIpPort,
+            publicAddress: configuration.serverSettings.publicAddress || "",
             corsOrigins: (configuration.serverSettings.corsOrigins || []).join("\n"),
             trustedProxies: (configuration.serverSettings.trustedProxies || []).join("\n"),
         };
@@ -63,6 +65,9 @@ class SettingsView {
         serverSettings.rows.push(
             Label("serverSettingsTitle", this.labels.serverSettings),
             Number(this.labels.apiIpPort, "apiIpPort", this.serverSettings.apiIpPort),
+            Text(this.labels.publicAddress, "publicAddress", this.serverSettings.publicAddress, {
+                placeholder: "https://central.example:2579"
+            }),
             {
                 view: "textarea",
                 label: this.labels.corsOrigins,
@@ -165,6 +170,7 @@ class SettingsView {
             const saveResult = await saveConfigurationSections({
                 serverSettings: _ => ({
                   apiIpPort: parseInt(values.apiIpPort),
+                  publicAddress: String(values.publicAddress || "").trim(),
                   corsOrigins: String(values.corsOrigins || "")
                     .split(/\r?\n/)
                     .map(item => item.trim())

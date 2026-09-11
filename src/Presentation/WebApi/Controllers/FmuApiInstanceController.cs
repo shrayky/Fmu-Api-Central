@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Application.Instance.Interfaces;
 using Domain.Entitys.Instance.Dto;
 using Domain.Entitys.Instance.Interfaces;
 using Microsoft.AspNetCore.Authorization;
@@ -12,10 +13,14 @@ namespace WebApi.Controllers;
 public class FmuApiInstanceController : ControllerBase
 {
     private readonly IInstanceManagerService  _managerService;
+    private readonly ICheckerDistributionService _checkerDistribution;
 
-    public FmuApiInstanceController(IInstanceManagerService managerService)
+    public FmuApiInstanceController(
+        IInstanceManagerService managerService,
+        ICheckerDistributionService checkerDistribution)
     {
         _managerService = managerService;
+        _checkerDistribution = checkerDistribution;
     }
     
     [HttpPut]
@@ -64,5 +69,20 @@ public class FmuApiInstanceController : ControllerBase
         var result = await _managerService.AssignForcedUpdate(request.Tokens, request.UpdateId);
 
         return result.IsSuccess ? Ok(result.Value) : BadRequest(result.Error);
+    }
+
+    [HttpGet("{token}/checker-distribution")]
+    public async Task<IActionResult> DownloadCheckerDistribution(string token)
+    {
+        var result = await _checkerDistribution.Build(token);
+
+        if (result.IsFailure)
+            return BadRequest(result.Error);
+
+        var download = result.Value;
+        return new FileStreamResult(download.Content, download.ContentType)
+        {
+            FileDownloadName = download.FileName
+        };
     }
 }

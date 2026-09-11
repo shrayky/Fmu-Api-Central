@@ -1,5 +1,6 @@
 import instanceMonitoringService from '../../services/instanceMonitoringService.js';
 import instanceGroupService from '../../services/instanceGroupService.js';
+import { loadConfiguration } from '../../services/ConfigurationService.js';
 import { Text, CheckBox } from '../../utils/ui.js';
 
 class InstanceElementView {
@@ -17,6 +18,9 @@ class InstanceElementView {
             invalidTokenMessage: "укажите токен",
             createButton: "Сохранить",
             cancelButton: "Отмена",
+            download: "Скачать",
+            needToken: "Укажите токен инстанса",
+            errorDownload: "Не удалось скачать дистрибутив",
             group: "Группа",
             selectGroup: "Выберите группу",
             settingsModified: "Выгрузить настройки"
@@ -31,13 +35,15 @@ class InstanceElementView {
             generateToken: "generateToken",
             secretKey: "secretKey",
             group: "instanceGroup",
-            settingsModified: "instanceSettingsModified"
+            settingsModified: "instanceSettingsModified",
+            downloadBtn: "instanceDownloadBtn"
         }
     }
 
     async showDialog(editedData = [], onSuccess, onClose) {
         this.editedData = editedData || {};
         const groupOptions = await this._loadGroupOptions();
+        const canDownload = await this._hasPublicAddress();
         const currentGroupId = this.editedData.group?.id || "";
 
         webix.ui({
@@ -88,7 +94,7 @@ class InstanceElementView {
 
                     this._createTokenField(editedData.id || ""),
 
-                    this._createButtons(onSuccess, onClose),
+                    this._createButtons(onSuccess, onClose, canDownload),
                 ]
             }
         }).show();
@@ -108,29 +114,92 @@ class InstanceElementView {
         }, 100);
     }
 
-    _createButtons(onSuccess, onClose) {
-        return {
-            cols: [
-                { 
-                    view: "button",
-                    value: this.LABELS.createButton,
-                    click: () => this._sendInstance(onSuccess),
-                    hotkey: "alt+enter"
+    _createButtons(onSuccess, onClose, canDownload) {
+        const buttons = [];
+
+        if (canDownload) {
+            buttons.push({
+                view: "button",
+                id: this.NAMES.downloadBtn,
+                value: this.LABELS.download,
+                click: () => this._downloadDistribution()
+            });
+        }
+
+        buttons.push(
+            {
+                view: "button",
+                value: this.LABELS.createButton,
+                click: () => this._sendInstance(onSuccess),
+                hotkey: "alt+enter"
+            },
+            {
+                view: "button",
+                value: this.LABELS.cancelButton,
+                click: () => {
+                    if (onClose) {
+                        onClose();
+                    }
+
+                    $$(this.NAMES.formId).close();
                 },
-                { 
-                    view: "button",
-                    value: this.LABELS.cancelButton,
-                    click: () => {
-                        if (onClose) {
-                            onClose();
-                        }
-                        
-                        $$(this.NAMES.formId).close();
-                    },
-                    hotkey: "esc"
-                }
-            ]
-        };
+                hotkey: "esc"
+            }
+        );
+
+        return { cols: buttons };
+    }
+
+    async _hasPublicAddress() {
+        try {
+            const result = await loadConfiguration();
+            if (!result.result)
+                return false;
+
+            const address = result.value?.Content?.serverSettings?.publicAddress;
+            return !!(address && String(address).trim());
+        } catch {
+            return false;
+        }
+    }
+
+    async _downloadDistribution() {
+        const token = $$(this.NAMES.instanceToken)?.getValue()?.trim();
+        if (!token) {
+            webix.message({ text: this.LABELS.needToken, type: "error" });
+            return;
+        }
+
+        const form = $$(this.NAMES.formId);
+        webix.extend(form, webix.ProgressBar);
+        form.showProgress({ type: "icon" });
+        form.disable();
+
+        try {
+            const data = await instanceMonitoringService.downloadCheckerDistribution(token);
+            if (!data.result) {
+                webix.message({ text: data.error || this.LABELS.errorDownload, type: "error" });
+                return;
+            }
+
+            this._downloadBlob(data.value, "fmu-api.zip");
+        } catch (error) {
+            webix.message({ text: error.message, type: "error" });
+        } finally {
+            form.enable();
+            form.hideProgress();
+        }
+    }
+
+    _downloadBlob(blob, fileName) {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
     }
 
     _createTokenField(token = "") {
