@@ -24,6 +24,9 @@ public record InstanceGroupView
     [JsonPropertyName("settingsSchema")]
     public SettingsSchemaLink SettingsSchema { get; set; } = new();
 
+    [JsonPropertyName("organizationIds")]
+    public List<string> OrganizationIds { get; set; } = [];
+
     [JsonPropertyName("alertChannel")]
     public AlertChannel AlertChannel { get; set; } = new();
 }

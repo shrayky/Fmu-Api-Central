@@ -14,4 +14,5 @@ public interface IInstanceGroupRepository
     Task<List<InstanceGroupEntity>> All();
     Task<List<InstanceGroupEntity>> ByListId(List<string> ids);
     Task<Result> ClearSettingsSchemaLink(string settingsSchemaId);
+    Task<Result> ClearOrganizationLink(string organizationId);
 }

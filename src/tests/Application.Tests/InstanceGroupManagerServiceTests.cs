@@ -135,6 +135,26 @@ public class InstanceGroupManagerServiceTests
         Assert.Equal(BotProvidersEnum.ntfy, repo.Store["g1"].AlertChannel.Provider);
     }
 
+    /// <summary>
+    /// В группу пишется список организаций для выгрузки токенов.
+    /// </summary>
+    [Fact]
+    public async Task Create_пишет_организации()
+    {
+        var repo = new FakeGroupRepository();
+        var sut = CreateSut(repo);
+
+        var result = await sut.Create(new InstanceGroupView
+        {
+            Id = "g1",
+            Name = "Группа",
+            OrganizationIds = ["o1", "o2"]
+        });
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(["o1", "o2"], repo.Store["g1"].OrganizationIds);
+    }
+
     [Fact]
     public async Task TestChannel_включённый_шлёт_в_поля_тела()
     {
@@ -226,6 +246,9 @@ public class InstanceGroupManagerServiceTests
         public Task<List<InstanceGroupEntity>> ByListId(List<string> ids) => throw new NotImplementedException();
 
         public Task<Result> ClearSettingsSchemaLink(string settingsSchemaId)
+            => throw new NotImplementedException();
+
+        public Task<Result> ClearOrganizationLink(string organizationId)
             => throw new NotImplementedException();
     }
 

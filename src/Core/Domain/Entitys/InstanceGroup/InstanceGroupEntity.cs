@@ -9,5 +9,6 @@ public class InstanceGroupEntity : IHaveStringId
     public string Name { get; set; } = string.Empty;
     public bool AutoUpdateAllowed { get; set; }
     public string SettingsSchemaId { get; set; } = string.Empty;
+    public List<string> OrganizationIds { get; set; } = [];
     public AlertChannel AlertChannel { get; set; } = AlertChannel.Disabled();
 }

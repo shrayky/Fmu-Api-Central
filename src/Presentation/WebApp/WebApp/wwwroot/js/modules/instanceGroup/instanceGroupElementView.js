@@ -1,5 +1,6 @@
 import { Text, CheckBox, Number } from '../../utils/ui.js';
 import instanceGroupService from '../../services/instanceGroupService.js';
+import organizationService from '../../services/organizationService.js';
 import settingsSchemaService from '../../services/settingsSchemaService.js';
 
 class InstanceGroupElementView {
@@ -16,6 +17,9 @@ class InstanceGroupElementView {
             settingsSchema: "Схема настроек",
             selectSchema: "Выберите схему",
             mainTab: "Основная",
+            organizationsTab: "Организации",
+            organizationName: "Наименование",
+            organizationInn: "ИНН",
             channelTab: "Канал оповещения",
             channelEnabled: "Использовать",
             provider: "Протокол",
@@ -34,6 +38,7 @@ class InstanceGroupElementView {
             name: "instanceGroupName",
             autoUpdateAllowed: "instanceGroupAutoUpdateAllowed",
             settingsSchema: "instanceGroupSettingsSchema",
+            organizationsTable: "instanceGroupOrganizationsTable",
             channelEnabled: "instanceGroupChannelEnabled",
             channelFields: "instanceGroupChannelFields",
             provider: "instanceGroupProvider",
@@ -46,6 +51,7 @@ class InstanceGroupElementView {
         this.elementId = editedData.id || crypto.randomUUID();
         const schemaOptions = await this._loadSchemaOptions();
         const currentSchemaId = editedData.settingsSchema?.id || "";
+        const organizationRows = await this._loadOrganizationRows(editedData.organizationIds || []);
         const channel = editedData.alertChannel || {};
         const isEnabled = !!channel.isEnabled;
 
@@ -57,7 +63,7 @@ class InstanceGroupElementView {
             view: "window",
             id: this.NAMES.windowId,
             modal: true,
-            width: 640,
+            width: 720,
             position: "center",
             head: this.LABELS.formTitle,
             body: {
@@ -89,6 +95,15 @@ class InstanceGroupElementView {
                                             value: currentSchemaId,
                                             options: schemaOptions
                                         }
+                                    ]
+                                }
+                            },
+                            {
+                                header: this.LABELS.organizationsTab,
+                                body: {
+                                    padding: 10,
+                                    rows: [
+                                        this._organizationsTable(organizationRows)
                                     ]
                                 }
                             },
@@ -245,6 +260,7 @@ class InstanceGroupElementView {
                 id: schemaId,
                 name: schemaId ? (schemaItem?.value || "") : ""
             },
+            organizationIds: this._readOrganizationIds(),
             alertChannel: this._readChannel()
         };
 
@@ -277,6 +293,58 @@ class InstanceGroupElementView {
         }
 
         return true;
+    }
+
+    _organizationsTable(rows) {
+        return {
+            view: "datatable",
+            id: this.NAMES.organizationsTable,
+            select: "row",
+            height: 280,
+            checkboxRefresh: true,
+            columns: [
+                {
+                    id: "selected",
+                    header: { content: "masterCheckbox", css: "webix_ss_center" },
+                    template: "{common.checkbox()}",
+                    checkValue: true,
+                    uncheckValue: false,
+                    width: 50,
+                    css: { "text-align": "center" }
+                },
+                { id: "name", header: this.LABELS.organizationName, fillspace: true, sort: "string" },
+                { id: "inn", header: this.LABELS.organizationInn, width: 160, sort: "string" }
+            ],
+            data: rows
+        };
+    }
+
+    _readOrganizationIds() {
+        const table = $$(this.NAMES.organizationsTable);
+        if (!table) {
+            return [];
+        }
+
+        return table.serialize()
+            .filter((row) => row.selected)
+            .map((row) => row.id);
+    }
+
+    async _loadOrganizationRows(selectedIds) {
+        const selected = new Set((selectedIds || []).map((id) => String(id)));
+
+        try {
+            const page = await organizationService.list(1, 500);
+            return (page.content || []).map((item) => ({
+                id: item.id,
+                name: item.name || "",
+                inn: item.inn || "",
+                selected: selected.has(String(item.id))
+            }));
+        } catch (error) {
+            webix.message({ text: error.message, type: "error" });
+            return [];
+        }
     }
 
     async _loadSchemaOptions() {

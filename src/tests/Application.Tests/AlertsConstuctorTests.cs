@@ -209,5 +209,8 @@ public class AlertsConstuctorTests
 
         public Task<Result> ClearSettingsSchemaLink(string settingsSchemaId)
             => throw new NotImplementedException();
+
+        public Task<Result> ClearOrganizationLink(string organizationId)
+            => throw new NotImplementedException();
     }
 }

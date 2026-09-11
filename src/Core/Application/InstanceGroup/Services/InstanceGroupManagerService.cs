@@ -230,6 +230,10 @@ public class InstanceGroupManagerService : IInstanceGroupManagerService
         entity.Name = data.Name;
         entity.AutoUpdateAllowed = data.AutoUpdateAllowed;
         entity.SettingsSchemaId = data.SettingsSchema?.Id ?? string.Empty;
+        entity.OrganizationIds = (data.OrganizationIds ?? [])
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
         entity.AlertChannel = data.AlertChannel ?? AlertChannel.Disabled();
     }
 
@@ -248,6 +252,7 @@ public class InstanceGroupManagerService : IInstanceGroupManagerService
             Id = entity.SettingsSchemaId,
             Name = schemaName
         },
+        OrganizationIds = entity.OrganizationIds ?? [],
         AlertChannel = entity.AlertChannel ?? AlertChannel.Disabled()
     };
 

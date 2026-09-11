@@ -192,4 +192,35 @@ public class InstanceGroupsRepository : BaseCouchDbRepository<InstanceGroupEntit
             return Result.Failure(ex.Message);
         }
     }
+
+    public async Task<Result> ClearOrganizationLink(string organizationId)
+    {
+        if (!_appState.DbState())
+            return Result.Failure(DatabaseUnavailable);
+
+        try
+        {
+            var groups = await All();
+            foreach (var group in groups)
+            {
+                var ids = group.OrganizationIds;
+                if (ids is null || !ids.Exists(id =>
+                        string.Equals(id, organizationId, StringComparison.OrdinalIgnoreCase)))
+                    continue;
+
+                ids.RemoveAll(id =>
+                    string.Equals(id, organizationId, StringComparison.OrdinalIgnoreCase));
+
+                var update = await Update(group);
+                if (update.IsFailure)
+                    return update;
+            }
+
+            return Result.Success();
+        }
+        catch (Exception ex)
+        {
+            return Result.Failure(ex.Message);
+        }
+    }
 }

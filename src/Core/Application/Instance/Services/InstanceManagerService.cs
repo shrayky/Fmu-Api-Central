@@ -1,5 +1,6 @@
 using Application.SoftwareUpdates.Interfaces;
 using CSharpFunctionalExtensions;
+using Domain.AppState.Interfaces;
 using Domain.Attributes;
 using Domain.Configuration.Interfaces;
 using Domain.Configuration.Options;
@@ -20,6 +21,8 @@ using Domain.Entitys.SettingsSchema.Interfaces;
 using Domain.Entitys.SoftwareUpdateFiles;
 using Domain.Entitys.MarkCheckStatistics.Interfaces;
 using Domain.Entitys.MarksCheckStatistic;
+using Domain.Entitys.Organization.Interfaces;
+using Domain.TrueApiIntegration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Shared.Json;
@@ -38,12 +41,16 @@ public class InstanceManagerService : IInstanceManagerService
     private readonly Lazy<ISoftwareUpdatesManagerService> _softwareVersionsManager;
     private readonly IMarksCheckStatisticRepository _marksCheckStatisticRepository;
     private readonly IParametersService _parametersService;
+    private readonly IOrganizationRepository _organizationRepository;
+    private readonly IApplicationState _applicationState;
 
     public InstanceManagerService(ILogger<IInstanceManagerService> logger, IInstanceRepository instanceRepository,
         IInstanceGroupRepository instanceGroupRepository,
         ISettingsSchemaRepository settingsSchemaRepository,
         IServiceProvider serviceProvider, IMarksCheckStatisticRepository marksCheckStatisticRepository,
-        IParametersService parametersService)
+        IParametersService parametersService,
+        IOrganizationRepository organizationRepository,
+        IApplicationState applicationState)
     {
         _logger = logger;
         _instanceRepository = instanceRepository;
@@ -56,6 +63,8 @@ public class InstanceManagerService : IInstanceManagerService
 
         _marksCheckStatisticRepository = marksCheckStatisticRepository;
         _parametersService = parametersService;
+        _organizationRepository = organizationRepository;
+        _applicationState = applicationState;
     }
 
     public async Task<Result<FmuApiCentralResponse>> UpdateFmuApiInstanceInformation(string instanceData, bool markLegacyAccess = false)
@@ -130,6 +139,8 @@ public class InstanceManagerService : IInstanceManagerService
             updateHash = string.Empty;
         }
 
+        var organizations = await _organizationRepository.All();
+        var allowedOrganizationIds = await OrganizationIdsForInstance(instanceEntity);
         var answer = new FmuApiCentralResponse()
         {
             SettingsUpdateAvailable = instanceEntity.SettingsModified,
@@ -137,6 +148,10 @@ public class InstanceManagerService : IInstanceManagerService
             UpdateHash = updateHash,
             Success = true,
             CentralServerProperties = CreateCentralServerProperties(softwareUpdateSettings),
+            TrueApiTokens = TrueApiExchangeTokens.ForExchange(
+                organizations,
+                _applicationState.TrueApiTokens(),
+                allowedOrganizationIds),
         };
 
         return updateResult.IsSuccess
@@ -225,6 +240,8 @@ public class InstanceManagerService : IInstanceManagerService
 
     public async Task<bool> CreateNew(InstanceMonitoringInformation instance)
     {
+        var existInstance = await _instanceRepository.ByToken(instance.Token);
+
         InstanceEntity entity = new()
         {
             Id = instance.Token,
@@ -234,10 +251,8 @@ public class InstanceManagerService : IInstanceManagerService
             SecretKey = instance.SecretKey,
             Address = instance.Address,
             GroupId = instance.Group?.Id ?? string.Empty,
-            SettingsModified = instance.SettingsModified
+            SettingsModified = existInstance.IsSuccess && instance.SettingsModified
         };
-        
-        var existInstance = await _instanceRepository.ByToken(instance.Token);
 
         if (existInstance.IsSuccess)
         {
@@ -510,6 +525,18 @@ public class InstanceManagerService : IInstanceManagerService
 
         var groups = await _instanceGroupRepository.ByListId(ids);
         return groups.ToDictionary(group => group.Id, group => group.Name, StringComparer.OrdinalIgnoreCase);
+    }
+
+    private async Task<IReadOnlyCollection<string>> OrganizationIdsForInstance(InstanceEntity instance)
+    {
+        if (string.IsNullOrEmpty(instance.GroupId))
+            return [];
+
+        var group = await _instanceGroupRepository.GetById(instance.GroupId);
+        if (group.IsFailure)
+            return [];
+
+        return group.Value.OrganizationIds ?? [];
     }
 
     private static bool OsArchMatches(NodeInformation node, SoftwareUpdateFilesEntity update)

@@ -3,6 +3,8 @@ using CSharpFunctionalExtensions;
 using Domain.AppState.Interfaces;
 using Domain.Configuration;
 using Domain.Dto.Responces;
+using Domain.Entitys.InstanceGroup;
+using Domain.Entitys.Interfaces;
 using Domain.Entitys.Organization;
 using Domain.Entitys.Organization.Dto;
 using Domain.Entitys.Organization.Interfaces;
@@ -32,7 +34,7 @@ public class OrganizationManagerServiceTests
                 DigitalSignature = "thumbprint"
             }
         };
-        var sut = new OrganizationManagerService(repository, new FakeTrueApiAuthService(), new FakeApplicationState());
+        var sut = CreateSut(repository);
 
         var result = await sut.List(1, 50);
 
@@ -40,6 +42,30 @@ public class OrganizationManagerServiceTests
         Assert.Equal(SecretMask.Placeholder, view.TrueApiIntegrationSettings.Password);
         Assert.Equal("true-api-secret", repository.Store["o1"].TrueApiIntegrationSettings.Password);
         Assert.Equal("thumbprint", view.TrueApiIntegrationSettings.DigitalSignature);
+    }
+
+    /// <summary>
+    /// Удаление организации снимает её из списков групп.
+    /// </summary>
+    [Fact]
+    public async Task Delete_убирает_организацию_из_групп()
+    {
+        var repository = new FakeOrganizationRepository();
+        repository.Store["o1"] = new OrganizationEntity { Id = "o1", Name = "Орг", Inn = "1234567890" };
+        var groups = new FakeGroupRepository();
+        groups.Store["g1"] = new InstanceGroupEntity
+        {
+            Id = "g1",
+            Name = "Группа",
+            OrganizationIds = ["o1", "o2"]
+        };
+        var sut = CreateSut(repository, groups);
+
+        var result = await sut.Delete("o1");
+
+        Assert.True(result.IsSuccess);
+        Assert.False(repository.Store.ContainsKey("o1"));
+        Assert.Equal(["o2"], groups.Store["g1"].OrganizationIds);
     }
 
     /// <summary>
@@ -60,7 +86,7 @@ public class OrganizationManagerServiceTests
                 Password = "true-api-secret"
             }
         };
-        var sut = new OrganizationManagerService(repository, new FakeTrueApiAuthService(), new FakeApplicationState());
+        var sut = CreateSut(repository);
 
         var result = await sut.Update(new OrganizationView
         {
@@ -95,7 +121,7 @@ public class OrganizationManagerServiceTests
                 Password = "true-api-secret"
             }
         };
-        var sut = new OrganizationManagerService(repository, new FakeTrueApiAuthService(), new FakeApplicationState());
+        var sut = CreateSut(repository);
 
         var result = await sut.Update(new OrganizationView
         {
@@ -163,6 +189,42 @@ public class OrganizationManagerServiceTests
         }
 
         public Task<List<OrganizationEntity>> All() => Task.FromResult(Store.Values.ToList());
+    }
+
+    private static OrganizationManagerService CreateSut(
+        FakeOrganizationRepository repository,
+        FakeGroupRepository? groups = null)
+        => new(repository, new FakeTrueApiAuthService(), new FakeApplicationState(), groups ?? new FakeGroupRepository());
+
+    private sealed class FakeGroupRepository : IInstanceGroupRepository
+    {
+        public Dictionary<string, InstanceGroupEntity> Store { get; } = new();
+
+        public Task<Result> Create(InstanceGroupEntity entity) => throw new NotImplementedException();
+
+        public Task<Result> Update(InstanceGroupEntity entity) => throw new NotImplementedException();
+
+        public Task<Result<InstanceGroupEntity>> GetById(string id) => throw new NotImplementedException();
+
+        public Task<Result> Delete(string id) => throw new NotImplementedException();
+
+        public Task<PaginatedResponse<InstanceGroupEntity>> List(int pageNumber, int pageSize)
+            => throw new NotImplementedException();
+
+        public Task<List<InstanceGroupEntity>> All() => Task.FromResult(Store.Values.ToList());
+
+        public Task<List<InstanceGroupEntity>> ByListId(List<string> ids) => throw new NotImplementedException();
+
+        public Task<Result> ClearSettingsSchemaLink(string settingsSchemaId)
+            => throw new NotImplementedException();
+
+        public Task<Result> ClearOrganizationLink(string organizationId)
+        {
+            foreach (var group in Store.Values)
+                group.OrganizationIds.RemoveAll(id => id == organizationId);
+
+            return Task.FromResult(Result.Success());
+        }
     }
 
     private sealed class FakeTrueApiAuthService : ITrueApiAuthService

@@ -83,7 +83,7 @@ class InstanceElementView {
                     },
 
                     CheckBox(this.LABELS.settingsModified, this.NAMES.settingsModified, {
-                        value: editedData.id ? !!editedData.settingsModified : true
+                        value: !!editedData.settingsModified
                     }),
 
                     this._createTokenField(editedData.id || ""),

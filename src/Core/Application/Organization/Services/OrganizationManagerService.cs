@@ -3,6 +3,7 @@ using Domain.AppState.Interfaces;
 using Domain.Attributes;
 using Domain.Configuration;
 using Domain.Dto.Responces;
+using Domain.Entitys.Interfaces;
 using Domain.Entitys.Organization;
 using Domain.Entitys.Organization.Dto;
 using Domain.Entitys.Organization.Interfaces;
@@ -19,15 +20,18 @@ public class OrganizationManagerService : IOrganizationManagerService
     private readonly IOrganizationRepository _repository;
     private readonly ITrueApiAuthService _trueApiAuthService;
     private readonly IApplicationState _applicationState;
+    private readonly IInstanceGroupRepository _instanceGroupRepository;
 
     public OrganizationManagerService(
         IOrganizationRepository repository,
         ITrueApiAuthService trueApiAuthService,
-        IApplicationState applicationState)
+        IApplicationState applicationState,
+        IInstanceGroupRepository instanceGroupRepository)
     {
         _repository = repository;
         _trueApiAuthService = trueApiAuthService;
         _applicationState = applicationState;
+        _instanceGroupRepository = instanceGroupRepository;
     }
 
     public async Task<Result> Create(OrganizationView data)
@@ -75,6 +79,10 @@ public class OrganizationManagerService : IOrganizationManagerService
         var exist = await _repository.GetById(id);
         if (exist.IsFailure)
             return Result.Failure(exist.Error);
+
+        var clearLinks = await _instanceGroupRepository.ClearOrganizationLink(id);
+        if (clearLinks.IsFailure)
+            return Result.Failure($"Ошибка очистки ссылок на организацию {id}: {clearLinks.Error}");
 
         return await _repository.Delete(id);
     }
