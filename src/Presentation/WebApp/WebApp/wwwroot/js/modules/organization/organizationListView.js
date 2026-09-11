@@ -1,5 +1,6 @@
 import organizationService from '../../services/organizationService.js';
 import organizationElementView from './organizationElementView.js';
+import { formatGisMtStatus } from '../../utils/formatGisMtStatus.js';
 
 class OrganizationListView {
     constructor(id) {
@@ -15,7 +16,7 @@ class OrganizationListView {
             name: "Наименование",
             inn: "ИНН",
             token: "Токен",
-            gisMt: "ГИС МТ",
+            gisMt: "FMU-API-ГИС-МТ",
             gisMtEmpty: "—",
             actions: "Действия",
             loadProductGroups: "Получить товарные группы",
@@ -261,21 +262,7 @@ class OrganizationListView {
     }
 
     _formatGisMtStatus(obj) {
-        const status = obj.gisMtLastStatus || {};
-        const code = status.code;
-        if (code === null || code === undefined || code === "") {
-            return this.LABELS.gisMtEmpty;
-        }
-
-        const numeric = Number(code);
-        const ok = numeric >= 200 && numeric < 300;
-        const description = ok ? "" : (status.description || "");
-        const text = `${code} ${description}`.trim()
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;");
-        const color = ok ? "" : "color:#E74C3C;";
-        return `<span style="${color}">${text}</span>`;
+        return formatGisMtStatus(obj, this.LABELS.gisMtEmpty);
     }
 
     _formatToken(obj) {
