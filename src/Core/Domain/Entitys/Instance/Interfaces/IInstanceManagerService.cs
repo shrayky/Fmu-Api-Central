@@ -11,7 +11,7 @@ public interface IInstanceManagerService
     Task<Result<FmuApiCentralResponse>> UpdateFmuApiInstanceInformation(string instanceData, bool markLegacyAccess = false);
     Task<PaginatedResponse<InstanceMonitoringInformation>> InstancesList(int pageNumber, int pageSize, InstanceListFilter filter);
     Task<bool> CreateNew(InstanceMonitoringInformation instanceInformation);
-    Task<bool> Delete(string instance);
+    Task<Result> Delete(string instance);
     Task<string> InstanceSettings(string token);
     Task<Result> SettingsUploaded(string token);
     Task<Result<SoftwareUpdateFileDownload>> FmuApiUpdate(string token, long? rangeFrom);

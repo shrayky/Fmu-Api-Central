@@ -61,10 +61,31 @@ public class InstanceManagerServiceTests
 
         var deleted = await sut.Delete("shop-1");
 
-        Assert.True(deleted);
+        Assert.True(deleted.IsSuccess);
         Assert.False(instances.Store.ContainsKey("shop-1"));
         Assert.DoesNotContain(stats.Records, record => record.ResolvedNodeId() == "shop-1");
         Assert.Contains(stats.Records, record => record.ResolvedNodeId() == "shop-2");
+    }
+
+    /// <summary>
+    /// Пустой 400 без текста ошибки не даёт понять, что статистика не снялась.
+    /// </summary>
+    [Fact]
+    public async Task Delete_отдаёт_ошибку_если_статистика_не_удалилась()
+    {
+        var instances = new FakeInstanceRepository();
+        instances.Store["shop-1"] = new InstanceEntity { Id = "shop-1" };
+
+        var stats = new FakeStatisticsRepository();
+        stats.DeleteByNodeIdError = "БД недоступна сейчас";
+
+        var sut = CreateSut(instances, stats);
+
+        var result = await sut.Delete("shop-1");
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("БД недоступна сейчас", result.Error);
+        Assert.True(instances.Store.ContainsKey("shop-1"));
     }
 
     /// <summary>
@@ -186,6 +207,7 @@ public class InstanceManagerServiceTests
     private sealed class FakeStatisticsRepository : IMarksCheckStatisticRepository
     {
         public List<MarkCheckStatisticsEntity> Records { get; } = [];
+        public string? DeleteByNodeIdError { get; set; }
 
         public Task<Result> CreateNew(MarkCheckStatisticsEntity statisticsEntity)
             => throw new NotImplementedException();
@@ -197,6 +219,9 @@ public class InstanceManagerServiceTests
 
         public Task<Result> DeleteByNodeId(string nodeId)
         {
+            if (!string.IsNullOrEmpty(DeleteByNodeIdError))
+                return Task.FromResult(Result.Failure(DeleteByNodeIdError));
+
             Records.RemoveAll(record => record.ResolvedNodeId() == nodeId);
             return Task.FromResult(Result.Success());
         }

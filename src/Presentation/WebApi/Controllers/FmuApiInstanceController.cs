@@ -45,8 +45,8 @@ public class FmuApiInstanceController : ControllerBase
     public async Task<IActionResult> Delete(string token)
     {
         var deleteResult = await _managerService.Delete(token);
-        
-        return deleteResult ? Ok() : BadRequest();
+
+        return deleteResult.IsSuccess ? Ok() : BadRequest(deleteResult.Error);
     }
 
     [HttpGet]

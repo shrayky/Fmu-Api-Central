@@ -273,24 +273,22 @@ public class InstanceManagerService : IInstanceManagerService
         return createResult.IsSuccess;
     }
 
-    public async Task<bool> Delete(string token)
+    public async Task<Result> Delete(string token)
     {
         var entitySearch = await _instanceRepository.ByToken(token);
         var nodeId = entitySearch.IsSuccess ? entitySearch.Value.Id : token;
 
         var statsResult = await _marksCheckStatisticRepository.DeleteByNodeId(nodeId);
         if (statsResult.IsFailure)
-            return false;
+            return statsResult;
 
         if (entitySearch.IsFailure)
-            return true;
+            return Result.Success();
 
         var deleteResult = await _instanceRepository.DeleteInstance(entitySearch.Value);
-
-        if (deleteResult.IsSuccess)
-            return true;
-
-        return false;
+        return deleteResult.IsSuccess
+            ? Result.Success()
+            : Result.Failure(deleteResult.Error);
     }
 
     public async Task<string> InstanceSettings(string token)

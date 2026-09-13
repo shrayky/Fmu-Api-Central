@@ -165,7 +165,7 @@ public class AlertsConstuctorTests
         public Task<bool> CreateNew(InstanceMonitoringInformation instanceInformation)
             => throw new NotImplementedException();
 
-        public Task<bool> Delete(string instance) => throw new NotImplementedException();
+        public Task<Result> Delete(string instance) => throw new NotImplementedException();
 
         public Task<string> InstanceSettings(string token) => throw new NotImplementedException();
 

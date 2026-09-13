@@ -74,24 +74,17 @@ public class MarkCheckStatisticsRepository : BaseCouchDbRepository<MarkCheckStat
         try
         {
             var queryLimit = (await _parameters.Current()).DatabaseConnection.QueryLimit;
-            var idPrefix = $"{nodeId}_";
 
             while (true)
             {
-                var byNodeId = await _database
-                    .Where(document => document.Data.NodeId == nodeId)
-                    .Take(queryLimit)
-                    .ToListAsync();
+                var documents = await _database.QueryAsync(
+                    MarkCheckStatisticsDeleteQuery.ForNode(nodeId, queryLimit),
+                    throwExceptionOnWarning: false);
 
-                // Документы без nodeId: id = {nodeId}_{unixDate}
-                var byIdPrefix = await _database
-                    .Where(document => document.Id.StartsWith(idPrefix))
-                    .Take(queryLimit)
-                    .ToListAsync();
-
-                var ids = byNodeId
-                    .Concat(byIdPrefix)
-                    .Select(document => document.Data.Id)
+                var ids = documents
+                    .Select(document => MarkCheckStatisticsDeleteQuery.DocumentId(
+                        document.Id,
+                        document.Data?.Id))
                     .Where(id => !string.IsNullOrEmpty(id))
                     .Distinct()
                     .ToList();
