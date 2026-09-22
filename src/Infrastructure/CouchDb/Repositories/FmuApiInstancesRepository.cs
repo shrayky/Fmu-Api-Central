@@ -218,6 +218,7 @@ public class FmuApiInstancesRepository : BaseCouchDbRepository<InstanceEntity>, 
         !string.IsNullOrEmpty(filter.TsPiotVersion) ||
         filter.TsPiotLicense.HasValue ||
         filter.UpdatedBefore.HasValue ||
+        filter.WithoutGroup ||
         !string.IsNullOrEmpty(filter.GroupId);
 
     private static IQueryable<UniversalDocument<InstanceEntity>> ApplyListFilter(
@@ -250,7 +251,9 @@ public class FmuApiInstancesRepository : BaseCouchDbRepository<InstanceEntity>, 
             query = query.Where(p => p.Data.UpdatedAt < updatedBefore);
         }
 
-        if (!string.IsNullOrEmpty(filter.GroupId))
+        if (filter.WithoutGroup)
+            query = query.Where(p => string.IsNullOrEmpty(p.Data.GroupId));
+        else if (!string.IsNullOrEmpty(filter.GroupId))
             query = query.Where(p => p.Data.GroupId == filter.GroupId);
 
         return query;

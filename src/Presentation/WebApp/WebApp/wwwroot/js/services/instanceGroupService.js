@@ -27,6 +27,15 @@ class InstanceGroupService {
         return data.value || [];
     }
 
+    // Возвращает группы в виде опций для выпадающих списков.
+    async groupOptions() {
+        const groups = await this.allLinks();
+
+        return groups
+            .filter((group) => group && group.id !== undefined && group.id !== null)
+            .map((group) => ({ id: group.id, value: group.name || group.id }));
+    }
+
     async create(payload) {
         const data = await this.authService.makeAuthenticatedRequest(this.apiEndpoint, {
             method: "POST",

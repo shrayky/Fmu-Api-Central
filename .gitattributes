@@ -1,1 +1,3 @@
 /src/Presentation/WebApp/WebApp/wwwroot/lib/** linguist-vendored
+deploy/ubuntu/**/*.sh text eol=lf
+deploy/ubuntu/**/*.yml text eol=lf

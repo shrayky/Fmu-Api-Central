@@ -412,6 +412,7 @@ typings/
 
 # dotenv environment variables file
 .env
+.sert-env
 
 # parcel-bundler cache
 .cache

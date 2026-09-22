@@ -71,6 +71,17 @@ public class FmuApiInstanceController : ControllerBase
         return result.IsSuccess ? Ok(result.Value) : BadRequest(result.Error);
     }
 
+    /// <summary>
+    /// Назначает выбранным инстансам группу. Пустой groupId снимает группу.
+    /// </summary>
+    [HttpPost("assign-group")]
+    public async Task<IActionResult> AssignGroup([FromBody] GroupAssignRequest request)
+    {
+        var result = await _managerService.AssignGroup(request.Tokens, request.GroupId);
+
+        return result.IsSuccess ? Ok(result.Value) : BadRequest(result.Error);
+    }
+
     [HttpGet("{token}/checker-distribution")]
     public async Task<IActionResult> DownloadCheckerDistribution(string token)
     {

@@ -20,12 +20,22 @@ namespace CouchDb.Repositories
 
         public async Task<Result<UserEntity>> ByName(string name)
         {
-            var document = await _database.FirstOrDefaultAsync(p => p.Data.Name == name);
+            if (!_appState.DbState())
+                return Result.Failure<UserEntity>(DatabaseUnavailable);
 
-            if (document == null)
-                return Result.Failure<UserEntity>($"Не найден пользователь с именем {name}");
+            try
+            {
+                var document = await _database.FirstOrDefaultAsync(p => p.Data.Name == name);
 
-            return Result.Success(document.Data);
+                if (document == null)
+                    return Result.Failure<UserEntity>($"Не найден пользователь с именем {name}");
+
+                return Result.Success(document.Data);
+            }
+            catch (Exception ex)
+            {
+                return Result.Failure<UserEntity>($"Не удалось прочитать запись {LogRepository} в БД {ex.Message}");
+            }
         }
 
         public async Task<Result<UserEntity>> GetById(string id)

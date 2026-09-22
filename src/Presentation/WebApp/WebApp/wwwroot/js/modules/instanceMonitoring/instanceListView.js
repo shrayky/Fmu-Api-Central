@@ -5,6 +5,7 @@ import instanceElementView from './instanceElementView.js';
 import instanceFilterView from './instanceFilterView.js';
 import { pollingManager } from '../../services/PollingManager.js';
 import { formatInstanceName } from '../../utils/formatInstanceName.js';
+import { estimateInstanceRowHeight } from '../../utils/estimateInstanceRowHeight.js';
 
 const style = document.createElement('style');
 
@@ -14,8 +15,12 @@ style.textContent = `
         vertical-align: top !important;
         line-height: 1.35 !important;
         padding: 8px 10px !important;
-        overflow: visible !important;
-        box-sizing: border-box !important;
+        overflow: hidden !important;
+    }
+
+    /* Webix sizer: height:1px; border-box схлопывает контент и ломает scrollHeight */
+    .multiline_datatable .webix_measure_size {
+        box-sizing: content-box !important;
     }
 
     .multiline_datatable .instance-module-item {
@@ -81,12 +86,19 @@ class InstanceListView {
             filterTsPiotLicense: "лицензия ТС ПИоТ до",
             filterUpdatedBefore: "последнее обновление до",
             filterGroup: "группа",
+            filterWithoutGroup: "без группы",
             instanceGroup: "Группа",
             token: "Токен",
             tsPiotsModules: "Модули ТСПИоТ",
             actions: "Действия",
             forceInstall: "Принудительная установка",
             forceInstallTitle: "Принудительная установка",
+            assignGroup: "Назначить группу",
+            assignGroupTitle: "Назначение группы",
+            applyAssignGroup: "Назначить",
+            noGroupOption: "— без группы —",
+            selectGroupRequired: "Выберите группу",
+            errorAssignGroup: "Не удалось назначить группу",
             selectedCount: "Инстансов выбрано",
             selectVersion: "Версия",
             applyForce: "Установить",
@@ -119,7 +131,9 @@ class InstanceListView {
             hostAddress: "address",
             id: "id",
             tsPiots: "tsPiots",
-            instanceGroup: "groupName"
+            instanceGroup: "groupName",
+            assignGroupWindow: "assignGroupWindow",
+            assignGroupForm: "assignGroupForm"
         };
 
         this.hotkeys = [
@@ -254,6 +268,7 @@ class InstanceListView {
                             value: this.LABELS.actions,
                             submenu: [
                                 { id: "actions:force-update", value: this.LABELS.forceInstall },
+                                { id: "actions:assign-group", value: this.LABELS.assignGroup },
                             ]
                         }
                     ],
@@ -271,6 +286,11 @@ class InstanceListView {
 
                             if (id === "actions:force-update") {
                                 this._showForceUpdateDialog();
+                                return;
+                            }
+
+                            if (id === "actions:assign-group") {
+                                this._showAssignGroupDialog();
                             }
                         }
                     }
@@ -492,6 +512,7 @@ class InstanceListView {
 
             table.clearAll();
             table.parse(data.content);
+            this._scheduleRowHeightAdjust();
 
             $$(this.id).enable();
 
@@ -611,7 +632,8 @@ class InstanceListView {
             this.filters?.tsPiotVersion ||
             this.filters?.tsPiotLicense ||
             this.filters?.updatedBefore ||
-            this.filters?.groupId
+            this.filters?.groupId ||
+            this.filters?.withoutGroup
         );
     }
 
@@ -740,6 +762,10 @@ class InstanceListView {
             parts.push(`${this.LABELS.filterGroup} = ${group?.name || this.filters.groupId}`);
         }
 
+        if (this.filters?.withoutGroup) {
+            parts.push(`${this.LABELS.filterGroup} = ${this.LABELS.filterWithoutGroup}`);
+        }
+
         if (parts.length === 0) {
             return "";
         }
@@ -839,6 +865,7 @@ class InstanceListView {
 
         this._assignRowHeightsToRecords([editedRecord]);
         table.updateItem(editedRecord.id, editedRecord);
+        this._scheduleRowHeightAdjust();
     }
 
     _addToTable(createdRecord) {
@@ -846,6 +873,7 @@ class InstanceListView {
 
         this._assignRowHeightsToRecords([createdRecord]);
         table.add(createdRecord);
+        this._scheduleRowHeightAdjust();
     }
 
     _formatLocalModules(localModules) {
@@ -949,13 +977,7 @@ class InstanceListView {
     }
 
     _estimateRowHeight(record, minHeight) {
-        const localCount = record.localModules?.length ?? 0;
-        const tsCount = record.TsPiots?.length ?? 0;
-        const blocks = Math.max(localCount || 1, tsCount || 1);
-        const blockHeight = 68;
-        const cellPadding = 16;
-
-        return Math.max(minHeight, blocks * blockHeight + cellPadding);
+        return estimateInstanceRowHeight(record, minHeight);
     }
 
     _applyRowHeights(preserveState) {
@@ -966,14 +988,8 @@ class InstanceListView {
 
         const selectedIds = preserveState ? this._normalizeIds(table.getSelectedId(true)) : [];
         const scroll = preserveState ? table.getScrollState() : null;
-        const minHeight = table.config.rowHeight || 36;
 
-        table.eachRow((rowId) => {
-            const record = table.getItem(rowId);
-            record.$height = this._estimateRowHeight(record, minHeight);
-        });
-
-        table.refresh();
+        table.adjustRowHeight();
 
         if (scroll) {
             table.scrollTo(scroll.x, scroll.y);
@@ -1301,6 +1317,109 @@ class InstanceListView {
         } catch (error) {
             webix.message({
                 text: error.message || "Ошибка назначения",
+                type: "error"
+            });
+        }
+    }
+
+    // Открывает диалог назначения группы отмеченным инстансам.
+    async _showAssignGroupDialog() {
+        const tokens = this._getSelectedInstanceIds();
+        if (tokens.length === 0) {
+            webix.message({
+                text: this.LABELS.selectInstances,
+                type: "error"
+            });
+            return;
+        }
+
+        this._disableHotkeys();
+
+        const groupOptions = await this._loadAssignGroupOptions();
+
+        if ($$(this.NAMES.assignGroupWindow)) {
+            $$(this.NAMES.assignGroupWindow).destructor();
+        }
+
+        webix.ui({
+            view: "window",
+            id: this.NAMES.assignGroupWindow,
+            modal: true,
+            width: 420,
+            position: "center",
+            head: this.LABELS.assignGroupTitle,
+            body: {
+                view: "form",
+                id: this.NAMES.assignGroupForm,
+                elements: [
+                    {
+                        view: "label",
+                        label: `${this.LABELS.selectedCount}: ${tokens.length}`
+                    },
+                    {
+                        view: "richselect",
+                        name: "groupId",
+                        label: this.LABELS.instanceGroup,
+                        labelPosition: "top",
+                        value: "",
+                        options: groupOptions
+                    },
+                    {
+                        cols: [
+                            {
+                                view: "button",
+                                value: this.LABELS.applyAssignGroup,
+                                css: "webix_primary",
+                                click: () => this._applyAssignGroup(tokens)
+                            },
+                            {
+                                view: "button",
+                                value: this.LABELS.cancel,
+                                click: () => {
+                                    $$(this.NAMES.assignGroupWindow).close();
+                                    this._enableHotkeys();
+                                }
+                            }
+                        ]
+                    }
+                ]
+            },
+            on: {
+                onDestruct: () => this._enableHotkeys()
+            }
+        }).show();
+    }
+
+    // Опции групп для диалога: первым пунктом снятие группы.
+    async _loadAssignGroupOptions() {
+        const options = [{ id: "", value: this.LABELS.noGroupOption }];
+
+        try {
+            const groups = await instanceGroupService.groupOptions();
+            groups.forEach((group) => options.push({ id: group.id, value: group.value }));
+        } catch {
+            webix.message({
+                text: "Не удалось загрузить список групп",
+                type: "warning"
+            });
+        }
+
+        return options;
+    }
+
+    // Назначает выбранную группу отмеченным инстансам.
+    async _applyAssignGroup(tokens) {
+        const form = $$(this.NAMES.assignGroupForm);
+        const groupId = form.getValue("groupId") || "";
+
+        try {
+            const result = await instanceMonitoringService.assignGroup(tokens, groupId);
+            webix.message(result?.description || "Группа назначена");
+            $$(this.NAMES.assignGroupWindow).close();
+            this._loadData();
+        } catch (error) {
+            webix.message({
+                text: error.message || this.LABELS.errorAssignGroup,
                 type: "error"
             });
         }

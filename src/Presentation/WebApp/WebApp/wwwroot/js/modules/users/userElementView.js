@@ -1,4 +1,5 @@
 import { Text, PasswordBox } from '../../utils/ui.js';
+import { newUuid } from '../../utils/uuid.js';
 import usersService from '../../services/usersService.js';
 
 class UserElementView {
@@ -35,7 +36,7 @@ class UserElementView {
 
     showDialog(editedData = {}, onSuccess, onClose) {
         const isNew = !editedData.id;
-        this.elementId = editedData.id || crypto.randomUUID();
+        this.elementId = editedData.id || newUuid();
 
         if ($$(this.NAMES.windowId)) {
             $$(this.NAMES.windowId).destructor();

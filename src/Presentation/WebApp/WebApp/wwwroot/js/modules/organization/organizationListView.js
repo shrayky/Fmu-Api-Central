@@ -1,6 +1,7 @@
 import organizationService from '../../services/organizationService.js';
 import organizationElementView from './organizationElementView.js';
 import { formatGisMtStatus } from '../../utils/formatGisMtStatus.js';
+import { copyText } from '../../utils/copyText.js';
 
 class OrganizationListView {
     constructor(id) {
@@ -308,7 +309,7 @@ class OrganizationListView {
                 return;
             }
 
-            await navigator.clipboard.writeText(token);
+            await copyText(token);
             webix.message(this.LABELS.tokenCopied);
         } catch (error) {
             webix.message({

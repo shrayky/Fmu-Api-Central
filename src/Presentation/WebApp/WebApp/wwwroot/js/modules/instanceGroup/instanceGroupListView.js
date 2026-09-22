@@ -1,6 +1,7 @@
 import instanceGroupService from '../../services/instanceGroupService.js';
 import instanceGroupElementView from './instanceGroupElementView.js';
 import softwareUpdatesService from '../../services/softwareUpdatesService.js';
+import { formatInstancesCount } from '../../utils/formatInstancesCount.js';
 
 class InstanceGroupListView {
     constructor(id) {
@@ -335,7 +336,7 @@ class InstanceGroupListView {
                     id: "instancesCount",
                     header: this.LABELS.instancesCount,
                     width: 140,
-                    template: (obj) => `${obj.instancesOnline ?? 0} / ${obj.instancesTotal ?? 0}`
+                    template: formatInstancesCount
                 }
             ],
             select: "row",

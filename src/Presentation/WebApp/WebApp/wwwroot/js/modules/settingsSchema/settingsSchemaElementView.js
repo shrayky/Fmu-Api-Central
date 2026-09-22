@@ -1,4 +1,5 @@
 import { Text, Number as NumberField, CheckBox } from '../../utils/ui.js';
+import { newUuid } from '../../utils/uuid.js';
 import settingsSchemaService from '../../services/settingsSchemaService.js';
 
 class SettingsSchemaElementView {
@@ -22,6 +23,7 @@ class SettingsSchemaElementView {
             checkSmp: "ЕМЦ",
             checkMrp: "Контроль МРЦ",
             checkExpireDate: "Срок годности",
+            haveExpireDate: "Есть срок годности",
             addMapping: "Добавить",
             removeMapping: "Удалить",
             fillDefaults: "Заполнить по умолчанию",
@@ -54,7 +56,7 @@ class SettingsSchemaElementView {
     }
 
     async showDialog(editedData = {}, onSuccess, onClose) {
-        this.elementId = editedData.id || crypto.randomUUID();
+        this.elementId = editedData.id || newUuid();
         this.defaults = await this._loadDefaults();
 
         const timeouts = editedData.httpRequestTimeouts || this.defaults.httpRequestTimeouts || {};
@@ -71,7 +73,7 @@ class SettingsSchemaElementView {
             view: "window",
             id: this.NAMES.windowId,
             modal: true,
-            width: 980,
+            width: 1070,
             position: "center",
             head: this.LABELS.formTitle,
             body: {
@@ -199,9 +201,18 @@ class SettingsSchemaElementView {
                     template: "{common.checkbox()}",
                     checkValue: true,
                     uncheckValue: false
+                },
+                {
+                    id: "haveExpireDate",
+                    header: { text: "Есть срок<br>годности", css: "pg-header-twoline" },
+                    width: 90,
+                    css: { "text-align": "center" },
+                    template: "{common.checkbox()}",
+                    checkValue: true,
+                    uncheckValue: false
                 }
             ],
-            headerRowHeight: 48,
+            headerRowHeight: 56,
             checkboxRefresh: true,
             data: mappings.map((row) => this._toRow(row)),
             on: {
@@ -219,7 +230,8 @@ class SettingsSchemaElementView {
             name: row.name || "",
             checkSmp: !!row.checkSmp,
             checkMrp: !!row.checkMrp,
-            checkExpireDate: !!row.checkExpireDate
+            checkExpireDate: !!row.checkExpireDate,
+            haveExpireDate: !!row.haveExpireDate
         };
     }
 
@@ -238,7 +250,8 @@ class SettingsSchemaElementView {
             name: "",
             checkSmp: false,
             checkMrp: false,
-            checkExpireDate: false
+            checkExpireDate: false,
+            haveExpireDate: false
         });
         table.select(id);
         table.showItem(id);
@@ -341,7 +354,8 @@ class SettingsSchemaElementView {
             name: preset.name,
             checkSmp: !!preset.checkSmp,
             checkMrp: !!preset.checkMrp,
-            checkExpireDate: !!preset.checkExpireDate
+            checkExpireDate: !!preset.checkExpireDate,
+            haveExpireDate: !!preset.haveExpireDate
         });
     }
 
@@ -425,7 +439,8 @@ class SettingsSchemaElementView {
                 name: item.name || "",
                 checkSmp: !!item.checkSmp,
                 checkMrp: !!item.checkMrp,
-                checkExpireDate: !!item.checkExpireDate
+                checkExpireDate: !!item.checkExpireDate,
+                haveExpireDate: !!item.haveExpireDate
             });
         });
 

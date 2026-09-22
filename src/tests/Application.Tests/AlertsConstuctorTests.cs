@@ -177,6 +177,9 @@ public class AlertsConstuctorTests
         public Task<Result<ForceUpdateResult>> AssignForcedUpdate(IReadOnlyList<string> tokens, string updateId)
             => throw new NotImplementedException();
 
+        public Task<Result<GroupAssignResult>> AssignGroup(IReadOnlyList<string> tokens, string groupId)
+            => throw new NotImplementedException();
+
         public Task<Result<List<InstanceMonitoringInformation>>> OfflineInstance(DateTime toDate)
             => throw new NotImplementedException();
 

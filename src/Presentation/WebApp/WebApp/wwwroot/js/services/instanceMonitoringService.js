@@ -36,6 +36,10 @@ class InstanceMonitoringService {
             params.append("groupId", filters.groupId);
         }
 
+        if (filters.withoutGroup) {
+            params.append("withoutGroup", "true");
+        }
+
         const endpoint = `${this.apiEndpoint}?${params.toString()}`;
         
         const data = await this.authService.makeAuthenticatedRequest(endpoint);
@@ -88,6 +92,25 @@ class InstanceMonitoringService {
                 "Content-Type": "application/json"
             },
             body: JSON.stringify({ tokens, updateId })
+        });
+
+        if (!data.result) {
+            throw new Error(data.error);
+        }
+
+        return data.value;
+    }
+
+    // Назначает инстансам группу. Пустой groupId снимает группу.
+    async assignGroup(tokens, groupId) {
+        const endpoint = `${this.apiEndpoint}/assign-group`;
+
+        const data = await this.authService.makeAuthenticatedRequest(endpoint, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ tokens, groupId: groupId || "" })
         });
 
         if (!data.result) {

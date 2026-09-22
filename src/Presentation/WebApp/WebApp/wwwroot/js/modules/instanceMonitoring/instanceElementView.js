@@ -2,6 +2,8 @@ import instanceMonitoringService from '../../services/instanceMonitoringService.
 import instanceGroupService from '../../services/instanceGroupService.js';
 import { loadConfiguration } from '../../services/ConfigurationService.js';
 import { Text, CheckBox } from '../../utils/ui.js';
+import { newUuid } from '../../utils/uuid.js';
+import { copyText } from '../../utils/copyText.js';
 
 class InstanceElementView {
     constructor() {
@@ -327,7 +329,7 @@ class InstanceElementView {
 
     _generateToken() {
         const tokenField = $$(this.NAMES.instanceToken);
-        tokenField.setValue(crypto.randomUUID());
+        tokenField.setValue(newUuid());
     }
 
     _copyTokenToClipboard() {
@@ -338,7 +340,7 @@ class InstanceElementView {
         const token = tokenField.getValue();
 
         if (token) {
-            navigator.clipboard.writeText(token).then(() => {
+            copyText(token).then(() => {
                 webix.message({ text: "Токен скопирован в буфер обмена", type: "success" });
 
                 const copyTokenBtn = $$(this.NAMES.copyToken);

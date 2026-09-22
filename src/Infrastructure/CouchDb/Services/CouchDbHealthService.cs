@@ -13,12 +13,18 @@ public class CouchDbHealthService : IDbHealthService
     private readonly Context _dbContext;
     private readonly IParametersService _parametersService;
     private readonly ILogger<CouchDbHealthService> _logger;
+    private readonly IDbStatusService _dbStatusService;
 
-    public CouchDbHealthService(Context dbContext, IParametersService parametersService, ILogger<CouchDbHealthService> logger)
+    public CouchDbHealthService(
+        Context dbContext,
+        IParametersService parametersService,
+        ILogger<CouchDbHealthService> logger,
+        IDbStatusService dbStatusService)
     {
         _dbContext = dbContext;
         _parametersService = parametersService;
         _logger = logger;
+        _dbStatusService = dbStatusService;
     }
 
     public async Task<bool> IsDatabaseEnabled()
@@ -65,11 +71,14 @@ public class CouchDbHealthService : IDbHealthService
 
     public async Task<bool> IsConnectionHealthy()
     {
-        var isOnline = await IsDatabaseEnabled();
-
-        if (!isOnline)
+        var configuration = await _parametersService.Current();
+        if (!configuration.DatabaseConnection.Enable)
             return false;
 
-        return await IsDatabaseAccessible(DatabaseNames.Users);
+        var address = configuration.DatabaseConnection.NetAddress;
+        if (string.IsNullOrWhiteSpace(address))
+            return false;
+
+        return await _dbStatusService.CheckAvailability(address);
     }
 }

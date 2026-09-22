@@ -35,6 +35,9 @@ namespace Authentication.Services
             if (!dbEnabled)
                 return true;
 
+            if (!await _dbHealthService.Value.IsConnectionHealthy())
+                return true;
+
             return !await _repositoryHealthService.Value.HasRecords(_userRepository.DatabaseName());
         }
 

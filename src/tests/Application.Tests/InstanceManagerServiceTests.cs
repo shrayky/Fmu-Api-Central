@@ -10,6 +10,7 @@ using Domain.Entitys.Instance;
 using Domain.Entitys.Instance.Dto;
 using Domain.Entitys.Instance.Interfaces;
 using Domain.Entitys.InstanceGroup;
+using Domain.Entitys.InstanceGroup.Dto;
 using Domain.Entitys.Interfaces;
 using Domain.Entitys.MarkCheckStatistics.Interfaces;
 using Domain.Entitys.MarksCheckStatistic;
@@ -149,17 +150,132 @@ public class InstanceManagerServiceTests
         Assert.False(instances.Store["shop-1"].SettingsModified);
     }
 
+    /// <summary>
+    /// Назначение группы проставляет группу, накладывает схему группы и помечает настройки к выгрузке.
+    /// </summary>
+    [Fact]
+    public async Task AssignGroup_назначает_группу_и_готовит_настройки()
+    {
+        var instances = new FakeInstanceRepository();
+        instances.Store["shop-1"] = new InstanceEntity { Id = "shop-1" };
+
+        var groups = new FakeGroupRepository();
+        groups.Store["g1"] = new InstanceGroupEntity { Id = "g1", Name = "Магазины", SettingsSchemaId = "s1" };
+
+        var schemas = new FakeSettingsSchemaRepository();
+        schemas.Store["s1"] = new SettingsSchemaEntity
+        {
+            Id = "s1",
+            HttpRequestTimeouts = new HttpRequestTimeouts { CdnRequestTimeout = 42 }
+        };
+
+        var sut = CreateSut(instances, new FakeStatisticsRepository(), groups: groups, schemas: schemas);
+
+        var result = await sut.AssignGroup(["shop-1"], "g1");
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(1, result.Value.Assigned);
+        Assert.Equal(0, result.Value.Skipped);
+
+        var instance = instances.Store["shop-1"];
+        Assert.Equal("g1", instance.GroupId);
+        Assert.True(instance.SettingsModified);
+        Assert.Equal(42, instance.Settings.TimeOut.CdnRequest);
+    }
+
+    /// <summary>
+    /// Пустая группа снимает привязку и не помечает настройки к выгрузке.
+    /// </summary>
+    [Fact]
+    public async Task AssignGroup_без_группы_снимает_привязку()
+    {
+        var instances = new FakeInstanceRepository();
+        instances.Store["shop-1"] = new InstanceEntity { Id = "shop-1", GroupId = "g1" };
+
+        var sut = CreateSut(instances, new FakeStatisticsRepository());
+
+        var result = await sut.AssignGroup(["shop-1"], "");
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(1, result.Value.Assigned);
+
+        var instance = instances.Store["shop-1"];
+        Assert.Equal(string.Empty, instance.GroupId);
+        Assert.False(instance.SettingsModified);
+    }
+
+    /// <summary>
+    /// Неизвестный токен не роняет операцию, а попадает в пропущенные.
+    /// </summary>
+    [Fact]
+    public async Task AssignGroup_пропускает_неизвестный_инстанс()
+    {
+        var instances = new FakeInstanceRepository();
+        instances.Store["shop-1"] = new InstanceEntity { Id = "shop-1" };
+
+        var groups = new FakeGroupRepository();
+        groups.Store["g1"] = new InstanceGroupEntity { Id = "g1" };
+
+        var sut = CreateSut(instances, new FakeStatisticsRepository(), groups: groups);
+
+        var result = await sut.AssignGroup(["shop-1", "ghost"], "g1");
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(1, result.Value.Assigned);
+        Assert.Equal(1, result.Value.Skipped);
+        Assert.Equal("g1", instances.Store["shop-1"].GroupId);
+    }
+
+    /// <summary>
+    /// Несуществующая группа — ошибка, а не молчаливое назначение.
+    /// </summary>
+    [Fact]
+    public async Task AssignGroup_отдаёт_ошибку_для_неизвестной_группы()
+    {
+        var instances = new FakeInstanceRepository();
+        instances.Store["shop-1"] = new InstanceEntity { Id = "shop-1" };
+
+        var sut = CreateSut(instances, new FakeStatisticsRepository());
+
+        var result = await sut.AssignGroup(["shop-1"], "ghost");
+
+        Assert.True(result.IsFailure);
+        Assert.Contains("ghost", result.Error);
+        Assert.Equal(string.Empty, instances.Store["shop-1"].GroupId);
+    }
+
+    /// <summary>
+    /// Отбор «без группы» превращается в флаг, чтобы репозиторий не искал группу с таким идентификатором.
+    /// </summary>
+    [Fact]
+    public async Task InstancesList_превращает_отбор_без_группы_во_флаг()
+    {
+        var instances = new FakeInstanceRepository();
+        var sut = CreateSut(instances, new FakeStatisticsRepository());
+
+        await sut.InstancesList(1, 50, new InstanceListFilter
+        {
+            GroupId = InstanceListFilter.WithoutGroupValue
+        });
+
+        var applied = instances.LastFilter;
+        Assert.NotNull(applied);
+        Assert.True(applied!.WithoutGroup);
+        Assert.Equal(string.Empty, applied.GroupId);
+    }
+
     private static InstanceManagerService CreateSut(
         FakeInstanceRepository instances,
         FakeStatisticsRepository stats,
         FakeOrganizationRepository? organizations = null,
         FakeApplicationState? state = null,
-        FakeGroupRepository? groups = null)
+        FakeGroupRepository? groups = null,
+        ISettingsSchemaRepository? schemas = null)
         => new(
             NullLogger<IInstanceManagerService>.Instance,
             instances,
             groups ?? new FakeGroupRepository(),
-            new UnusedSettingsSchemaRepository(),
+            schemas ?? new UnusedSettingsSchemaRepository(),
             new ServiceCollection().BuildServiceProvider(),
             stats,
             new StubParametersService(),
@@ -170,6 +286,8 @@ public class InstanceManagerServiceTests
     {
         public Dictionary<string, InstanceEntity> Store { get; } = new();
 
+        public InstanceListFilter? LastFilter { get; private set; }
+
         public Task<Result> Update(InstanceEntity instance) => Task.FromResult(Result.Success());
 
         public Task<Result<InstanceEntity>> ByToken(string token)
@@ -179,7 +297,17 @@ public class InstanceManagerServiceTests
 
         public Task<Result<PaginatedResponse<InstanceEntity>>> List(
             int pageNumber, int pageSize, InstanceListFilter filter)
-            => throw new NotImplementedException();
+        {
+            LastFilter = filter;
+
+            return Task.FromResult(Result.Success(new PaginatedResponse<InstanceEntity>
+            {
+                Content = [],
+                CurrentPage = pageNumber,
+                PageSize = pageSize,
+                TotalCount = 0
+            }));
+        }
 
         public Task<Result<bool>> CreateInstance(InstanceEntity instance)
         {
@@ -275,6 +403,30 @@ public class InstanceManagerServiceTests
         public Task<List<SettingsSchemaEntity>> All() => throw new NotImplementedException();
 
         public Task<List<SettingsSchemaEntity>> ByListId(List<string> ids) => throw new NotImplementedException();
+    }
+
+    private sealed class FakeSettingsSchemaRepository : ISettingsSchemaRepository
+    {
+        public Dictionary<string, SettingsSchemaEntity> Store { get; } = new();
+
+        public Task<Result> Create(SettingsSchemaEntity entity) => throw new NotImplementedException();
+
+        public Task<Result> Update(SettingsSchemaEntity entity) => throw new NotImplementedException();
+
+        public Task<Result<SettingsSchemaEntity>> GetById(string id)
+            => Task.FromResult(Store.TryGetValue(id, out var entity)
+                ? Result.Success(entity)
+                : Result.Failure<SettingsSchemaEntity>($"Схема {id} не найдена"));
+
+        public Task<Result> Delete(string id) => throw new NotImplementedException();
+
+        public Task<PaginatedResponse<SettingsSchemaEntity>> List(int pageNumber, int pageSize)
+            => throw new NotImplementedException();
+
+        public Task<List<SettingsSchemaEntity>> All() => Task.FromResult(Store.Values.ToList());
+
+        public Task<List<SettingsSchemaEntity>> ByListId(List<string> ids)
+            => Task.FromResult(ids.Where(Store.ContainsKey).Select(id => Store[id]).ToList());
     }
 
     private sealed class StubParametersService : IParametersService

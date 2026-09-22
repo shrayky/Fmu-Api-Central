@@ -1,4 +1,6 @@
 import { Text, CheckBox, PasswordBox } from '../../utils/ui.js';
+import { newUuid } from '../../utils/uuid.js';
+import { copyText } from '../../utils/copyText.js';
 import organizationService from '../../services/organizationService.js';
 
 class OrganizationElementView {
@@ -45,7 +47,7 @@ class OrganizationElementView {
     }
 
     async showDialog(editedData = {}, onSuccess, onClose) {
-        this.elementId = editedData.id || crypto.randomUUID();
+        this.elementId = editedData.id || newUuid();
         const isNew = !editedData.id;
         const trueApi = editedData.trueApiIntegrationSettings || {};
         const groups = editedData.gisMtProductGroups || [];
@@ -227,7 +229,7 @@ class OrganizationElementView {
                 return;
             }
 
-            await navigator.clipboard.writeText(token);
+            await copyText(token);
             webix.message("Токен получен и скопирован в буфер обмена");
         } catch (error) {
             const message = error.message || "Ошибка при получении токена";

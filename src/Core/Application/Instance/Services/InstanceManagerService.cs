@@ -186,6 +186,8 @@ public class InstanceManagerService : IInstanceManagerService
         int pageSize,
         InstanceListFilter filter)
     {
+        filter = NormalizeFilter(filter);
+
         var answer = await _instanceRepository.List(pageNumber, pageSize, filter);
 
         if (answer.IsFailure)
@@ -435,6 +437,78 @@ public class InstanceManagerService : IInstanceManagerService
         }
     }
 
+    /// <summary>
+    /// Назначает инстансам группу и готовит настройки группы к выгрузке.
+    /// Пустая группа снимает привязку, настройки не меняются.
+    /// </summary>
+    public async Task<Result<GroupAssignResult>> AssignGroup(IReadOnlyList<string> tokens, string groupId)
+    {
+        try
+        {
+            if (tokens == null || tokens.Count == 0)
+                return Result.Failure<GroupAssignResult>("Не выбраны инстансы");
+
+            var targetGroupId = groupId?.Trim() ?? string.Empty;
+            InstanceGroupEntity? group = null;
+
+            if (!string.IsNullOrEmpty(targetGroupId))
+            {
+                var groupSearch = await _instanceGroupRepository.GetById(targetGroupId);
+                if (groupSearch.IsFailure)
+                    return Result.Failure<GroupAssignResult>(groupSearch.Error);
+
+                group = groupSearch.Value;
+            }
+
+            var assigned = 0;
+            var skipped = 0;
+
+            foreach (var token in tokens.Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                var instanceSearch = await _instanceRepository.ByToken(token);
+                if (instanceSearch.IsFailure)
+                {
+                    skipped++;
+                    continue;
+                }
+
+                var instance = instanceSearch.Value;
+
+                if (!string.IsNullOrEmpty(targetGroupId))
+                {
+                    var settings = await ApplyGroupSchema(targetGroupId, instance.Settings);
+                    instance.Settings = settings;
+                    instance.SettingsModified = true;
+                }
+
+                instance.GroupId = targetGroupId;
+
+                var save = await _instanceRepository.Update(instance);
+                if (save.IsFailure)
+                {
+                    skipped++;
+                    continue;
+                }
+
+                assigned++;
+            }
+
+            var groupName = string.IsNullOrWhiteSpace(group?.Name) ? targetGroupId : group.Name;
+            var target = string.IsNullOrEmpty(targetGroupId) ? "без группы" : $"в группу «{groupName}»";
+
+            return Result.Success(new GroupAssignResult
+            {
+                Assigned = assigned,
+                Skipped = skipped,
+                Description = $"Назначено {target}: {assigned}, пропущено: {skipped}"
+            });
+        }
+        catch (Exception ex)
+        {
+            return Result.Failure<GroupAssignResult>(ex.Message);
+        }
+    }
+
     private async Task<(bool needUpdate, string updateHash)> ResolveAvailableUpdate(
         InstanceEntity instance,
         FmuApiSetting settings)
@@ -497,6 +571,18 @@ public class InstanceManagerService : IInstanceManagerService
             schemaSearch.Value.HttpRequestTimeouts,
             schemaSearch.Value.GisMtProductMappings,
             schemaSearch.Value.HostsToPing);
+    }
+
+    /// <summary>
+    /// Приводит отбор к виду, который понимает репозиторий:
+    /// значение без группы превращается во флаг WithoutGroup, а не в идентификатор группы.
+    /// </summary>
+    private static InstanceListFilter NormalizeFilter(InstanceListFilter filter)
+    {
+        if (!string.Equals(filter.GroupId, InstanceListFilter.WithoutGroupValue, StringComparison.Ordinal))
+            return filter;
+
+        return filter with { GroupId = string.Empty, WithoutGroup = true };
     }
 
     private async Task<bool> AutoUpdateAllowed(InstanceEntity instance)

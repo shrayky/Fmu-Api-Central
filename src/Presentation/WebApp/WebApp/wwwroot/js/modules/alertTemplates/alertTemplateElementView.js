@@ -1,5 +1,6 @@
 import api from '../../services/alertTemplatesService.js';
 import { Text, CheckBox } from '../../utils/ui.js';
+import { newUuid } from '../../utils/uuid.js';
 import { ALERT_SCRIPT_DTS } from './alertScriptTypes.js';
 
 const DEFAULT_SCRIPT = `const hours = settings.offlineNodeAlertInterval || 12;
@@ -65,7 +66,7 @@ class AlertTemplateElementView {
         if (editedData.id)
             this.elementId = editedData.id;
         else
-            this.elementId = crypto.randomUUID();
+            this.elementId = newUuid();
 
         this._isNew = !editedData.id;
         this.savedWindowState = this._centeredSize();

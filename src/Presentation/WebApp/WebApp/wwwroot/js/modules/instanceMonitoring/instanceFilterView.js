@@ -1,3 +1,10 @@
+import {
+    ALL_GROUPS_VALUE,
+    WITHOUT_GROUP_VALUE,
+    toGroupFilter,
+    toGroupSelectValue
+} from '../../utils/groupFilter.js';
+
 class InstanceFilterView {
     constructor() {
         this.LABELS = {
@@ -11,7 +18,8 @@ class InstanceFilterView {
             applyButton: "Применить",
             resetButton: "Сбросить",
             cancelButton: "Отмена",
-            allOption: "— все —"
+            allOption: "— все —",
+            withoutGroupOption: "— без группы —"
         };
 
         this.NAMES = {
@@ -23,7 +31,8 @@ class InstanceFilterView {
             tsPiotLicense: "filterTsPiotLicense",
             updatedBefore: "filterUpdatedBefore",
             group: "filterGroup",
-            allValue: "__all__"
+            allValue: ALL_GROUPS_VALUE,
+            withoutGroupValue: WITHOUT_GROUP_VALUE
         };
     }
 
@@ -74,7 +83,7 @@ class InstanceFilterView {
                         this.LABELS.group,
                         this.NAMES.group,
                         filterOptions.groups,
-                        currentFilters.groupId
+                        currentFilters
                     ),
                     this._createButtons(onApply, onClose)
                 ]
@@ -106,8 +115,11 @@ class InstanceFilterView {
         };
     }
 
-    _createGroupSelect(label, name, groups, selectedValue) {
-        const items = [{ id: this.NAMES.allValue, value: this.LABELS.allOption }];
+    _createGroupSelect(label, name, groups, selectedFilters) {
+        const items = [
+            { id: this.NAMES.allValue, value: this.LABELS.allOption },
+            { id: this.NAMES.withoutGroupValue, value: this.LABELS.withoutGroupOption }
+        ];
 
         (groups || []).forEach((group) => {
             items.push({ id: group.id, value: group.name });
@@ -119,7 +131,7 @@ class InstanceFilterView {
             labelPosition: "top",
             name,
             id: name,
-            value: this._toSelectValue(selectedValue),
+            value: toGroupSelectValue(selectedFilters),
             options: items
         };
     }
@@ -212,6 +224,7 @@ class InstanceFilterView {
     _getFormValues() {
         const form = $$(this.NAMES.formId);
         const values = form.getValues();
+        const group = toGroupFilter(values[this.NAMES.group]);
 
         return {
             name: (values[this.NAMES.name] || "").trim(),
@@ -219,7 +232,8 @@ class InstanceFilterView {
             tsPiotVersion: this._fromSelectValue(values[this.NAMES.tsPiotVersion]),
             tsPiotLicense: this._formatLicenseFilterValue(values[this.NAMES.tsPiotLicense]),
             updatedBefore: this._formatLicenseFilterValue(values[this.NAMES.updatedBefore]),
-            groupId: this._fromSelectValue(values[this.NAMES.group])
+            groupId: group.groupId,
+            withoutGroup: group.withoutGroup
         };
     }
 
@@ -252,7 +266,8 @@ class InstanceFilterView {
                 tsPiotVersion: "",
                 tsPiotLicense: "",
                 updatedBefore: "",
-                groupId: ""
+                groupId: "",
+                withoutGroup: false
             });
         }
     }

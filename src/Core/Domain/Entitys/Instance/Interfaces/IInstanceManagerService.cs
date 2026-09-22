@@ -16,6 +16,11 @@ public interface IInstanceManagerService
     Task<Result> SettingsUploaded(string token);
     Task<Result<SoftwareUpdateFileDownload>> FmuApiUpdate(string token, long? rangeFrom);
     Task<Result<ForceUpdateResult>> AssignForcedUpdate(IReadOnlyList<string> tokens, string updateId);
+
+    /// <summary>
+    /// Назначает инстансам группу. Пустой groupId снимает группу.
+    /// </summary>
+    Task<Result<GroupAssignResult>> AssignGroup(IReadOnlyList<string> tokens, string groupId);
     Task<Result<List<InstanceMonitoringInformation>>> OfflineInstance(DateTime toDate);
     Task<Result<List<InstanceMonitoringInformation>>> All();
     Task MarkLegacyAccess(string token);

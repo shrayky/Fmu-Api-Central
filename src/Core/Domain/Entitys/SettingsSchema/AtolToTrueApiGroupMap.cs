@@ -61,7 +61,8 @@ public static class AtolToTrueApiGroupMap
             Name = name,
             CheckSmp = DefaultCheckSmp(trueApiGroupId),
             CheckMrp = DefaultCheckMrp(trueApiGroupId),
-            CheckExpireDate = false
+            CheckExpireDate = false,
+            HaveExpireDate = false
         };
 
     public static List<GisMtProductMapping> CopyDefaults()
@@ -73,7 +74,8 @@ public static class AtolToTrueApiGroupMap
                 Name = item.Name,
                 CheckSmp = item.CheckSmp,
                 CheckMrp = item.CheckMrp,
-                CheckExpireDate = item.CheckExpireDate
+                CheckExpireDate = item.CheckExpireDate,
+                HaveExpireDate = item.HaveExpireDate
             })
             .ToList();
 }

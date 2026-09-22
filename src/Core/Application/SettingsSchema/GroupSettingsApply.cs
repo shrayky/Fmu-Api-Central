@@ -33,7 +33,8 @@ public static class GroupSettingsApply
                     Name = item.Name,
                     CheckSmp = item.CheckSmp,
                     CheckMrp = item.CheckMrp,
-                    CheckExpireDate = item.CheckExpireDate
+                    CheckExpireDate = item.CheckExpireDate,
+                    HaveExpireDate = item.HaveExpireDate
                 })
                 .ToList(),
             HostsToPing = hostsToPing

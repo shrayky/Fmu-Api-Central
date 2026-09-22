@@ -24,4 +24,7 @@ public class GisMtProductMapping
 
     [JsonPropertyName("checkExpireDate")]
     public bool CheckExpireDate { get; set; }
+
+    [JsonPropertyName("haveExpireDate")]
+    public bool HaveExpireDate { get; set; }
 }

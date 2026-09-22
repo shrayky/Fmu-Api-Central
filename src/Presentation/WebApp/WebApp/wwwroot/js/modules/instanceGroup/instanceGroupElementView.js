@@ -1,4 +1,5 @@
 import { Text, CheckBox, Number } from '../../utils/ui.js';
+import { newUuid } from '../../utils/uuid.js';
 import instanceGroupService from '../../services/instanceGroupService.js';
 import organizationService from '../../services/organizationService.js';
 import settingsSchemaService from '../../services/settingsSchemaService.js';
@@ -48,7 +49,7 @@ class InstanceGroupElementView {
     }
 
     async showDialog(editedData = {}, onSuccess, onClose) {
-        this.elementId = editedData.id || crypto.randomUUID();
+        this.elementId = editedData.id || newUuid();
         const schemaOptions = await this._loadSchemaOptions();
         const currentSchemaId = editedData.settingsSchema?.id || "";
         const organizationRows = await this._loadOrganizationRows(editedData.organizationIds || []);
