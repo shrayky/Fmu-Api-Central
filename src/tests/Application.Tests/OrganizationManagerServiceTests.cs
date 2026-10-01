@@ -138,6 +138,42 @@ public class OrganizationManagerServiceTests
         Assert.Equal("new-true-api", repository.Store["o1"].TrueApiIntegrationSettings.Password);
     }
 
+    /// <summary>
+    /// Срок кэша берётся из сессии Честного знака, а не из фиксированных 8 часов.
+    /// </summary>
+    [Fact]
+    public async Task Token_сохраняет_uuid_и_срок_сессии()
+    {
+        var repository = new FakeOrganizationRepository();
+        repository.Store["o1"] = new OrganizationEntity
+        {
+            Id = "o1",
+            Name = "Орг",
+            Inn = "7700000000",
+            TrueApiIntegrationSettings = new TrueApiIntegrationSettings
+            {
+                Enable = true,
+                Password = "pwd",
+                DigitalSignature = "serial"
+            }
+        };
+        var liveUntil = new DateTime(2026, 10, 10, 7, 0, 0, DateTimeKind.Local);
+        var state = new RecordingApplicationState();
+        var sut = new OrganizationManagerService(
+            repository,
+            new SessionTrueApiAuthService(new TrueApiSession("123e4567-e89b-12d3-a456-426655440000", liveUntil)),
+            state,
+            new FakeGroupRepository());
+
+        var result = await sut.Token("7700000000");
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("123e4567-e89b-12d3-a456-426655440000", result.Value.Token);
+        Assert.Equal(liveUntil, result.Value.Expired);
+        Assert.Equal("123e4567-e89b-12d3-a456-426655440000", state.SavedToken);
+        Assert.Equal(liveUntil, state.SavedUntil);
+    }
+
     private sealed class FakeOrganizationRepository : IOrganizationRepository
     {
         public Dictionary<string, OrganizationEntity> Store { get; } = new();
@@ -229,8 +265,41 @@ public class OrganizationManagerServiceTests
 
     private sealed class FakeTrueApiAuthService : ITrueApiAuthService
     {
-        public Task<Result<string>> GenerateToken(string inn, string password, string signatureNumber)
-            => Task.FromResult(Result.Failure<string>("не используется в тесте"));
+        public Task<Result<TrueApiSession>> GenerateToken(string inn, string password, string signatureNumber)
+            => Task.FromResult(Result.Failure<TrueApiSession>("не используется в тесте"));
+    }
+
+    private sealed class SessionTrueApiAuthService : ITrueApiAuthService
+    {
+        private readonly TrueApiSession _session;
+
+        public SessionTrueApiAuthService(TrueApiSession session) => _session = session;
+
+        public Task<Result<TrueApiSession>> GenerateToken(string inn, string password, string signatureNumber)
+            => Task.FromResult(Result.Success(_session));
+    }
+
+    private sealed class RecordingApplicationState : IApplicationState
+    {
+        public string SavedToken { get; private set; } = string.Empty;
+        public DateTime SavedUntil { get; private set; }
+
+        public void DbStateUpdate(bool isOnline) { }
+        public bool DbState() => true;
+        public void UpdateNeedRestart(bool need) { }
+        public bool NeedRestart() => false;
+
+        public void UpdateTrueApiToken(string inn, string token, DateTime lifeUntil)
+        {
+            SavedToken = token;
+            SavedUntil = lifeUntil;
+        }
+
+        public TrueApiToken TrueApiToken(string inn) => new();
+        public IReadOnlyList<TrueApiToken> TrueApiTokens() => [];
+        public void MarkGisMtPushPending() { }
+        public bool GisMtPushPending() => false;
+        public void ClearGisMtPushPending() { }
     }
 
     private sealed class FakeApplicationState : IApplicationState

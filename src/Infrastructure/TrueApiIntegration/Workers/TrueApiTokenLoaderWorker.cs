@@ -87,11 +87,11 @@ public class TrueApiTokenLoaderWorker : BackgroundService
                     continue;
                 }
 
-                var tokenLifeUntil = DateTime.Now.AddHours(TrueApiTokenDefaults.LifeHours);
-                _applicationState.UpdateTrueApiToken(inn, token.Value, tokenLifeUntil);
+                var session = token.Value;
+                _applicationState.UpdateTrueApiToken(inn, session.Token, session.LiveUntil);
                 _applicationState.MarkGisMtPushPending();
 
-                _logger.LogInformation("Для {inn} получен новый токен, который действует до {tokenLifeUntil}", inn, tokenLifeUntil);
+                _logger.LogInformation("Для {inn} получен новый токен, который действует до {tokenLifeUntil}", inn, session.LiveUntil);
             }
         }
         catch (Exception ex)

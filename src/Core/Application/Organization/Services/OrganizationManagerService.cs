@@ -128,14 +128,14 @@ public class OrganizationManagerService : IOrganizationManagerService
         if (generated.IsFailure)
             return Result.Failure<TrueApiTokenView>(generated.Error);
 
-        var lifeUntil = DateTime.Now.AddHours(TrueApiTokenDefaults.LifeHours);
-        _applicationState.UpdateTrueApiToken(normalizedInn, generated.Value, lifeUntil);
+        var session = generated.Value;
+        _applicationState.UpdateTrueApiToken(normalizedInn, session.Token, session.LiveUntil);
 
         return Result.Success(ToTokenView(new TrueApiToken
         {
             Inn = normalizedInn,
-            Token = generated.Value,
-            LiveUntil = lifeUntil
+            Token = session.Token,
+            LiveUntil = session.LiveUntil
         }));
     }
 

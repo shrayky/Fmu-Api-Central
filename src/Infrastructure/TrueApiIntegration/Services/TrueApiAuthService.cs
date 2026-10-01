@@ -3,6 +3,7 @@ using CryptoPro.Security.Cryptography.Pkcs;
 using CryptoPro.Security.Cryptography.X509Certificates;
 using CSharpFunctionalExtensions;
 using Domain.Attributes;
+using Domain.TrueApiIntegration;
 using Domain.TrueApiIntegration.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -32,15 +33,15 @@ public class TrueApiAuthService : ITrueApiAuthService
         _httpClientFactory = httpClientFactory;
     }
 
-    public async Task<Result<string>> GenerateToken(string inn, string password, string signatureNumber)
+    public async Task<Result<TrueApiSession>> GenerateToken(string inn, string password, string signatureNumber)
     {
         var data = await DataForEncrypt();
         if (data.IsFailure)
-            return Result.Failure<string>(data.Error);
+            return Result.Failure<TrueApiSession>(data.Error);
 
         var encrypted = Encrypt(data.Value.Data, signatureNumber, inn, password);
         if (encrypted.IsFailure)
-            return Result.Failure<string>(encrypted.Error);
+            return Result.Failure<TrueApiSession>(encrypted.Error);
 
         return await FinishAuth(encrypted.Value, data.Value.Uuid, inn);
     }
@@ -158,19 +159,12 @@ public class TrueApiAuthService : ITrueApiAuthService
         }
     }
 
-    private async Task<Result<string>> FinishAuth(string encodedData, string requestId, string inn)
+    private async Task<Result<TrueApiSession>> FinishAuth(string encodedData, string requestId, string inn)
     {
         using var httpClient = _httpClientFactory.CreateClient("TrueApiIntegration");
         httpClient.BaseAddress = new Uri(Url);
 
-        DataWithUuid data = new()
-        {
-            Uuid = requestId,
-            Data = encodedData,
-        };
-
-        if (!string.IsNullOrEmpty(inn))
-            data.Inn = inn;
+        var data = TrueApiUnitedSignIn.Body(requestId, encodedData, inn);
 
         try
         {
@@ -189,17 +183,17 @@ public class TrueApiAuthService : ITrueApiAuthService
             if (answerData == null)
                 throw new Exception($"Ошибка преобразования ответа в {SignInPath}");
 
-            if (string.IsNullOrEmpty(answerData.Token))
-                throw new Exception(string.IsNullOrEmpty(answerData.ErrorMessage)
-                    ? "True API не вернул токен"
-                    : answerData.ErrorMessage);
+            var parsed = TrueApiUnitedSignIn.Parse(answerData.UuidToken, answerData.ExpireDate);
+            if (parsed.IsFailure)
+                return Result.Failure<TrueApiSession>(
+                    string.IsNullOrEmpty(answerData.ErrorMessage) ? parsed.Error : answerData.ErrorMessage);
 
-            return Result.Success(answerData.Token);
+            return parsed;
         }
         catch (Exception ex)
         {
             _logger.LogError("Ошибка получения данных авторизации в true api {err}", ex);
-            return Result.Failure<string>($"Ошибка получения данных авторизации в true api {ex.Message}");
+            return Result.Failure<TrueApiSession>($"Ошибка получения данных авторизации в true api {ex.Message}");
         }
     }
 }

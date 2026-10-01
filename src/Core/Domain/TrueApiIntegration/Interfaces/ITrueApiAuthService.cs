@@ -5,7 +5,7 @@ namespace Domain.TrueApiIntegration.Interfaces;
 public interface ITrueApiAuthService
 {
     /// <summary>
-    /// Получает токен True API: ключ авторизации, подпись КриптоПро, simpleSignIn.
+    /// Получает единый токен UUID: auth/key, подпись КриптоПро, simpleSignIn с unitedToken.
     /// </summary>
-    Task<Result<string>> GenerateToken(string inn, string password, string signatureNumber);
+    Task<Result<TrueApiSession>> GenerateToken(string inn, string password, string signatureNumber);
 }
