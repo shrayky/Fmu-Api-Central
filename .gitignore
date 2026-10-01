@@ -445,3 +445,4 @@ typings/
 .worktrees/
 .superpowers/
 /deploy
+/.tmp-instances-import
