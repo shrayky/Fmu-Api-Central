@@ -18,6 +18,9 @@ using Domain.Entitys.MarkCheckStatistics.Interfaces;
 using Domain.Entitys.MarksCheckStatistic;
 using Domain.Entitys.Organization;
 using Domain.Entitys.Organization.Interfaces;
+using Domain.TrueApiIntegration;
+using Domain.TrueApiIntegration.Interfaces;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Application.Tests;
@@ -143,6 +146,222 @@ public class AlertTemplateRunServiceTests
         Assert.Equal("Ромашка:2:1500", result.Value.Message);
     }
 
+    /// <summary>
+    /// Истёкший сертификат нужен мониторингу: список для выбора его уже не показывает.
+    /// </summary>
+    [Fact]
+    public async Task Preview_организация_отдаёт_срок_истёкшего_сертификата()
+    {
+        const string script = "return { message: organizations[0].name + \":\" + organizations[0].certificateWorkUntil };";
+        var until = new DateTime(2026, 1, 10, 0, 0, 0, DateTimeKind.Local);
+        var sender = new FakeMessageService("tg");
+        var sut = CreateSut(
+            sender,
+            globalEnabled: true,
+            DateTime.Now,
+            organizations:
+            [
+                new OrganizationEntity
+                {
+                    Id = "o1",
+                    Name = "Ромашка",
+                    Inn = "246412218294",
+                    TrueApiIntegrationSettings = new TrueApiIntegrationSettings { DigitalSignature = "ABC" }
+                }
+            ],
+            certificates:
+            [
+                new DigitalSignature { Number = "ABC", WorkUntil = until }
+            ]);
+
+        var result = await sut.Preview(script);
+
+        Assert.True(result.IsSuccess);
+        Assert.Contains("Ромашка", result.Value.Message);
+        Assert.Contains("2026-01-10", result.Value.Message);
+    }
+
+    [Fact]
+    public async Task RunDueTemplates_организация_уходит_в_канал_своей_группы()
+    {
+        const string script = "return { items: organizations.map(function (o) { return o.name; }) };";
+        var sender = new FakeMessageService("tg");
+        var now = DateTime.Now;
+        var sut = CreateSut(
+            sender,
+            globalEnabled: true,
+            now,
+            script,
+            organizations:
+            [
+                new OrganizationEntity { Id = "o1", Name = "Ромашка" },
+                new OrganizationEntity { Id = "o2", Name = "Василек" }
+            ],
+            group1OrganizationIds: ["o1"]);
+
+        var result = await sut.RunDueTemplates(now);
+
+        Assert.True(result.IsSuccess);
+        Assert.Contains(sender.Sends, send => send.ChatId == 100 && send.Message.Contains("Ромашка"));
+        Assert.DoesNotContain(sender.Sends, send => send.ChatId == 100 && send.Message.Contains("Василек"));
+        Assert.Contains(sender.Sends, send => send.ChatId == 200 && send.Message.Contains("Василек"));
+        Assert.DoesNotContain(sender.Sends, send => send.ChatId == 200 && send.Message.Contains("Ромашка"));
+    }
+
+    [Fact]
+    public async Task Preview_скрипт_сертификатов_сообщает_об_истёкшем()
+    {
+        var script = AlertTemplateDefaults.All()
+            .Single(template => template.Id == "check-organization-certificates")
+            .Script;
+        var sender = new FakeMessageService("tg");
+        var sut = CreateSut(
+            sender,
+            globalEnabled: true,
+            DateTime.Now,
+            organizations:
+            [
+                new OrganizationEntity
+                {
+                    Id = "o1",
+                    Name = "Ромашка",
+                    Inn = "246412218294",
+                    TrueApiIntegrationSettings = new TrueApiIntegrationSettings { DigitalSignature = "ABC" }
+                }
+            ],
+            certificates:
+            [
+                new DigitalSignature { Number = "ABC", WorkUntil = DateTime.Today.AddDays(-1) }
+            ]);
+
+        var result = await sut.Preview(script);
+
+        Assert.True(result.IsSuccess);
+        Assert.Contains("истёк", result.Value.Message);
+        Assert.Contains("Ромашка", result.Value.Message);
+    }
+
+    [Fact]
+    public async Task Preview_скрипт_лицензии_криптопро_сообщает_об_истёкшей()
+    {
+        var script = AlertTemplateDefaults.All()
+            .Single(template => template.Id == "check-cryptopro-license")
+            .Script;
+        var yesterday = DateTime.Today.AddDays(-1);
+        var sender = new FakeMessageService("tg");
+        var sut = CreateSut(
+            sender,
+            globalEnabled: true,
+            DateTime.Now,
+            licenseView: $"Expires: {yesterday:dd.MM.yyyy}");
+
+        var result = await sut.Preview(script);
+
+        Assert.True(result.IsSuccess);
+        Assert.Contains("истекла", result.Value.Message);
+    }
+
+    [Fact]
+    public async Task Preview_скрипт_лицензии_криптопро_понимает_expires_day()
+    {
+        var script = AlertTemplateDefaults.All()
+            .Single(template => template.Id == "check-cryptopro-license")
+            .Script;
+        var sender = new FakeMessageService("tg");
+        var sut = CreateSut(
+            sender,
+            globalEnabled: true,
+            DateTime.Now,
+            licenseView: "Expires: 1 day(s)");
+
+        var result = await sut.Preview(script);
+
+        Assert.True(result.IsSuccess);
+        Assert.Contains("истекает", result.Value.Message);
+    }
+
+    /// <summary>
+    /// Лицензия одна на машину: при включённом общем канале группы её не получают.
+    /// </summary>
+    [Fact]
+    public async Task RunDueTemplates_лицензия_криптопро_уходит_только_в_общий_канал()
+    {
+        const string script = "return { message: (cryptoProLicense && cryptoProLicense.expiresAt) ? cryptoProLicense.expiresAt : \"none\" };";
+        var sender = new FakeMessageService("tg");
+        var now = DateTime.Now;
+        var sut = CreateSut(
+            sender,
+            globalEnabled: true,
+            now,
+            script,
+            licenseView: "Expires: 18.11.2026");
+
+        var result = await sut.RunDueTemplates(now);
+
+        Assert.True(result.IsSuccess);
+        Assert.Contains(sender.Sends, send => send.ChatId == 200 && send.Message.Contains("2026-11-18"));
+        Assert.DoesNotContain(sender.Sends, send => send.ChatId == 100 && send.Message.Contains("2026-11-18"));
+    }
+
+    [Fact]
+    public async Task RunDueTemplates_лицензия_криптопро_идёт_в_группу_если_общий_канал_выключен()
+    {
+        const string script = "return { message: (cryptoProLicense && cryptoProLicense.expiresAt) ? cryptoProLicense.expiresAt : \"none\" };";
+        var sender = new FakeMessageService("tg");
+        var now = DateTime.Now;
+        var sut = CreateSut(
+            sender,
+            globalEnabled: false,
+            now,
+            script,
+            licenseView: "Expires: 18.11.2026");
+
+        var result = await sut.RunDueTemplates(now);
+
+        Assert.True(result.IsSuccess);
+        Assert.Contains(sender.Sends, send => send.ChatId == 100 && send.Message.Contains("2026-11-18"));
+        Assert.DoesNotContain(sender.Sends, send => send.ChatId == 200);
+    }
+
+    [Fact]
+    public async Task Preview_логирует_если_лицензию_криптопро_не_прочитать()
+    {
+        var logger = new ListLogger<AlertTemplateRunService>();
+        var sut = CreateSut(new FakeMessageService("tg"), globalEnabled: true, DateTime.Now, logger: logger);
+
+        var result = await sut.Preview("return { message: \"ok\" };");
+
+        Assert.True(result.IsSuccess);
+        Assert.Contains(logger.Messages, message => message.Contains("Лицензию КриптоПро прочитать не удалось"));
+    }
+
+    [Fact]
+    public async Task Preview_логирует_организацию_чей_сертификат_не_в_хранилище()
+    {
+        var logger = new ListLogger<AlertTemplateRunService>();
+        var sut = CreateSut(
+            new FakeMessageService("tg"),
+            globalEnabled: true,
+            DateTime.Now,
+            logger: logger,
+            licenseView: "Expires: 18.11.2026",
+            organizations:
+            [
+                new OrganizationEntity
+                {
+                    Id = "o1",
+                    Name = "Ромашка",
+                    Inn = "246412218294",
+                    TrueApiIntegrationSettings = new TrueApiIntegrationSettings { DigitalSignature = "ABC" }
+                }
+            ]);
+
+        var result = await sut.Preview("return { message: \"ok\" };");
+
+        Assert.True(result.IsSuccess);
+        Assert.Contains(logger.Messages, message => message.Contains("Ромашка") && message.Contains("ABC"));
+    }
+
     [Fact]
     public async Task RunDueTemplates_null_канал_группы_не_падает()
     {
@@ -163,7 +382,11 @@ public class AlertTemplateRunServiceTests
         IReadOnlyList<MarkCheckStatisticsEntity>? statistics = null,
         bool nullGroupChannel = false,
         IReadOnlyList<CrptViolationsDailyEntity>? violations = null,
-        IReadOnlyList<OrganizationEntity>? organizations = null)
+        IReadOnlyList<OrganizationEntity>? organizations = null,
+        IReadOnlyList<DigitalSignature>? certificates = null,
+        IReadOnlyList<string>? group1OrganizationIds = null,
+        string? licenseView = null,
+        ILogger<AlertTemplateRunService>? logger = null)
     {
         var factory = new FakeMessageServiceFactory
         {
@@ -190,6 +413,7 @@ public class AlertTemplateRunServiceTests
         {
             Id = "g1",
             Name = "g1",
+            OrganizationIds = group1OrganizationIds?.ToList() ?? [],
             AlertChannel = nullGroupChannel
                 ? null!
                 : new AlertChannel
@@ -222,7 +446,7 @@ public class AlertTemplateRunServiceTests
         };
 
         return new AlertTemplateRunService(
-            NullLogger<AlertTemplateRunService>.Instance,
+            logger ?? NullLogger<AlertTemplateRunService>.Instance,
             templates,
             new FakeTemplateManager(),
             new AlertDatasetScriptExecutor(),
@@ -232,7 +456,9 @@ public class AlertTemplateRunServiceTests
             new FakeOrganizationRepository(organizations),
             parameters,
             groups,
-            factory);
+            factory,
+            new FakeDigitalSignatureService(certificates),
+            new FakeCryptoProLicenseService(licenseView));
     }
 
     private sealed class FakeTemplateRepository : IAlertTemplateRepository
@@ -391,5 +617,57 @@ public class AlertTemplateRunServiceTests
         public Task<Parameters> Current() => Task.FromResult(Value);
 
         public Task<bool> Update(Parameters parameters) => throw new NotImplementedException();
+    }
+
+    private sealed class FakeDigitalSignatureService : IDigitalSignatureService
+    {
+        private readonly List<DigitalSignature> _certificates;
+
+        public FakeDigitalSignatureService(IReadOnlyList<DigitalSignature>? certificates = null)
+        {
+            _certificates = certificates?.ToList() ?? [];
+        }
+
+        public List<DigitalSignature> List() =>
+            _certificates.Where(certificate => certificate.WorkUntil > DateTime.Now).ToList();
+
+        public List<DigitalSignature> ListIncludingExpired() => _certificates;
+
+        public Result Install(Stream archive) => throw new NotImplementedException();
+    }
+
+    private sealed class FakeCryptoProLicenseService : ICryptoProLicenseService
+    {
+        private readonly string? _viewText;
+
+        public FakeCryptoProLicenseService(string? viewText)
+        {
+            _viewText = viewText;
+        }
+
+        public Result<string> View() => _viewText == null
+            ? Result.Failure<string>("нет")
+            : Result.Success(_viewText);
+
+        public Result<string> Set(string serial) => throw new NotImplementedException();
+    }
+
+    private sealed class ListLogger<T> : ILogger<T>
+    {
+        public List<string> Messages { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            Messages.Add(formatter(state, exception));
+        }
     }
 }

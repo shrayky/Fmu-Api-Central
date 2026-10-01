@@ -147,8 +147,7 @@ class SettingsView {
         };
 
         return {
-            id:
-                this.id,
+            id: this.id,
             rows: [
                 couchDbSettingsForm,
             ],

@@ -2,6 +2,8 @@
 
 import { loadConfiguration, exportPortableSettings, importPortableSettings } from '../services/ConfigurationService.js';
 import databaseDumpService from '../services/databaseDumpService.js';
+import cryptoProLicenseService from '../services/cryptoProLicenseService.js';
+import organizationService from '../services/organizationService.js';
 
 class ServiceView {
     constructor(id) {
@@ -20,6 +22,14 @@ class ServiceView {
             settingsImportConfirm: "Импорт заменит настройки логов, оповещений и обновлений ПО. Параметры базы данных и сервера останутся без изменений. Продолжить?",
             exportDone: "Экспорт завершён",
             importDone: "Импорт завершён",
+            cryptoPro: "КриптоПро",
+            cryptoProHint: "Лицензия одна на машину, где запущена служба. Сертификат — zip-контейнер с файлами *.key, например 2560.zip.",
+            cryptoProTool: "csptest ищется в Program Files\\Crypto Pro\\CSP, в Program Files (x86)\\Crypto Pro\\CSP и в /opt/cprocsp/bin/amd64/csptest. Другие каталоги не проверяются.",
+            setLicense: "Установить лицензию",
+            uploadCertificate: "Загрузить сертификат",
+            licenseSet: "Лицензия установлена",
+            certificateUploaded: "Сертификат загружен",
+            serial: "Серийный номер",
         };
     }
 
@@ -29,10 +39,12 @@ class ServiceView {
         if (!requestResult.result) {
             webix.message({ type: "error", text: requestResult.error });
             this.dbEnabled = false;
+            this.licenseText = await this._readLicense();
             return this;
         }
 
         this.dbEnabled = !!requestResult.value?.Content?.databaseConnection?.enable;
+        this.licenseText = await this._readLicense();
         return this;
     }
 
@@ -48,6 +60,7 @@ class ServiceView {
                     elements: [
                         this._dataFieldset(),
                         this._settingsFieldset(),
+                        this._cryptoProFieldset(),
                         {}
                     ]
                 }
@@ -93,6 +106,119 @@ class ServiceView {
                 ]
             }
         };
+    }
+
+    /**
+     * Лицензия и контейнер ставятся в КриптоПро пользователя службы, не в настройки организации.
+     */
+    _cryptoProFieldset() {
+        return {
+            view: "fieldset",
+            label: this.labels.cryptoPro,
+            body: {
+                rows: [
+                    {
+                        view: "label",
+                        label: this.labels.cryptoProHint
+                    },
+                    {
+                        view: "label",
+                        label: this.labels.cryptoProTool
+                    },
+                    {
+                        view: "template",
+                        id: "cryptoProLicenseStatus",
+                        autoheight: true,
+                        borderless: true,
+                        template: this._escape(this.licenseText),
+                        css: { "white-space": "pre-wrap" }
+                    },
+                    {
+                        view: "text",
+                        id: "cryptoProLicenseSerial",
+                        label: this.labels.serial,
+                        labelPosition: "top",
+                        placeholder: "XXXXX-XXXXX-XXXXX-XXXXX-XXXXX"
+                    },
+                    {
+                        cols: [
+                            {
+                                view: "button",
+                                value: this.labels.setLicense,
+                                width: 220,
+                                click: () => this._setLicense()
+                            },
+                            {
+                                view: "button",
+                                value: this.labels.uploadCertificate,
+                                width: 220,
+                                click: () => this._uploadCertificate()
+                            },
+                            {}
+                        ]
+                    }
+                ]
+            }
+        };
+    }
+
+    async _readLicense() {
+        try {
+            return await cryptoProLicenseService.view();
+        } catch (error) {
+            return error.message || "Не удалось прочитать лицензию";
+        }
+    }
+
+    _escape(text) {
+        return String(text || "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;");
+    }
+
+    async _setLicense() {
+        const serial = String($$("cryptoProLicenseSerial").getValue() || "");
+        const form = $$(this.formId);
+        this._showFormProgress(form);
+
+        try {
+            const text = await cryptoProLicenseService.set(serial);
+            this._showLicense(text);
+            webix.message({ type: "success", text: this.labels.licenseSet });
+        } catch (error) {
+            webix.message({ type: "error", text: error.message || "Не удалось установить лицензию" });
+        } finally {
+            this._hideFormProgress(form);
+        }
+    }
+
+    async _uploadCertificate() {
+        const file = await this._pickFile(".zip,application/zip,application/x-zip-compressed");
+        if (!file)
+            return;
+
+        const form = $$(this.formId);
+        this._showFormProgress(form);
+
+        try {
+            await organizationService.uploadCertificate(file);
+            webix.message({ type: "success", text: this.labels.certificateUploaded });
+        } catch (error) {
+            webix.message({ type: "error", text: error.message || "Не удалось загрузить сертификат" });
+        } finally {
+            this._hideFormProgress(form);
+        }
+    }
+
+    _showLicense(text) {
+        this.licenseText = text;
+        const status = $$("cryptoProLicenseStatus");
+        if (!status)
+            return;
+
+        status.define("template", this._escape(text));
+        status.refresh();
     }
 
     /**

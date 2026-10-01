@@ -17,7 +17,7 @@ class OrganizationElementView {
             DigitalSignature: "Сертификат ЭЦП",
             signPassword: "Пароль от ЭЦП",
             LoadToken: "Получить токен",
-            cryptoProHint: "Для работы необходимо, чтобы на одном ПК с fmu-api-central был установлен КриптоПро, а также у пользователя, от которого запущена служба, был установлен сертификат ЭЦП.",
+            cryptoProHint: "Сертификат ставится на вкладке «Сервис». Здесь выбирается уже установленный.",
             gisMtTab: "Подключенные группы",
             gisMtGroupCode: "Код",
             gisMtGroupName: "Название",

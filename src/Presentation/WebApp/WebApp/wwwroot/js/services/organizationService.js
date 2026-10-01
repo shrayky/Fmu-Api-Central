@@ -55,6 +55,22 @@ class OrganizationService {
         return data.value || [];
     }
 
+    async uploadCertificate(file) {
+        const formData = new FormData();
+        formData.append("file", file);
+
+        const data = await this.authService.makeAuthenticatedRequest("/api/digitalSignature", {
+            method: "POST",
+            body: formData
+        });
+
+        if (!data.result) {
+            throw new Error(data.error);
+        }
+
+        return data.value || [];
+    }
+
     async getToken(inn) {
         const endpoint = `/api/ts/token/inn?inn=${encodeURIComponent(inn)}`;
         const data = await this.authService.makeAuthenticatedRequest(endpoint);

@@ -251,8 +251,11 @@ public class FmuApiInstancesRepository : BaseCouchDbRepository<InstanceEntity>, 
             query = query.Where(p => p.Data.UpdatedAt < updatedBefore);
         }
 
+        // "Без группы" — это и пустая строка, и null: драйвер транслирует только сравнение
+        // с литералами, string.IsNullOrEmpty даёт "The method 'IsNullOrEmpty' is not supported".
+        // Документы, в которых поля groupId нет вовсе, mango-селектором не выбираются.
         if (filter.WithoutGroup)
-            query = query.Where(p => string.IsNullOrEmpty(p.Data.GroupId));
+            query = query.Where(p => p.Data.GroupId == "" || (string)p.Data.GroupId == null);
         else if (!string.IsNullOrEmpty(filter.GroupId))
             query = query.Where(p => p.Data.GroupId == filter.GroupId);
 

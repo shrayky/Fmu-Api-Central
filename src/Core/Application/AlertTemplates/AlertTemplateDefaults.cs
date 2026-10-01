@@ -13,7 +13,9 @@ public static class AlertTemplateDefaults
         Template("check-ts-piot-status", "Состояние ТС ПИоТ", CheckTsPiotStatus),
         Template("check-ts-piot-license", "Лицензии ТС ПИоТ", CheckTsPiotLicense),
         Template("check-ts-piot-versions", "Версии ТС ПИоТ", CheckTsPiotVersions),
-        Template("crpt-violations-yesterday", "Сводка отклонений ЧЗ", CrptViolationsYesterday)
+        Template("crpt-violations-yesterday", "Сводка отклонений ЧЗ", CrptViolationsYesterday),
+        Template("check-organization-certificates", "Сертификаты организаций", CheckOrganizationCertificates),
+        Template("check-cryptopro-license", "Лицензия КриптоПро", CheckCryptoProLicense)
     ];
 
     private static AlertTemplateEntity Template(string id, string name, string script) => new()
@@ -221,5 +223,62 @@ public static class AlertTemplateDefaults
             message: "Отклонений: " + total + ", штрафы: " + penalty + " ₽",
             items: items
         };
+        """;
+
+    private const string CheckOrganizationCertificates =
+        """
+        const alertDays = 30;
+        const today = new Date(now);
+        today.setHours(0, 0, 0, 0);
+        const alertUntil = new Date(today);
+        alertUntil.setDate(alertUntil.getDate() + alertDays);
+        const items = [];
+
+        (organizations || []).forEach(function (org) {
+            if (!org.certificateWorkUntil)
+                return;
+
+            var until = new Date(org.certificateWorkUntil);
+            until.setHours(0, 0, 0, 0);
+            var dateText = until.toLocaleDateString("ru-RU");
+
+            if (until < today) {
+                items.push("🚨<b>" + org.name + "</b> ИНН " + org.inn + "%0A Сертификат истёк!%0A дата: <u>" + dateText + "</u>!");
+                return;
+            }
+
+            if (until > alertUntil)
+                return;
+
+            var daysLeft = Math.round((until - today) / (24 * 60 * 60 * 1000));
+            items.push("🚨<b>" + org.name + "</b> ИНН " + org.inn + "%0A Сертификат истекает через " + daysLeft + " дней!%0A дата: <u>" + dateText + "</u>!");
+        });
+
+        return { items: items };
+        """;
+
+    private const string CheckCryptoProLicense =
+        """
+        const alertDays = 30;
+        if (!cryptoProLicense || cryptoProLicense.permanent || !cryptoProLicense.expiresAt)
+            return;
+
+        // yyyy-MM-dd как локальная дата: new Date("yyyy-MM-dd") считает день по UTC и сдвигает его.
+        const parts = cryptoProLicense.expiresAt.split("-");
+        const until = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+        const today = new Date(now);
+        today.setHours(0, 0, 0, 0);
+        const alertUntil = new Date(today);
+        alertUntil.setDate(alertUntil.getDate() + alertDays);
+        const dateText = until.toLocaleDateString("ru-RU");
+
+        if (until < today)
+            return { items: ["🚨<b>Лицензия КриптоПро</b> истекла!%0A дата: <u>" + dateText + "</u>!"] };
+
+        if (until > alertUntil)
+            return;
+
+        const daysLeft = Math.round((until - today) / (24 * 60 * 60 * 1000));
+        return { items: ["🚨<b>Лицензия КриптоПро</b> истекает через " + daysLeft + " дней!%0A дата: <u>" + dateText + "</u>!"] };
         """;
 }

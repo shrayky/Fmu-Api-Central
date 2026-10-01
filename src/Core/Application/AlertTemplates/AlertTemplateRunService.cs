@@ -12,7 +12,10 @@ using Domain.Entitys.CrptViolations;
 using Domain.Entitys.CrptViolations.Interfaces;
 using Domain.Entitys.MarkCheckStatistics.Interfaces;
 using Domain.Entitys.MarksCheckStatistic;
+using Domain.Entitys.Organization;
 using Domain.Entitys.Organization.Interfaces;
+using Domain.TrueApiIntegration;
+using Domain.TrueApiIntegration.Interfaces;
 using Domain.Entitys.SettingsSchema;
 using Microsoft.Extensions.Logging;
 
@@ -34,6 +37,8 @@ public class AlertTemplateRunService : IAlertTemplateRunService
     private readonly IParametersService _parameters;
     private readonly IInstanceGroupRepository _groups;
     private readonly IMessageServiceFactory _messageServiceFactory;
+    private readonly IDigitalSignatureService _signatures;
+    private readonly ICryptoProLicenseService _licenses;
 
     public AlertTemplateRunService(
         ILogger<AlertTemplateRunService> logger,
@@ -46,7 +51,9 @@ public class AlertTemplateRunService : IAlertTemplateRunService
         IOrganizationRepository organizations,
         IParametersService parameters,
         IInstanceGroupRepository groups,
-        IMessageServiceFactory messageServiceFactory)
+        IMessageServiceFactory messageServiceFactory,
+        IDigitalSignatureService signatures,
+        ICryptoProLicenseService licenses)
     {
         _logger = logger;
         _templates = templates;
@@ -59,6 +66,8 @@ public class AlertTemplateRunService : IAlertTemplateRunService
         _parameters = parameters;
         _groups = groups;
         _messageServiceFactory = messageServiceFactory;
+        _signatures = signatures;
+        _licenses = licenses;
     }
 
     public async Task<Result> RunDueTemplates(DateTime now)
@@ -82,6 +91,10 @@ public class AlertTemplateRunService : IAlertTemplateRunService
         var global = AlertChannel.FromBotSettings(bot);
         var statistics = await LoadStatistics();
         var violations = await LoadViolations();
+        var organizations = await LoadOrganizations();
+        var license = LoadLicense();
+        // Лицензия одна на машину службы: в общий канал, а если он выключен — в первую включённую группу.
+        var licenseDelivered = global.IsEnabled;
 
         foreach (var group in groups)
         {
@@ -89,22 +102,40 @@ public class AlertTemplateRunService : IAlertTemplateRunService
             if (!channel.IsEnabled)
                 continue;
 
+            var groupLicense = AlertCryptoProLicenseSnapshot.None;
+            if (!licenseDelivered)
+            {
+                groupLicense = license;
+                licenseDelivered = true;
+            }
+
             var groupInstances = instances.Where(instance => instance.GroupId == group.Id).ToList();
-            var sendResult = await RunTemplatesForChannel(due, groupInstances, channel, statistics, violations, bot);
+            var groupOrganizations = organizations
+                .Where(organization => (group.OrganizationIds ?? []).Contains(organization.Id))
+                .ToList();
+            var sendResult = await RunTemplatesForChannel(
+                due, groupInstances, channel, statistics, violations, groupOrganizations, groupLicense, bot);
             if (sendResult.IsFailure)
                 return sendResult;
         }
 
-        var enabledGroupIds = groups
+        var enabledGroups = groups
             .Where(group => (group.AlertChannel ?? AlertChannel.Disabled()).IsEnabled)
-            .Select(group => group.Id)
+            .ToList();
+        var enabledGroupIds = enabledGroups.Select(group => group.Id).ToHashSet();
+        var enabledOrganizationIds = enabledGroups
+            .SelectMany(group => group.OrganizationIds ?? [])
             .ToHashSet();
         var fallback = instances
             .Where(instance => !enabledGroupIds.Contains(instance.GroupId))
             .ToList();
+        var fallbackOrganizations = organizations
+            .Where(organization => !enabledOrganizationIds.Contains(organization.Id))
+            .ToList();
 
         if (global.IsEnabled)
-            return await RunTemplatesForChannel(due, fallback, global, statistics, violations, bot);
+            return await RunTemplatesForChannel(
+                due, fallback, global, statistics, violations, fallbackOrganizations, license, bot);
 
         return Result.Success();
     }
@@ -130,9 +161,11 @@ public class AlertTemplateRunService : IAlertTemplateRunService
         AlertChannel channel,
         IReadOnlyList<MarkCheckStatisticsEntity> statistics,
         IReadOnlyList<AlertViolationDaySnapshot> violations,
+        IReadOnlyList<AlertOrganizationSnapshot> organizations,
+        AlertCryptoProLicenseSnapshot license,
         TelegramBotSetting bot)
     {
-        var contextResult = BuildContext(instances, statistics, violations, bot);
+        var contextResult = BuildContext(instances, statistics, violations, organizations, license, bot);
         if (contextResult.IsFailure)
             return Result.Failure(contextResult.Error);
 
@@ -184,13 +217,21 @@ public class AlertTemplateRunService : IAlertTemplateRunService
             return Result.Failure<AlertDatasetContext>(instancesResult.Error);
 
         var bot = (await _parameters.Current()).BotSettings;
-        return BuildContext(instancesResult.Value, await LoadStatistics(), await LoadViolations(), bot);
+        return BuildContext(
+            instancesResult.Value,
+            await LoadStatistics(),
+            await LoadViolations(),
+            await LoadOrganizations(),
+            LoadLicense(),
+            bot);
     }
 
     private Result<AlertDatasetContext> BuildContext(
         IReadOnlyList<InstanceEntity> entities,
         IReadOnlyList<MarkCheckStatisticsEntity> statisticsEntities,
         IReadOnlyList<AlertViolationDaySnapshot> violations,
+        IReadOnlyList<AlertOrganizationSnapshot> organizations,
+        AlertCryptoProLicenseSnapshot license,
         TelegramBotSetting bot)
     {
         var now = DateTimeOffset.Now;
@@ -211,6 +252,8 @@ public class AlertTemplateRunService : IAlertTemplateRunService
             Instances = instances,
             Statistics = statistics,
             Violations = violations,
+            Organizations = organizations,
+            CryptoProLicense = license,
             Settings = new AlertSettingsSnapshot
             {
                 OfflineNodeAlertInterval = bot.OfflineNodeAlertInterval,
@@ -244,6 +287,68 @@ public class AlertTemplateRunService : IAlertTemplateRunService
         }
 
         return statisticsResult.Value;
+    }
+
+    private AlertCryptoProLicenseSnapshot LoadLicense()
+    {
+        var view = _licenses.View();
+        if (view.IsFailure)
+        {
+            _logger.LogWarning("Лицензию КриптоПро прочитать не удалось: {Error}", view.Error);
+            return AlertCryptoProLicenseSnapshot.None;
+        }
+
+        var parsed = CryptoProLicenseView.Parse(view.Value);
+        return new AlertCryptoProLicenseSnapshot
+        {
+            Permanent = parsed.Permanent,
+            ExpiresAt = parsed.ExpiresAt?.ToString("yyyy-MM-dd")
+        };
+    }
+
+    private async Task<List<AlertOrganizationSnapshot>> LoadOrganizations()
+    {
+        var organizations = await _organizations.All();
+        var byNumber = _signatures.ListIncludingExpired()
+            .Where(certificate => !string.IsNullOrWhiteSpace(certificate.Number))
+            .GroupBy(certificate => certificate.Number.Trim(), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+
+        return organizations
+            .Select(organization =>
+            {
+                var snapshot = ToOrganizationSnapshot(organization, byNumber);
+                if (snapshot.CertificateNumber.Length > 0 && snapshot.CertificateWorkUntil == null)
+                {
+                    _logger.LogWarning(
+                        "У организации {Name} ({Inn}) указан сертификат {Number}, в хранилище его нет",
+                        snapshot.Name,
+                        snapshot.Inn,
+                        snapshot.CertificateNumber);
+                }
+
+                return snapshot;
+            })
+            .ToList();
+    }
+
+    private static AlertOrganizationSnapshot ToOrganizationSnapshot(
+        OrganizationEntity organization,
+        IReadOnlyDictionary<string, DigitalSignature> certificates)
+    {
+        var number = organization.TrueApiIntegrationSettings?.DigitalSignature?.Trim() ?? string.Empty;
+        DigitalSignature? certificate = null;
+        if (number.Length > 0)
+            certificates.TryGetValue(number, out certificate);
+
+        return new AlertOrganizationSnapshot
+        {
+            Id = organization.Id,
+            Name = organization.Name,
+            Inn = organization.Inn,
+            CertificateNumber = number,
+            CertificateWorkUntil = certificate?.WorkUntil.ToString("O")
+        };
     }
 
     /// <summary>

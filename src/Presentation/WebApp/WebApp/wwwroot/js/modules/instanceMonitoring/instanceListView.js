@@ -133,7 +133,8 @@ class InstanceListView {
             tsPiots: "tsPiots",
             instanceGroup: "groupName",
             assignGroupWindow: "assignGroupWindow",
-            assignGroupForm: "assignGroupForm"
+            assignGroupForm: "assignGroupForm",
+            assignGroupSelect: "assignGroupSelect"
         };
 
         this.hotkeys = [
@@ -1358,6 +1359,7 @@ class InstanceListView {
                     },
                     {
                         view: "richselect",
+                        id: this.NAMES.assignGroupSelect,
                         name: "groupId",
                         label: this.LABELS.instanceGroup,
                         labelPosition: "top",
@@ -1409,8 +1411,9 @@ class InstanceListView {
 
     // Назначает выбранную группу отмеченным инстансам.
     async _applyAssignGroup(tokens) {
-        const form = $$(this.NAMES.assignGroupForm);
-        const groupId = form.getValue("groupId") || "";
+        // Значение берём у самого селекта: строковый ключ у формы в этой сборке Webix не поддерживается.
+        const select = $$(this.NAMES.assignGroupSelect);
+        const groupId = select ? (select.getValue() || "") : "";
 
         try {
             const result = await instanceMonitoringService.assignGroup(tokens, groupId);

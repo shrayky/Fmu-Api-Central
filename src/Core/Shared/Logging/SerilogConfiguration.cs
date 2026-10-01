@@ -40,6 +40,7 @@ namespace Shared.Logging
             loggerConfiguration = loggerConfiguration
                 .MinimumLevel.Override("Microsoft.AspNetCore", LogEventLevel.Error)
                 .MinimumLevel.Override("Microsoft.Hosting.Lifetime", LogEventLevel.Error)
+                .MinimumLevel.Override("Microsoft.Extensions.Http.DefaultHttpClientFactory", LogEventLevel.Warning)
                 .MinimumLevel.Override("System", LogEventLevel.Error);
 
             return loggerConfiguration.CreateLogger();

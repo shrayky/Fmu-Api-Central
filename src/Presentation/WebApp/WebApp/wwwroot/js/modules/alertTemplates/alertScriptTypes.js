@@ -47,6 +47,19 @@ interface AlertViolationItem {
     violationNumber: number;
 }
 
+interface AlertOrganization {
+    id: string;
+    name: string;
+    inn: string;
+    certificateNumber: string;
+    certificateWorkUntil?: string;
+}
+
+interface AlertCryptoProLicense {
+    permanent: boolean;
+    expiresAt?: string;
+}
+
 interface AlertViolationDay {
     inn: string;
     organizationName: string;
@@ -84,6 +97,8 @@ interface AlertDataset {
 declare const instances: AlertInstance[];
 declare const statistics: AlertStatistic[];
 declare const violations: AlertViolationDay[];
+declare const organizations: AlertOrganization[];
+declare const cryptoProLicense: AlertCryptoProLicense;
 declare const now: string;
 declare const settings: AlertSettings;
 declare function isVersionBelowThreshold(currentVersion: string, thresholdVersion: string): boolean;

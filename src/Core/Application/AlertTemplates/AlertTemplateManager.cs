@@ -80,11 +80,13 @@ public class AlertTemplateManager : IAlertTemplateManager
     public async Task<Result> EnsureDefaults()
     {
         var existing = await _repository.All();
-        if (existing.Count > 0)
-            return Result.Success();
+        var existingIds = existing.Select(template => template.Id).ToHashSet();
 
         foreach (var template in AlertTemplateDefaults.All())
         {
+            if (existingIds.Contains(template.Id))
+                continue;
+
             var createResult = await _repository.Create(template);
             if (createResult.IsFailure)
                 return createResult;

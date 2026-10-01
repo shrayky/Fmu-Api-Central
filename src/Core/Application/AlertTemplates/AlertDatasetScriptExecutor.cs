@@ -28,6 +28,8 @@ public class AlertDatasetScriptExecutor : IAlertDatasetScriptExecutor
                 instances = context.Instances,
                 statistics = context.Statistics,
                 violations = context.Violations,
+                organizations = context.Organizations,
+                cryptoProLicense = context.CryptoProLicense,
                 now = context.Now.ToUniversalTime().ToString("O"),
                 settings = context.Settings
             }, JsonOptions);
@@ -48,6 +50,8 @@ public class AlertDatasetScriptExecutor : IAlertDatasetScriptExecutor
                 var instances = __ctx.instances;
                 var statistics = __ctx.statistics;
                 var violations = __ctx.violations;
+                var organizations = __ctx.organizations;
+                var cryptoProLicense = __ctx.cryptoProLicense;
                 var now = __ctx.now;
                 var settings = __ctx.settings;
                 var result;
