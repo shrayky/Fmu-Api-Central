@@ -15,6 +15,12 @@ namespace Domain.AppState.Interfaces
 
         IReadOnlyList<TrueApiToken> TrueApiTokens();
 
+        void UpdateXApiKey(string inn, string key, DateTime lifeUntil);
+
+        TrueApiToken XApiKey(string inn);
+
+        IReadOnlyList<TrueApiToken> XApiKeys();
+
         void MarkGisMtPushPending();
         bool GisMtPushPending();
         void ClearGisMtPushPending();

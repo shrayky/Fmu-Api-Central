@@ -23,6 +23,9 @@ public record OrganizationView
     [JsonPropertyName("trueApiTokenExpired")]
     public DateTime? TrueApiTokenExpired { get; set; }
 
+    [JsonPropertyName("xApiKeyExpiresAt")]
+    public DateTime? XApiKeyExpiresAt { get; set; }
+
     [JsonPropertyName("gisMtLastStatus")]
     public GisMtLastStatus GisMtLastStatus { get; set; } = new();
 

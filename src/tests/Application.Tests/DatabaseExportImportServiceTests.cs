@@ -81,6 +81,9 @@ public class DatabaseExportImportServiceTests
         public void UpdateTrueApiToken(string inn, string token, DateTime lifeUntil) { }
         public TrueApiToken TrueApiToken(string inn) => new();
         public IReadOnlyList<TrueApiToken> TrueApiTokens() => [];
+        public void UpdateXApiKey(string inn, string key, DateTime lifeUntil) { }
+        public TrueApiToken XApiKey(string inn) => new();
+        public IReadOnlyList<TrueApiToken> XApiKeys() => [];
         public void MarkGisMtPushPending() { }
         public bool GisMtPushPending() => false;
         public void ClearGisMtPushPending() { }

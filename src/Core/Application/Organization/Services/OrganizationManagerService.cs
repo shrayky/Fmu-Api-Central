@@ -200,6 +200,7 @@ public class OrganizationManagerService : IOrganizationManagerService
             TrueApiEnabled = entity.TrueApiIntegrationSettings?.Enable ?? false,
             TrueApiTokenReceived = received,
             TrueApiTokenExpired = received ? cached.LiveUntil : null,
+            XApiKeyExpiresAt = entity.XApiKeyExpiresAt,
             GisMtLastStatus = CopyStatus(entity.GisMtLastStatus),
             GisMtProductGroups = CopyGroups(entity.GisMtProductGroups),
             TrueApiIntegrationSettings = ForClient(entity.TrueApiIntegrationSettings)

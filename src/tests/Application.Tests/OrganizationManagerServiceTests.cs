@@ -45,6 +45,29 @@ public class OrganizationManagerServiceTests
     }
 
     /// <summary>
+    /// Срок x-api-key хранится в документе организации и виден в списке.
+    /// </summary>
+    [Fact]
+    public async Task List_отдаёт_срок_x_api_key()
+    {
+        var until = new DateTime(2026, 10, 14, 18, 0, 0, DateTimeKind.Local);
+        var repository = new FakeOrganizationRepository();
+        repository.Store["o1"] = new OrganizationEntity
+        {
+            Id = "o1",
+            Name = "Орг",
+            Inn = "1234567890",
+            XApiKeyExpiresAt = until
+        };
+        var sut = CreateSut(repository);
+
+        var result = await sut.List(1, 50);
+
+        var view = Assert.Single(result.Content);
+        Assert.Equal(until, view.XApiKeyExpiresAt);
+    }
+
+    /// <summary>
     /// Удаление организации снимает её из списков групп.
     /// </summary>
     [Fact]
@@ -267,6 +290,9 @@ public class OrganizationManagerServiceTests
     {
         public Task<Result<TrueApiSession>> GenerateToken(string inn, string password, string signatureNumber)
             => Task.FromResult(Result.Failure<TrueApiSession>("не используется в тесте"));
+
+        public Task<Result<TrueApiSession>> GenerateXApiKey(string inn, string password, string signatureNumber)
+            => Task.FromResult(Result.Failure<TrueApiSession>("не используется в тесте"));
     }
 
     private sealed class SessionTrueApiAuthService : ITrueApiAuthService
@@ -277,6 +303,9 @@ public class OrganizationManagerServiceTests
 
         public Task<Result<TrueApiSession>> GenerateToken(string inn, string password, string signatureNumber)
             => Task.FromResult(Result.Success(_session));
+
+        public Task<Result<TrueApiSession>> GenerateXApiKey(string inn, string password, string signatureNumber)
+            => Task.FromResult(Result.Failure<TrueApiSession>("не используется в тесте"));
     }
 
     private sealed class RecordingApplicationState : IApplicationState
@@ -297,6 +326,9 @@ public class OrganizationManagerServiceTests
 
         public TrueApiToken TrueApiToken(string inn) => new();
         public IReadOnlyList<TrueApiToken> TrueApiTokens() => [];
+        public void UpdateXApiKey(string inn, string key, DateTime lifeUntil) { }
+        public TrueApiToken XApiKey(string inn) => new();
+        public IReadOnlyList<TrueApiToken> XApiKeys() => [];
         public void MarkGisMtPushPending() { }
         public bool GisMtPushPending() => false;
         public void ClearGisMtPushPending() { }
@@ -311,6 +343,9 @@ public class OrganizationManagerServiceTests
         public void UpdateTrueApiToken(string inn, string token, DateTime lifeUntil) { }
         public TrueApiToken TrueApiToken(string inn) => new();
         public IReadOnlyList<TrueApiToken> TrueApiTokens() => [];
+        public void UpdateXApiKey(string inn, string key, DateTime lifeUntil) { }
+        public TrueApiToken XApiKey(string inn) => new();
+        public IReadOnlyList<TrueApiToken> XApiKeys() => [];
         public void MarkGisMtPushPending() { }
         public bool GisMtPushPending() => false;
         public void ClearGisMtPushPending() { }

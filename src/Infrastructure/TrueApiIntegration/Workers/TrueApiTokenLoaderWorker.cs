@@ -93,6 +93,9 @@ public class TrueApiTokenLoaderWorker : BackgroundService
 
                 _logger.LogInformation("Для {inn} получен новый токен, который действует до {tokenLifeUntil}", inn, session.LiveUntil);
             }
+
+            var xApiKeys = scope.ServiceProvider.GetRequiredService<IXApiKeyLoadService>();
+            await xApiKeys.Refresh(organizations, stoppingToken);
         }
         catch (Exception ex)
         {

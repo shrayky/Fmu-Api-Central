@@ -24,4 +24,7 @@ public record FmuApiCentralResponse
 
     [JsonPropertyName("trueApiTokens")]
     public List<TrueApiExchangeTokenItem> TrueApiTokens { get; init; } = [];
+
+    [JsonPropertyName("xApiKeys")]
+    public List<XApiKeyExchangeItem> XApiKeys { get; init; } = [];
 }

@@ -13,6 +13,7 @@ namespace Application.AppState
         private bool _needRessart { get; set; } = false;
         private bool _gisMtPushPending;
         private readonly ConcurrentDictionary<string, TrueApiToken> _trueApiTokens = new();
+        private readonly ConcurrentDictionary<string, TrueApiToken> _xApiKeys = new();
 
         public bool DbState() => _dbState;
 
@@ -47,6 +48,35 @@ namespace Application.AppState
         {
             var now = DateTime.Now;
             return _trueApiTokens.Values
+                .Where(item => !string.IsNullOrEmpty(item.Token) && item.LiveUntil >= now)
+                .ToList();
+        }
+
+        public void UpdateXApiKey(string inn, string key, DateTime lifeUntil)
+        {
+            _xApiKeys[inn] = new TrueApiToken
+            {
+                Inn = inn,
+                Token = key,
+                LiveUntil = lifeUntil
+            };
+        }
+
+        public TrueApiToken XApiKey(string inn)
+        {
+            if (!_xApiKeys.TryGetValue(inn, out var data))
+                return new TrueApiToken();
+
+            if (data.LiveUntil < DateTime.Now)
+                return new TrueApiToken();
+
+            return data;
+        }
+
+        public IReadOnlyList<TrueApiToken> XApiKeys()
+        {
+            var now = DateTime.Now;
+            return _xApiKeys.Values
                 .Where(item => !string.IsNullOrEmpty(item.Token) && item.LiveUntil >= now)
                 .ToList();
         }

@@ -152,6 +152,11 @@ public class InstanceManagerService : IInstanceManagerService
                 organizations,
                 _applicationState.TrueApiTokens(),
                 allowedOrganizationIds),
+            XApiKeys = XApiKeyExchange.ForExchange(
+                organizations,
+                _applicationState.XApiKeys(),
+                allowedOrganizationIds,
+                DateTime.Now),
         };
 
         return updateResult.IsSuccess

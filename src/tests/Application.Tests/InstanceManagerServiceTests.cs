@@ -131,6 +131,60 @@ public class InstanceManagerServiceTests
     }
 
     /// <summary>
+    /// Сеанс отдаёт x-api-key организаций группы: живой ключ или признак истечения.
+    /// </summary>
+    [Fact]
+    public async Task Update_отдаёт_x_api_key_по_группе()
+    {
+        var instances = new FakeInstanceRepository();
+        instances.Store["shop-1"] = new InstanceEntity { Id = "shop-1", GroupId = "g1" };
+
+        var until = new DateTime(2027, 1, 1, 0, 0, 0, DateTimeKind.Local);
+        var organizations = new FakeOrganizationRepository();
+        organizations.Store.Add(new OrganizationEntity
+        {
+            Id = "o1",
+            Inn = "7701234567",
+            XApiKeyExpiresAt = until,
+            TrueApiIntegrationSettings = new TrueApiIntegrationSettings { DigitalSignature = "serial" }
+        });
+        organizations.Store.Add(new OrganizationEntity
+        {
+            Id = "o2",
+            Inn = "7707654321",
+            XApiKeyExpiresAt = until,
+            TrueApiIntegrationSettings = new TrueApiIntegrationSettings { DigitalSignature = "serial" }
+        });
+
+        var groups = new FakeGroupRepository();
+        groups.Store["g1"] = new InstanceGroupEntity
+        {
+            Id = "g1",
+            OrganizationIds = ["o1"]
+        };
+
+        var state = new FakeApplicationState();
+        state.XApiKeysStore.Add(new TrueApiToken { Inn = "7701234567", Token = "cdn-key", LiveUntil = until });
+        state.XApiKeysStore.Add(new TrueApiToken { Inn = "7707654321", Token = "other-key", LiveUntil = until });
+
+        var sut = CreateSut(instances, new FakeStatisticsRepository(), organizations, state, groups);
+        var packet = JsonSerializer.Serialize(new DataPacket
+        {
+            Token = "shop-1",
+            Data = JsonSerializer.Serialize(new Payload())
+        });
+
+        var result = await sut.UpdateFmuApiInstanceInformation(packet);
+
+        Assert.True(result.IsSuccess);
+        var item = Assert.Single(result.Value.XApiKeys);
+        Assert.Equal("7701234567", item.Inn);
+        Assert.Equal("cdn-key", item.XApiKey);
+        Assert.False(item.XApiKeyExpired);
+        Assert.Equal(until, item.ExpiresAt);
+    }
+
+    /// <summary>
     /// Новый инстанс не помечаем к выгрузке настроек.
     /// </summary>
     [Fact]
@@ -467,6 +521,10 @@ public class InstanceManagerServiceTests
         public void UpdateTrueApiToken(string inn, string token, DateTime lifeUntil) { }
         public TrueApiToken TrueApiToken(string inn) => new();
         public IReadOnlyList<TrueApiToken> TrueApiTokens() => Tokens;
+        public List<TrueApiToken> XApiKeysStore { get; } = [];
+        public void UpdateXApiKey(string inn, string key, DateTime lifeUntil) { }
+        public TrueApiToken XApiKey(string inn) => new();
+        public IReadOnlyList<TrueApiToken> XApiKeys() => XApiKeysStore;
         public void MarkGisMtPushPending() { }
         public bool GisMtPushPending() => false;
         public void ClearGisMtPushPending() { }

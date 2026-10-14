@@ -272,6 +272,9 @@ public class CrptViolationsLoaderServiceTests
                 ? new TrueApiToken { Inn = inn, Token = "token" }
                 : new TrueApiToken();
         public IReadOnlyList<TrueApiToken> TrueApiTokens() => [];
+        public void UpdateXApiKey(string inn, string key, DateTime lifeUntil) { }
+        public TrueApiToken XApiKey(string inn) => new();
+        public IReadOnlyList<TrueApiToken> XApiKeys() => [];
         public void MarkGisMtPushPending() { }
         public bool GisMtPushPending() => false;
         public void ClearGisMtPushPending() { }

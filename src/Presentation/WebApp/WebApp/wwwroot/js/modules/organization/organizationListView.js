@@ -17,6 +17,8 @@ class OrganizationListView {
             name: "Наименование",
             inn: "ИНН",
             token: "Токен",
+            xApiKey: "x-api-key",
+            xApiKeyEmpty: "—",
             gisMt: "FMU-API-ГИС-МТ",
             gisMtEmpty: "—",
             actions: "Действия",
@@ -247,6 +249,12 @@ class OrganizationListView {
                     header: this.LABELS.token,
                     width: 240,
                     template: (obj) => this._formatToken(obj)
+                },
+                {
+                    id: "xApiKeyExpiresAt",
+                    header: this.LABELS.xApiKey,
+                    width: 180,
+                    template: (obj) => this._formatXApiKey(obj)
                 }
             ],
             select: "row",
@@ -286,6 +294,28 @@ class OrganizationListView {
             : this.LABELS.tokenReceived;
 
         return `<span style="cursor:pointer" title="${this.LABELS.tokenCopyHint}">${text}</span>`;
+    }
+
+    _formatXApiKey(obj) {
+        const raw = obj.xApiKeyExpiresAt;
+        if (!raw) {
+            return `<span style="color:#95A5A6">${this.LABELS.xApiKeyEmpty}</span>`;
+        }
+
+        const expired = new Date(raw);
+        if (Number.isNaN(expired.getTime())) {
+            return `<span style="color:#95A5A6">${this.LABELS.xApiKeyEmpty}</span>`;
+        }
+
+        const until = expired.toLocaleString("ru-RU", {
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit"
+        });
+        const color = expired.getTime() < Date.now() ? "#E74C3C" : "#2ECC71";
+        return `<span style="color:${color}">${until}</span>`;
     }
 
     async _copyToken(rowId) {

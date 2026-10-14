@@ -24,8 +24,10 @@ public class TrueApiAuthService : ITrueApiAuthService
     private readonly IHttpClientFactory _httpClientFactory;
 
     private const string Url = "https://markirovka.crpt.ru";
+    private const string CdnUrl = "https://cdn.crpt.ru";
     private const string AuthPath = "/api/v3/true-api/auth/key";
     private const string SignInPath = "/api/v3/true-api/auth/simpleSignIn";
+    private const string PermissiveAccessPath = "/api/v3/true-api/auth/permissive-access";
 
     public TrueApiAuthService(ILogger<TrueApiAuthService> logger, IHttpClientFactory httpClientFactory)
     {
@@ -44,6 +46,15 @@ public class TrueApiAuthService : ITrueApiAuthService
             return Result.Failure<TrueApiSession>(encrypted.Error);
 
         return await FinishAuth(encrypted.Value, data.Value.Uuid, inn);
+    }
+
+    public async Task<Result<TrueApiSession>> GenerateXApiKey(string inn, string password, string signatureNumber)
+    {
+        var encrypted = Encrypt(inn, signatureNumber, inn, password);
+        if (encrypted.IsFailure)
+            return Result.Failure<TrueApiSession>(encrypted.Error);
+
+        return await FinishPermissiveAccess(encrypted.Value);
     }
 
     private async Task<Result<DataWithUuid>> DataForEncrypt()
@@ -194,6 +205,44 @@ public class TrueApiAuthService : ITrueApiAuthService
         {
             _logger.LogError("Ошибка получения данных авторизации в true api {err}", ex);
             return Result.Failure<TrueApiSession>($"Ошибка получения данных авторизации в true api {ex.Message}");
+        }
+    }
+
+    private async Task<Result<TrueApiSession>> FinishPermissiveAccess(string encodedData)
+    {
+        using var httpClient = _httpClientFactory.CreateClient("TrueApiIntegration");
+        httpClient.BaseAddress = new Uri(CdnUrl);
+
+        var data = TrueApiPermissiveAccess.Body(encodedData);
+
+        try
+        {
+            var answer = await httpClient.PostAsJsonAsync(PermissiveAccessPath, data);
+            if (answer == null)
+                throw new Exception($"Пустой ответ от {PermissiveAccessPath}");
+
+            if (!answer.IsSuccessStatusCode)
+                throw new Exception($"{PermissiveAccessPath} вернул код ошибки {answer.StatusCode}");
+
+            var rawJson = await answer.Content.ReadAsStringAsync();
+            _logger.LogDebug("Ответ permissive-access : {Json}", rawJson);
+
+            using var stream = new MemoryStream(Encoding.UTF8.GetBytes(rawJson));
+            var answerData = await JsonHelpers.DeserializeAsync<PermissiveAccessResponse>(stream);
+            if (answerData == null)
+                throw new Exception($"Ошибка преобразования ответа в {PermissiveAccessPath}");
+
+            var parsed = TrueApiPermissiveAccess.Parse(answerData.AccessToken, answerData.ExpiresIn, DateTime.Now);
+            if (parsed.IsFailure)
+                return Result.Failure<TrueApiSession>(
+                    string.IsNullOrEmpty(answerData.ErrorMessage) ? parsed.Error : answerData.ErrorMessage);
+
+            return parsed;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError("Ошибка получения x-api-key в true api {err}", ex);
+            return Result.Failure<TrueApiSession>($"Ошибка получения x-api-key в true api {ex.Message}");
         }
     }
 }
