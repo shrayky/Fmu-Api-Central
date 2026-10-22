@@ -144,6 +144,11 @@ class InstanceMonitoringService {
         return { result: true, error: null, value: blob };
     }
 
+    async checkerInstallCommand(token) {
+        const endpoint = `${this.apiEndpoint}/${encodeURIComponent(token)}/checker-install-command`;
+        return await this.authService.makeAuthenticatedRequest(endpoint);
+    }
+
 }
 
 export default new InstanceMonitoringService();

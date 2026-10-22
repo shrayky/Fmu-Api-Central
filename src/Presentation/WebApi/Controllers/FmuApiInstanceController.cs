@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Application.Instance.Interfaces;
+using Application.Instance.Services;
 using Domain.Entitys.Instance.Dto;
 using Domain.Entitys.Instance.Interfaces;
 using Microsoft.AspNetCore.Authorization;
@@ -82,13 +83,17 @@ public class FmuApiInstanceController : ControllerBase
         return result.IsSuccess ? Ok(result.Value) : BadRequest(result.Error);
     }
 
+    /// <summary>
+    /// Без JWT: команду выполняют на кассе, сессии администратора там нет.
+    /// </summary>
+    [AllowAnonymous]
     [HttpGet("{token}/checker-distribution")]
     public async Task<IActionResult> DownloadCheckerDistribution(string token)
     {
         var result = await _checkerDistribution.Build(token);
 
         if (result.IsFailure)
-            return BadRequest(result.Error);
+            return Plain(result.Error, CheckerDistributionLimits.FailureStatusCode(result.Error));
 
         var download = result.Value;
         return new FileStreamResult(download.Content, download.ContentType)
@@ -96,4 +101,19 @@ public class FmuApiInstanceController : ControllerBase
             FileDownloadName = download.FileName
         };
     }
+
+    [HttpGet("{token}/checker-install-command")]
+    public async Task<IActionResult> InstallCommand(string token)
+    {
+        var result = await _checkerDistribution.InstallCommand(token);
+
+        return result.IsSuccess ? Ok(new { command = result.Value }) : Plain(result.Error, StatusCodes.Status400BadRequest);
+    }
+
+    private ContentResult Plain(string error, int statusCode) => new()
+    {
+        StatusCode = statusCode,
+        Content = error,
+        ContentType = "text/plain; charset=utf-8"
+    };
 }

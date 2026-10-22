@@ -1,4 +1,5 @@
 import instanceMonitoringService from '../../services/instanceMonitoringService.js';
+import { instanceCardCancelTarget } from './instanceCardCancel.js';
 import instanceGroupService from '../../services/instanceGroupService.js';
 import { loadConfiguration } from '../../services/ConfigurationService.js';
 import { Text, CheckBox } from '../../utils/ui.js';
@@ -21,8 +22,15 @@ class InstanceElementView {
             createButton: "Сохранить",
             cancelButton: "Отмена",
             download: "Скачать",
+            downloadFile: "Скачать файл",
+            downloadLink: "Получить ссылку",
+            installCommandTitle: "Команда установки",
+            copyCommand: "Скопировать",
+            commandCopied: "Команда скопирована в буфер обмена",
+            errorCopyCommand: "Не удалось скопировать команду",
             needToken: "Укажите токен инстанса",
             errorDownload: "Не удалось скачать дистрибутив",
+            errorCommand: "Не удалось получить команду установки",
             group: "Группа",
             selectGroup: "Выберите группу",
             settingsModified: "Выгрузить настройки"
@@ -38,7 +46,10 @@ class InstanceElementView {
             secretKey: "secretKey",
             group: "instanceGroup",
             settingsModified: "instanceSettingsModified",
-            downloadBtn: "instanceDownloadBtn"
+            downloadBtn: "instanceDownloadBtn",
+            downloadMenu: "instanceDownloadMenu",
+            installCommandWindow: "instanceInstallCommandWindow",
+            installCommandText: "instanceInstallCommandText"
         }
     }
 
@@ -101,6 +112,9 @@ class InstanceElementView {
             }
         }).show();
 
+        if (canDownload)
+            this._keepDownloadMenuToggle();
+
         if (!editedData.id) 
             this._generateToken();
         else {
@@ -124,7 +138,8 @@ class InstanceElementView {
                 view: "button",
                 id: this.NAMES.downloadBtn,
                 value: this.LABELS.download,
-                click: () => this._downloadDistribution()
+                icon: "wxi-download",
+                click: () => this._toggleDownloadMenu()
             });
         }
 
@@ -138,13 +153,7 @@ class InstanceElementView {
             {
                 view: "button",
                 value: this.LABELS.cancelButton,
-                click: () => {
-                    if (onClose) {
-                        onClose();
-                    }
-
-                    $$(this.NAMES.formId).close();
-                },
+                click: () => this._cancelCard(onClose),
                 hotkey: "esc"
             }
         );
@@ -163,6 +172,189 @@ class InstanceElementView {
         } catch {
             return false;
         }
+    }
+
+    /** mousedown всплывает до click и закрывает popup как внешний клик. */
+    _keepDownloadMenuToggle() {
+        const button = $$(this.NAMES.downloadBtn);
+        if (!button)
+            return;
+
+        webix.event(button.getNode(), "mousedown", (event) => {
+            event.stopPropagation();
+        });
+    }
+
+    _toggleDownloadMenu() {
+        const existing = $$(this.NAMES.downloadMenu);
+        const button = $$(this.NAMES.downloadBtn);
+        if (!button)
+            return;
+
+        if (existing) {
+            if (existing.isVisible())
+                existing.hide();
+            else
+                existing.show(button.getNode(), { pos: "top" });
+            return;
+        }
+
+        webix.ui({
+            view: "popup",
+            id: this.NAMES.downloadMenu,
+            width: 200,
+            body: {
+                view: "list",
+                borderless: true,
+                autoheight: true,
+                yCount: 2,
+                data: [
+                    { id: "file", value: this.LABELS.downloadFile },
+                    { id: "link", value: this.LABELS.downloadLink }
+                ],
+                on: {
+                    onItemClick: (id) => {
+                        const menu = $$(this.NAMES.downloadMenu);
+                        if (menu)
+                            menu.hide();
+
+                        if (id === "file")
+                            this._downloadDistribution();
+                        else if (id === "link")
+                            this._showInstallCommand();
+                    }
+                }
+            }
+        }).show(button.getNode(), { pos: "top" });
+    }
+
+    async _showInstallCommand() {
+        const token = $$(this.NAMES.instanceToken)?.getValue()?.trim();
+        if (!token) {
+            webix.message({ text: this.LABELS.needToken, type: "error" });
+            return;
+        }
+
+        const form = $$(this.NAMES.formId);
+        webix.extend(form, webix.ProgressBar);
+        form.showProgress({ type: "icon" });
+        form.disable();
+
+        try {
+            const data = await instanceMonitoringService.checkerInstallCommand(token);
+            const command = data.value?.command;
+            if (!data.result || !command) {
+                webix.message({ text: data.error || this.LABELS.errorCommand, type: "error" });
+                return;
+            }
+
+            this._openInstallCommandWindow(command);
+        } catch (error) {
+            webix.message({ text: error.message, type: "error" });
+        } finally {
+            form.enable();
+            form.hideProgress();
+        }
+    }
+
+    _openInstallCommandWindow(command) {
+        const existing = $$(this.NAMES.installCommandWindow);
+        if (existing)
+            existing.destructor();
+
+        webix.ui({
+            view: "window",
+            id: this.NAMES.installCommandWindow,
+            modal: true,
+            width: 640,
+            position: "center",
+            head: this.LABELS.installCommandTitle,
+            body: {
+                padding: 12,
+                rows: [
+                    {
+                        view: "textarea",
+                        id: this.NAMES.installCommandText,
+                        readonly: true,
+                        value: command,
+                        height: 140
+                    },
+                    {
+                        cols: [
+                            {
+                                view: "checkbox",
+                                labelRight: this.LABELS.copyCommand,
+                                labelWidth: 0,
+                                width: 160,
+                                on: {
+                                    onChange: (checked) => {
+                                        if (checked)
+                                            this._copyInstallCommand();
+                                    }
+                                }
+                            },
+                            {},
+                            {
+                                view: "button",
+                                value: this.LABELS.cancelButton,
+                                width: 120,
+                                click: () => $$(this.NAMES.installCommandWindow).close()
+                            }
+                        ]
+                    }
+                ]
+            }
+        }).show();
+
+        setTimeout(() => {
+            const input = $$(this.NAMES.installCommandText)?.getInputNode();
+            if (!input)
+                return;
+
+            input.focus();
+            input.select();
+        }, 0);
+    }
+
+    _copyInstallCommand() {
+        const command = $$(this.NAMES.installCommandText)?.getValue();
+        if (!command) {
+            webix.message({ text: this.LABELS.errorCommand, type: "error" });
+            return;
+        }
+
+        copyText(command).then(() => {
+            webix.message({ text: this.LABELS.commandCopied, type: "success" });
+        }).catch(() => {
+            webix.message({ text: this.LABELS.errorCopyCommand, type: "error" });
+        });
+    }
+
+    _cancelCard(onClose) {
+        const commandWindow = $$(this.NAMES.installCommandWindow);
+        if (instanceCardCancelTarget(!!commandWindow) === "command") {
+            commandWindow.close();
+            return;
+        }
+
+        if (onClose)
+            onClose();
+
+        this._closeDialog();
+    }
+
+    _closeDialog() {
+        const menu = $$(this.NAMES.downloadMenu);
+        if (menu)
+            menu.destructor();
+
+        const commandWindow = $$(this.NAMES.installCommandWindow);
+        if (commandWindow)
+            commandWindow.destructor();
+
+        const dialog = $$(this.NAMES.formId);
+        if (dialog)
+            dialog.close();
     }
 
     async _downloadDistribution() {
@@ -284,7 +476,7 @@ class InstanceElementView {
                 onSuccess(instanceData);
             }
 
-            $$("instanceForm", this.NAMES.formId).close();
+            this._closeDialog();
 
         } catch (error) {
             webix.message({ text: error.message, type: "error" });

@@ -4,7 +4,10 @@ using CSharpFunctionalExtensions;
 using Domain.Configuration;
 using Domain.Configuration.Interfaces;
 using Domain.Dto.Responces;
+using Domain.Entitys.Instance;
+using Domain.Entitys.Instance.Dto;
 using Domain.Entitys.Instance.Interfaces;
+using Domain.Entitys.Interfaces;
 using Domain.Entitys.SoftwareUpdateFiles;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -209,6 +212,98 @@ public class CheckerDistributionServiceTests
     }
 
     [Fact]
+    public async Task InstallCommand_ошибка_если_инстанс_не_найден()
+    {
+        var sut = CreateSut(WithAddress(), Path.GetTempPath(), new FakeUpdates(), new FakeInstances { Found = false });
+
+        var result = await sut.InstallCommand("missing-token");
+
+        Assert.True(result.IsFailure);
+        Assert.Contains("Не найден", result.Error, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task InstallCommand_собирает_ссылку_из_публичного_адреса()
+    {
+        var sut = CreateSut(WithAddress(), Path.GetTempPath(), new FakeUpdates());
+
+        var result = await sut.InstallCommand("token-1");
+
+        Assert.True(result.IsSuccess);
+        Assert.Contains(
+            "https://central.example:2579/api/fmuApiInstance/token-1/checker-distribution",
+            result.Value);
+    }
+
+    [Fact]
+    public void FailureStatusCode_занятая_сборка_отдаёт_503()
+    {
+        Assert.Equal(
+            StatusCodes.Status503ServiceUnavailable,
+            CheckerDistributionLimits.FailureStatusCode(CheckerDistributionLimits.Busy));
+        Assert.Equal(
+            StatusCodes.Status400BadRequest,
+            CheckerDistributionLimits.FailureStatusCode("Не найден fmu-api"));
+    }
+
+    /// <summary>
+    /// Пока первый zip не отдан клиенту, второй запрос не держит ещё одну копию в памяти.
+    /// </summary>
+    [Fact]
+    public async Task Build_вторая_сборка_отклоняется_пока_первая_не_закрыта()
+    {
+        var dir = Directory.CreateTempSubdirectory();
+        try
+        {
+            await File.WriteAllBytesAsync(Path.Combine(dir.FullName, "update.zip"), ZipWithFullPackage());
+            var sut = CreateSut(WithAddress(), dir.FullName, new FakeUpdates());
+
+            var first = await sut.Build("token-1");
+            Assert.True(first.IsSuccess);
+
+            try
+            {
+                var second = await sut.Build("token-1");
+
+                Assert.True(second.IsFailure);
+                Assert.Contains("уже выполняется", second.Error, StringComparison.Ordinal);
+            }
+            finally
+            {
+                await first.Value.Content.DisposeAsync();
+            }
+
+            var third = await sut.Build("token-1");
+            Assert.True(third.IsSuccess);
+            await third.Value.Content.DisposeAsync();
+        }
+        finally
+        {
+            dir.Delete(true);
+        }
+    }
+
+    [Fact]
+    public async Task Build_ошибка_если_инстанс_не_найден()
+    {
+        var dir = Directory.CreateTempSubdirectory();
+        try
+        {
+            await File.WriteAllBytesAsync(Path.Combine(dir.FullName, "update.zip"), ZipWithFullPackage());
+            var sut = CreateSut(WithAddress(), dir.FullName, new FakeUpdates(), new FakeInstances { Found = false });
+
+            var result = await sut.Build("missing-token");
+
+            Assert.True(result.IsFailure);
+            Assert.Contains("Не найден", result.Error, StringComparison.Ordinal);
+        }
+        finally
+        {
+            dir.Delete(true);
+        }
+    }
+
+    [Fact]
     public async Task Build_ошибка_если_нет_токена()
     {
         var dir = Directory.CreateTempSubdirectory();
@@ -238,8 +333,14 @@ public class CheckerDistributionServiceTests
     private static CheckerDistributionService CreateSut(
         IParametersService parameters,
         string folder,
-        ISoftwareUpdatesManagerService updates)
-        => new(parameters, new FakeLocator(folder), updates, NullLogger<CheckerDistributionService>.Instance);
+        ISoftwareUpdatesManagerService updates,
+        FakeInstances? instances = null)
+        => new(
+            parameters,
+            new FakeLocator(folder),
+            updates,
+            instances ?? new FakeInstances(),
+            NullLogger<CheckerDistributionService>.Instance);
 
     private static async Task<string?> TokenFromBuild(CheckerDistributionService sut, string token)
     {
@@ -276,6 +377,28 @@ public class CheckerDistributionServiceTests
         public Task<Parameters> Current() => Task.FromResult(CurrentValue);
 
         public Task<bool> Update(Parameters parameters) => Task.FromResult(true);
+    }
+
+    private sealed class FakeInstances : IInstanceRepository
+    {
+        public bool Found { get; init; } = true;
+
+        public Task<Result<InstanceEntity>> ByToken(string token)
+        {
+            if (!Found)
+                return Task.FromResult(Result.Failure<InstanceEntity>($"Не найден fmu-api с токеном {token}"));
+
+            return Task.FromResult(Result.Success(new InstanceEntity { Id = token }));
+        }
+
+        public Task<Result> Update(InstanceEntity instance) => throw new NotSupportedException();
+        public Task<Result<PaginatedResponse<InstanceEntity>>> List(int pageNumber, int pageSize, InstanceListFilter filter) => throw new NotSupportedException();
+        public Task<Result<bool>> CreateInstance(InstanceEntity instance) => throw new NotSupportedException();
+        public Task<Result<bool>> DeleteInstance(InstanceEntity instance) => throw new NotSupportedException();
+        public Task<Result<List<InstanceEntity>>> OfflineInstances(DateTime toDate) => throw new NotSupportedException();
+        public Task<Result<List<InstanceEntity>>> All() => throw new NotSupportedException();
+        public Task<Result<List<InstanceEntity>>> ByGroupIds(IReadOnlyList<string> groupIds) => throw new NotSupportedException();
+        public Task<Result> ClearGroupLink(string groupId) => throw new NotSupportedException();
     }
 
     private sealed class FakeLocator : ICheckerTemplateLocator

@@ -6,4 +6,6 @@ namespace Application.Instance.Interfaces;
 public interface ICheckerDistributionService
 {
     Task<Result<CheckerDistributionDownload>> Build(string token);
+
+    Task<Result<string>> InstallCommand(string token);
 }
