@@ -60,22 +60,15 @@ public class TrueApiTokenLoaderWorker : BackgroundService
             using var scope = _scopeFactory.CreateScope();
             var repository = scope.ServiceProvider.GetRequiredService<IOrganizationRepository>();
             var organizations = await repository.All();
+            // x-api-key не чаще UUID: тот же список, что и для simpleSignIn.
+            var due = TrueApiTokenRefresh.Due(organizations, _applicationState.TrueApiToken);
 
-            foreach (var organisation in organizations)
+            foreach (var organisation in due)
             {
                 if (stoppingToken.IsCancellationRequested)
                     return;
 
                 var inn = organisation.Inn;
-                if (string.IsNullOrEmpty(inn))
-                    continue;
-
-                if (!(organisation.TrueApiIntegrationSettings?.Enable ?? false))
-                    continue;
-
-                var tokenData = _applicationState.TrueApiToken(inn);
-                if (tokenData.Token != string.Empty)
-                    continue;
 
                 _logger.LogDebug("Начинаю получать токен true api для {inn}", inn);
 
@@ -95,7 +88,7 @@ public class TrueApiTokenLoaderWorker : BackgroundService
             }
 
             var xApiKeys = scope.ServiceProvider.GetRequiredService<IXApiKeyLoadService>();
-            await xApiKeys.Refresh(organizations, stoppingToken);
+            await xApiKeys.Refresh(due, stoppingToken);
         }
         catch (Exception ex)
         {
