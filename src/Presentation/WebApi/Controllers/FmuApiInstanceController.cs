@@ -5,6 +5,7 @@ using Domain.Entitys.Instance.Dto;
 using Domain.Entitys.Instance.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace WebApi.Controllers;
 
@@ -87,6 +88,7 @@ public class FmuApiInstanceController : ControllerBase
     /// Без JWT: команду выполняют на кассе, сессии администратора там нет.
     /// </summary>
     [AllowAnonymous]
+    [EnableRateLimiting(CheckerDistributionLimits.RateLimitPolicy)]
     [HttpGet("{token}/checker-distribution")]
     public async Task<IActionResult> DownloadCheckerDistribution(string token)
     {

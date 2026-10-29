@@ -1,6 +1,7 @@
 using Application.Instance.Services;
 using Application.SoftwareUpdates.Interfaces;
 using CSharpFunctionalExtensions;
+using Domain.Authentication;
 using Domain.Configuration;
 using Domain.Configuration.Interfaces;
 using Domain.Dto.Responces;
@@ -240,6 +241,18 @@ public class CheckerDistributionServiceTests
         Assert.Contains(
             "https://central.example:2579/api/fmuApiInstance/token-1/checker-distribution",
             script);
+    }
+
+    /// <summary>
+    /// Анонимная выдача zip не делит квоту с логином: касса не закрывает вход.
+    /// </summary>
+    [Fact]
+    public void RateLimitPolicy_не_совпадает_с_политиками_входа()
+    {
+        Assert.False(string.IsNullOrWhiteSpace(CheckerDistributionLimits.RateLimitPolicy));
+        Assert.NotEqual(AuthRateLimit.Login, CheckerDistributionLimits.RateLimitPolicy);
+        Assert.NotEqual(AuthRateLimit.Refresh, CheckerDistributionLimits.RateLimitPolicy);
+        Assert.NotEqual(AuthRateLimit.ChangePassword, CheckerDistributionLimits.RateLimitPolicy);
     }
 
     [Fact]

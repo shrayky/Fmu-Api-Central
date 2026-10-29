@@ -4,6 +4,8 @@ namespace Application.Instance.Services;
 
 public static class CheckerDistributionLimits
 {
+    public const string RateLimitPolicy = "checker-distribution";
+
     public const string Busy = "Сборка дистрибутива уже выполняется";
 
     public static int FailureStatusCode(string error)

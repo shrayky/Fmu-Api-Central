@@ -1,4 +1,5 @@
 using Application;
+using Application.Instance.Services;
 using Application.MarkingCalendar.Services;
 using Authentication;
 using Configuration;
@@ -89,6 +90,7 @@ builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
     options.AddPolicy(AuthRateLimit.Login, context => PerClientWindow(context, AuthRateLimit.LoginPerMinute));
+    options.AddPolicy(CheckerDistributionLimits.RateLimitPolicy, context => PerClientWindow(context, AuthRateLimit.LoginPerMinute));
     options.AddPolicy(AuthRateLimit.Refresh, context => PerClientWindow(context, AuthRateLimit.RefreshPerMinute));
     options.AddPolicy(AuthRateLimit.ChangePassword, context => PerClientWindow(context, AuthRateLimit.ChangePasswordPerMinute));
 });
