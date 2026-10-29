@@ -439,6 +439,8 @@ typings/
 # TernJS port file
 .tern-port
 /builds
+/docker/**/*.zip
+/docker/**/*.tgz
 /.nuke/temp
 /temp_couch.dll
 

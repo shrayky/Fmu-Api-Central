@@ -1,0 +1,68 @@
+name: fmu-api-central
+
+x-app: &app
+  image: fmu-api-central:local
+  build:
+    context: .
+    dockerfile: Dockerfile
+    args:
+      LINUX_ZIP: ${LINUX_ZIP:-2-2-x64-linux.zip}
+      CRYPTOPRO_ARCHIVE: ${CRYPTOPRO_ARCHIVE:-cp-linux-amd64_deb.tgz}
+
+services:
+  couchdb:
+    image: couchdb:3
+    environment:
+      COUCHDB_USER: ${COUCHDB_USER:-admin}
+      COUCHDB_PASSWORD: ${COUCHDB_PASSWORD:?COUCHDB_PASSWORD не задан}
+    # С хоста порт не публикуем: API ходит на http://couchdb:5984.
+    # Для отладки раскомментировать и привязать только loopback:
+    # ports:
+    #   - "127.0.0.1:${COUCHDB_PORT:-5984}:5984"
+    volumes:
+      - couchdb-data:/opt/couchdb/data
+    # В образе couchdb:3 нет curl. Порт открывается, когда сервер уже принимает запросы.
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/5984'"]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+      start_period: 15s
+
+  api:
+    <<: *app
+    command: ["api"]
+    ports:
+      - "${API_PORT:-2579}:2579"
+    environment:
+      COUCHDB_USER: ${COUCHDB_USER:-admin}
+      COUCHDB_PASSWORD: ${COUCHDB_PASSWORD:?COUCHDB_PASSWORD не задан}
+      COUCHDB_URL: http://couchdb:5984
+      WEB_PORT: ${WEB_PORT:-2580}
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
+    volumes:
+      - fmu-config:/var/lib/FmuApiCentral
+      - fmu-log:/var/log/FmuApiCentral
+      - cprocsp-keys:/var/opt/cprocsp/keys
+    depends_on:
+      couchdb:
+        condition: service_healthy
+    restart: unless-stopped
+
+  web:
+    <<: *app
+    command: ["web"]
+    # Справа 2580: бинарник Web слушает этот порт, в env меняется только порт на хосте.
+    ports:
+      - "${WEB_PORT:-2580}:2580"
+    volumes:
+      - fmu-log:/var/log/FmuApiCentral
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  couchdb-data:
+  fmu-config:
+  fmu-log:
+  cprocsp-keys:

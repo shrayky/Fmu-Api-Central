@@ -1,0 +1,5 @@
+*
+!Dockerfile
+!entrypoint.sh
+!*-x64-linux.zip
+!cp-linux-amd64_deb.tgz
