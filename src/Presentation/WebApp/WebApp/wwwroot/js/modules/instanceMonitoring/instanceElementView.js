@@ -54,7 +54,9 @@ class InstanceElementView {
     }
 
     async showDialog(editedData = [], onSuccess, onClose) {
-        this.editedData = editedData || {};
+        this.editedData = editedData && !Array.isArray(editedData) ? editedData : {};
+        this._onSuccess = onSuccess;
+        this._pendingListNotify = false;
         const groupOptions = await this._loadGroupOptions();
         const canDownload = await this._hasPublicAddress();
         const currentGroupId = this.editedData.group?.id || "";
@@ -115,7 +117,7 @@ class InstanceElementView {
         if (canDownload)
             this._keepDownloadMenuToggle();
 
-        if (!editedData.id) 
+        if (!this.editedData.id)
             this._generateToken();
         else {
             $$(this.NAMES.instanceToken).disable();
@@ -229,11 +231,8 @@ class InstanceElementView {
     }
 
     async _showInstallCommand() {
-        const token = $$(this.NAMES.instanceToken)?.getValue()?.trim();
-        if (!token) {
-            webix.message({ text: this.LABELS.needToken, type: "error" });
+        if (!this._isPersisted() && !this._validateForm())
             return;
-        }
 
         const form = $$(this.NAMES.formId);
         webix.extend(form, webix.ProgressBar);
@@ -241,6 +240,15 @@ class InstanceElementView {
         form.disable();
 
         try {
+            if (!await this._ensureSaved())
+                return;
+
+            const token = $$(this.NAMES.instanceToken)?.getValue()?.trim();
+            if (!token) {
+                webix.message({ text: this.LABELS.needToken, type: "error" });
+                return;
+            }
+
             const data = await instanceMonitoringService.checkerInstallCommand(token);
             const command = data.value?.command;
             if (!data.result || !command) {
@@ -337,6 +345,12 @@ class InstanceElementView {
             return;
         }
 
+        // Инстанс уже создан ради скачивания: Отмена оставляет его в списке.
+        if (this._pendingListNotify && this._onSuccess) {
+            this._onSuccess(this.editedData);
+            this._pendingListNotify = false;
+        }
+
         if (onClose)
             onClose();
 
@@ -358,11 +372,8 @@ class InstanceElementView {
     }
 
     async _downloadDistribution() {
-        const token = $$(this.NAMES.instanceToken)?.getValue()?.trim();
-        if (!token) {
-            webix.message({ text: this.LABELS.needToken, type: "error" });
+        if (!this._isPersisted() && !this._validateForm())
             return;
-        }
 
         const form = $$(this.NAMES.formId);
         webix.extend(form, webix.ProgressBar);
@@ -370,6 +381,15 @@ class InstanceElementView {
         form.disable();
 
         try {
+            if (!await this._ensureSaved())
+                return;
+
+            const token = $$(this.NAMES.instanceToken)?.getValue()?.trim();
+            if (!token) {
+                webix.message({ text: this.LABELS.needToken, type: "error" });
+                return;
+            }
+
             const data = await instanceMonitoringService.downloadCheckerDistribution(token);
             if (!data.result) {
                 webix.message({ text: data.error || this.LABELS.errorDownload, type: "error" });
@@ -435,30 +455,40 @@ class InstanceElementView {
         }
     }
 
-    async _sendInstance(onSuccess) {
-        const form = $$("instanceForm", this.NAMES.formId);
-        if (!this._validateForm()) return;
+    _isPersisted() {
+        return !!this.editedData?.id;
+    }
 
-        webix.extend(form, webix.ProgressBar);
-        form.showProgress({ type: "icon" });
-        form.disable();
+    async _ensureSaved() {
+        if (this._isPersisted())
+            return true;
 
-        const instanceName = $$(this.NAMES.instanceName).getValue();
-        const instanceToken = $$(this.NAMES.instanceToken).getValue();
-        const instanceSecretKey = $$(this.NAMES.secretKey).getValue();
-        const instanceAddress = $$(this.NAMES.instanceAddress).getValue();
+        await this._writeInstance();
+        this._pendingListNotify = true;
+        return true;
+    }
+
+    async _writeInstance() {
+        const instanceData = this._collectInstanceData();
+        await instanceMonitoringService.create(instanceData);
+        this.editedData = instanceData;
+        this._lockToken();
+        return instanceData;
+    }
+
+    _collectInstanceData() {
         const groupId = $$(this.NAMES.group).getValue() || "";
         const groupList = $$(this.NAMES.group).getList();
         const groupItem = groupId && groupList ? groupList.getItem(groupId) : null;
         const current = this.editedData || {};
 
-        const instanceData = {
-            name: instanceName,
-            id: instanceToken,
+        return {
+            name: $$(this.NAMES.instanceName).getValue(),
+            id: $$(this.NAMES.instanceToken).getValue(),
             version: current.version || "-",
             lastUpdated: current.lastUpdated || new Date("2000-01-01T00:00:00.000Z"),
-            secretKey: instanceSecretKey,
-            address: instanceAddress,
+            secretKey: $$(this.NAMES.secretKey).getValue(),
+            address: $$(this.NAMES.instanceAddress).getValue(),
             localModules: current.localModules,
             TsPiots: current.TsPiots,
             forcedUpdateId: current.forcedUpdateId,
@@ -468,21 +498,35 @@ class InstanceElementView {
             },
             settingsModified: !!$$(this.NAMES.settingsModified).getValue()
         };
+    }
+
+    _lockToken() {
+        const tokenField = $$(this.NAMES.instanceToken);
+        const generateButton = $$(this.NAMES.generateToken);
+        if (tokenField)
+            tokenField.disable();
+        if (generateButton)
+            generateButton.disable();
+    }
+
+    async _sendInstance(onSuccess) {
+        if (!this._validateForm()) return;
+
+        const form = $$(this.NAMES.formId);
+        webix.extend(form, webix.ProgressBar);
+        form.showProgress({ type: "icon" });
+        form.disable();
 
         try {
-            await instanceMonitoringService.create(instanceData);
+            const instanceData = await this._writeInstance();
+            this._pendingListNotify = false;
 
-            if (onSuccess) {
+            if (onSuccess)
                 onSuccess(instanceData);
-            }
 
             this._closeDialog();
-
         } catch (error) {
             webix.message({ text: error.message, type: "error" });
-            form.enable();
-            form.hideProgress();
-
             form.enable();
             form.hideProgress();
         }

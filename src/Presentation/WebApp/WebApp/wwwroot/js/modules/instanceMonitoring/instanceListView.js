@@ -873,7 +873,10 @@ class InstanceListView {
         const table = $$(this.NAMES.dataTable);
 
         this._assignRowHeightsToRecords([createdRecord]);
-        table.add(createdRecord);
+        if (table.exists(createdRecord.id))
+            table.updateItem(createdRecord.id, createdRecord);
+        else
+            table.add(createdRecord);
         this._scheduleRowHeightAdjust();
     }
 
