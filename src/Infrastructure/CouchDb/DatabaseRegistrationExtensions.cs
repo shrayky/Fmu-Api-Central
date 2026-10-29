@@ -12,6 +12,7 @@ using Domain.Entitys.Organization.Interfaces;
 using Domain.Entitys.SettingsSchema.Interfaces;
 using Domain.Entitys.Users.Interfaces;
 using Domain.GisMt.Interfaces;
+using Domain.Vetis;
 using Microsoft.Extensions.DependencyInjection;
 using System.Net.Http.Headers;
 using System.Reflection;
@@ -76,6 +77,8 @@ public static class DatabaseRegistrationExtensions
         services.AddScoped<IGisMtMarkRepository, GisMtMarkRepository>();
         services.AddScoped<IAlertTemplateRepository, AlertTemplateRepository>();
         services.AddScoped<ICrptViolationsRepository, CrptViolationsRepository>();
+        services.AddScoped<IVetisIncomingRepository, VetisIncomingRepository>();
+        services.AddScoped<IVetisApplicationRepository, VetisApplicationRepository>();
 
         services.AddHttpClient("CouchDbState", client =>
         {

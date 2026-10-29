@@ -11,6 +11,7 @@ using Domain.Entitys.SettingsSchema;
 using Domain.Entitys.CrptViolations;
 using Domain.GisMt.Entity;
 using Domain.Entitys.SoftwareUpdateFiles;
+using Domain.Vetis;
 
 namespace CouchDb;
 
@@ -27,6 +28,8 @@ public class Context
     public ICouchDatabase<UniversalDocument<GisMtMarkEntity>> GisMtMarks { get; }
     public ICouchDatabase<UniversalDocument<AlertTemplateEntity>> AlertTemplates { get; }
     public ICouchDatabase<UniversalDocument<CrptViolationsDailyEntity>> CrptViolations { get; }
+    public ICouchDatabase<UniversalDocument<VetisIncomingDocumentEntity>> VetisIncoming { get; }
+    public ICouchDatabase<UniversalDocument<VetisApplicationEntity>> VetisApplications { get; }
 
     public Context(CouchClient client)
     {
@@ -41,5 +44,7 @@ public class Context
         GisMtMarks = client.GetDatabase<UniversalDocument<GisMtMarkEntity>>(DatabaseNames.GisMtMarks);
         AlertTemplates = client.GetDatabase<UniversalDocument<AlertTemplateEntity>>(DatabaseNames.AlertTemplates);
         CrptViolations = client.GetDatabase<UniversalDocument<CrptViolationsDailyEntity>>(DatabaseNames.CrptViolations);
+        VetisIncoming = client.GetDatabase<UniversalDocument<VetisIncomingDocumentEntity>>(DatabaseNames.VetisIncoming);
+        VetisApplications = client.GetDatabase<UniversalDocument<VetisApplicationEntity>>(DatabaseNames.VetisApplications);
     }
 }

@@ -1,4 +1,5 @@
 ﻿using CouchDb.Models;
+using CouchDb.Repositories;
 
 namespace CouchDb.DatabaseScheme;
 
@@ -18,9 +19,26 @@ public class DatabaseIndexes
                 { DatabaseNames.GisMtDocuments, GisMtDocumentsIndexSchema() },
                 { DatabaseNames.GisMtMarks, GisMtMarksIndexSchema() },
                 { DatabaseNames.AlertTemplates, AlertTemplatesIndexSchema() },
-                { DatabaseNames.CrptViolations, CrptViolationsIndexSchema() }
+                { DatabaseNames.CrptViolations, CrptViolationsIndexSchema() },
+                { DatabaseNames.VetisIncoming, VetisIncomingIndexSchema() },
+                { DatabaseNames.VetisApplications, VetisApplicationsIndexSchema() }
             };
     }
+
+    private static CouchDbIndexDefinition[] VetisIncomingIndexSchema() =>
+        [
+            new("sort-at-idx", new(["data.sortAt"])),
+            ..VetisIncomingQuery.FilterIndexes().Select(index =>
+                new CouchDbIndexDefinition(index.Name, new(index.Fields), VetisIncomingQuery.DesignDoc))
+        ];
+
+    private static CouchDbIndexDefinition[] VetisApplicationsIndexSchema() =>
+        [
+            new("created-at-idx", new(["data.createdAt"])),
+            new("completed-created-at-idx", new(["data.completed", "data.createdAt"])),
+            ..VetisApplicationQuery.FilterIndexes().Select(index =>
+                new CouchDbIndexDefinition(index.Name, new(index.Fields), VetisApplicationQuery.DesignDoc))
+        ];
 
     private static CouchDbIndexDefinition[] UsersIndexSchema() =>
         [

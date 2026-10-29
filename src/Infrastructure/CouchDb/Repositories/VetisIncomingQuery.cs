@@ -1,0 +1,102 @@
+using Domain.Vetis;
+
+namespace CouchDb.Repositories;
+
+public static class VetisIncomingQuery
+{
+    public const string DesignDoc = "vetis-incoming";
+
+    private static readonly string[] FilterFields = ["organizationId", "enterpriseGuid", "status"];
+
+    // Список читает счётчики, а ВСД с XML открываются только по одному документу.
+    private static readonly string[] ListFields =
+    [
+        "_id", "_rev", "data.id", "data.organizationId", "data.enterpriseGuid", "data.number", "data.date",
+        "data.type", "data.loose", "data.consignor", "data.status", "data.sortAt", "data.receivedAt",
+        "data.vsdCount", "data.acceptedCount"
+    ];
+
+    /// <summary>
+    /// Индексы для каждого сочетания отборов: равенства стоят перед data.sortAt, иначе CouchDB отвечает no_usable_index.
+    /// </summary>
+    public static IEnumerable<(string Name, string[] Fields)> FilterIndexes()
+    {
+        for (var mask = 1; mask < 1 << FilterFields.Length; mask++)
+        {
+            var fields = FilterFields.Where((_, index) => (mask & (1 << index)) != 0).ToArray();
+            yield return (IndexName(fields), fields.Select(field => "data." + field).Append("data.sortAt").ToArray());
+        }
+    }
+
+    public static Dictionary<string, object> List(VetisIncomingFilter filter, int skip, int limit)
+    {
+        // Без условия на поле сортировки CouchDB не берёт индекс по нему.
+        var selector = new Dictionary<string, object>
+        {
+            ["data.sortAt"] = new Dictionary<string, object> { ["$gte"] = 0L }
+        };
+        var sort = new List<Dictionary<string, string>>();
+        var filtered = new List<string>();
+
+        AddFilter(selector, sort, filtered, "organizationId", filter.OrganizationId);
+        AddFilter(selector, sort, filtered, "enterpriseGuid", filter.EnterpriseGuid);
+        AddFilter(selector, sort, filtered, "status", filter.Status);
+        sort.Add(new Dictionary<string, string> { ["data.sortAt"] = "desc" });
+
+        var query = new Dictionary<string, object>
+        {
+            ["selector"] = selector,
+            ["sort"] = sort.ToArray(),
+            ["fields"] = ListFields,
+            ["skip"] = skip,
+            ["limit"] = limit
+        };
+        if (filtered.Count > 0)
+            query["use_index"] = new[] { DesignDoc, IndexName(filtered) };
+
+        return query;
+    }
+
+    /// <summary>
+    /// Только id: XML площадки на этом проходе не нужен, а sortAt до конца чтения не меняется.
+    /// </summary>
+    public static Dictionary<string, object> EnterpriseIds(string organizationId, string enterpriseGuid, int skip, int limit) =>
+        new()
+        {
+            ["selector"] = new Dictionary<string, object>
+            {
+                ["data.organizationId"] = organizationId,
+                ["data.enterpriseGuid"] = enterpriseGuid,
+                ["data.sortAt"] = new Dictionary<string, object> { ["$gte"] = 0L }
+            },
+            ["sort"] = new[]
+            {
+                new Dictionary<string, string> { ["data.organizationId"] = "desc" },
+                new Dictionary<string, string> { ["data.enterpriseGuid"] = "desc" },
+                new Dictionary<string, string> { ["data.sortAt"] = "desc" }
+            },
+            ["fields"] = new[] { "_id", "data.id" },
+            ["use_index"] = new[] { DesignDoc, "organizationId-enterpriseGuid-sort-at-idx" },
+            ["skip"] = skip,
+            ["limit"] = limit
+        };
+
+    private static void AddFilter(
+        Dictionary<string, object> selector,
+        List<Dictionary<string, string>> sort,
+        List<string> filtered,
+        string field,
+        string value)
+    {
+        if (value.Length == 0)
+            return;
+
+        selector["data." + field] = value;
+        // Смешанное направление CouchDB не принимает: все поля индекса сортируются в одну сторону.
+        sort.Add(new Dictionary<string, string> { ["data." + field] = "desc" });
+        filtered.Add(field);
+    }
+
+    private static string IndexName(IReadOnlyList<string> fields) =>
+        string.Join("-", fields) + "-sort-at-idx";
+}

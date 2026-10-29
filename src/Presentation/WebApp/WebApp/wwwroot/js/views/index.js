@@ -5,6 +5,8 @@ import { RouterService } from '../services/RouterService.js';
 import { createLayout, createTopToolbarWithLogout } from '../components/Layout.js';
 import { Sidebar } from '../components/Sidebar.js';
 import { MENU_ITEMS } from '../config/menu.js';
+import { visibleMenuItems } from '../config/menuAvailability.js';
+import { syncVetisMenu } from '../services/VetisMenuService.js';
 import { registerWebixEditors } from "../utils/webixEditors.js";
 
 import informationView from '../modules/informationView.js';
@@ -23,6 +25,7 @@ import createCrptViolationsListView from '../modules/crptViolations/crptViolatio
 import createAlertSettingsView from '../modules/alertSettingsView.js';
 import createServiceView from '../modules/serviceView.js';
 import createUsersListView from '../modules/users/usersListView.js';
+import createVetisView from '../modules/vetis/vetisView.js';
 
 registerWebixEditors();
 
@@ -46,6 +49,7 @@ class App {
         this.router.register("organizations", async (id) => await createOrganizationListView(id));
         this.router.register("markCheckStatistics", async (id) => await createMarkCheckStatisticsListView(id));
         this.router.register("crptViolations", async (id) => await createCrptViolationsListView(id));
+        this.router.register("vetis", async (id) => await createVetisView(id));
         this.router.register("telegramBotSettings", async (id) => await createAlertSettingsView(id));
         this.router.register("service", async (id) => await createServiceView(id));
         this.router.register("usersList", async (id) => await createUsersListView(id));
@@ -63,7 +67,7 @@ class App {
 
     createMainLayout() {
         const mainSidebar = new Sidebar({
-            items: Object.values(MENU_ITEMS),
+            items: visibleMenuItems(MENU_ITEMS, false),
             onSelect: (id) => this.router.navigate(id, this.bodyId),
             logo: "../../img/logo.svg",
             logoText: "FMU-API-CENTRAL"
@@ -138,6 +142,7 @@ class App {
     initMainApp() {
         webix.ui(this.createMainLayout());
         this.router.navigate("informationView", "body");
+        syncVetisMenu();
         AuthService.startTokenRefreshTimer();
     }
 

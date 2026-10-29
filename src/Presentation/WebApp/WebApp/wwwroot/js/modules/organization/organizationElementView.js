@@ -1,3 +1,4 @@
+import { incomingFromForSave } from '../../utils/vetisFormat.js';
 import { Text, CheckBox, PasswordBox } from '../../utils/ui.js';
 import { newUuid } from '../../utils/uuid.js';
 import { copyText } from '../../utils/copyText.js';
@@ -725,6 +726,7 @@ class OrganizationElementView {
             address: row.address || "",
             presentation: row.presentation || "",
             incomingFrom: this._toDate(row.incomingFrom),
+            loadedIncomingFrom: row.incomingFrom || "",
             participates: !!row.participates
         })));
     }
@@ -894,7 +896,7 @@ class OrganizationElementView {
             name: row.name || "",
             address: row.address || "",
             presentation: String(row.presentation || "").trim(),
-            incomingFrom: this._fromDate(row.incomingFrom),
+            incomingFrom: incomingFromForSave(row.loadedIncomingFrom, this._fromDate(row.incomingFrom)),
             participates: !!row.participates
         })) : [];
 

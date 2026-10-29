@@ -46,6 +46,7 @@ webix.protoUI({
                 language: config.language || "javascript",
                 theme: config.theme || "vs-dark",
                 automaticLayout: true,
+                readOnly: !!config.readOnly,
                 minimap: { enabled: false },
                 fontSize: 13,
                 tabSize: 4,

@@ -27,14 +27,41 @@ public sealed class VetisGateway : IVetisGateway
 
     public Task<VetisExchange> CheckConnectionAsync(VetisCall call, CancellationToken cancellationToken)
     {
-        var envelope = VetisEnvelope.Submit(call, GetBusinessEntityUserXml.Create(call));
-        return SubmitAndWaitAsync(call, GetBusinessEntityUserXml.Operation, envelope, cancellationToken);
+        return SubmitAndWaitAsync(
+            call,
+            GetBusinessEntityUserXml.Operation,
+            GetBusinessEntityUserXml.Create(call),
+            $"Оператор {call.InitiatorLogin.Trim()}",
+            cancellationToken);
+    }
+
+    public async Task<VetisIncomingResult> GetIncomingAsync(
+        VetisCall call,
+        VetisIncomingRequest request,
+        CancellationToken cancellationToken)
+    {
+        var exchange = await SubmitAndWaitAsync(
+            call,
+            GetVetDocumentChangesListXml.Operation,
+            GetVetDocumentChangesListXml.Create(call, request),
+            GetVetDocumentChangesListXml.Describe(request),
+            cancellationToken);
+        if (!exchange.Completed)
+            return new VetisIncomingResult { Exchange = exchange };
+
+        return new VetisIncomingResult
+        {
+            Exchange = exchange,
+            Documents = VetisResponseReader.ReadIncoming(exchange.ResponseXml),
+            PageCount = VetisResponseReader.ListedCount(exchange.ResponseXml)
+        };
     }
 
     public async Task<VetisEnterpriseList> ListEnterprisesAsync(VetisCall call, CancellationToken cancellationToken)
     {
         var url = VetisEndpoints.EnterpriseService(call.Endpoint);
         var collected = new List<VetisEnterprise>();
+        var exchanges = new List<VetisExchange>();
         var offset = 0;
 
         for (var page = 0; page < MaxEnterprisePages; page++)
@@ -42,22 +69,25 @@ public sealed class VetisGateway : IVetisGateway
             var envelope = VetisEnvelope.Registry(
                 GetActivityLocationListXml.Create(call.IssuerId, GetActivityLocationListXml.PageSize, offset));
             var posted = await PostAsync(call, envelope, GetActivityLocationListXml.Operation, url, cancellationToken, cancellationToken);
-            if (!posted.Ok)
+            var fault = posted.Ok ? VetisResponseReader.ErrorText(posted.ResponseXml) : null;
+            var failure = posted.Ok ? fault : posted.Error ?? "Ветис не вернул список площадок.";
+            exchanges.Add(new VetisExchange
+            {
+                Operation = GetActivityLocationListXml.Operation,
+                Parameters = $"Площадки: смещение {offset}, количество {GetActivityLocationListXml.PageSize}",
+                Status = failure == null ? "COMPLETED" : posted.Sent ? "FAILED" : "NOT_SENT",
+                Completed = failure == null,
+                Error = failure,
+                RequestXml = VetisRequestLog.Masked(envelope),
+                ResponseXml = posted.ResponseXml
+            });
+            if (failure != null)
             {
                 return new VetisEnterpriseList
                 {
                     Completed = false,
-                    Error = posted.Error ?? "Ветис не вернул список площадок."
-                };
-            }
-
-            var fault = VetisResponseReader.ErrorText(posted.ResponseXml);
-            if (!string.IsNullOrWhiteSpace(fault))
-            {
-                return new VetisEnterpriseList
-                {
-                    Completed = false,
-                    Error = fault
+                    Error = failure,
+                    Exchanges = exchanges
                 };
             }
 
@@ -71,7 +101,8 @@ public sealed class VetisGateway : IVetisGateway
                 return new VetisEnterpriseList
                 {
                     Completed = false,
-                    Error = $"Ветис сообщил {total} площадок. За один запрос можно забрать не больше {ceiling}."
+                    Error = $"Ветис сообщил {total} площадок. За один запрос можно забрать не больше {ceiling}.",
+                    Exchanges = exchanges
                 };
             }
 
@@ -87,16 +118,25 @@ public sealed class VetisGateway : IVetisGateway
         return new VetisEnterpriseList
         {
             Completed = true,
-            Enterprises = enterprises
+            Enterprises = enterprises,
+            Exchanges = exchanges
         };
     }
 
     private async Task<VetisExchange> SubmitAndWaitAsync(
         VetisCall call,
         string operation,
-        XElement envelope,
+        XElement applicationData,
+        string parameters,
         CancellationToken cancellationToken)
     {
+        var envelope = VetisEnvelope.Submit(call, applicationData);
+        var sent = new SentRequest(
+            operation,
+            applicationData.Element(VetisNs.Mercury + "localTransactionId")?.Value ?? "",
+            parameters,
+            VetisRequestLog.Masked(envelope));
+
         // Иначе каждый опрос заново получает TimeoutSeconds, и ACCEPTED держит запрос минутами.
         var budgetSeconds = call.TimeoutSeconds > 0 ? call.TimeoutSeconds : 60;
         using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -109,15 +149,14 @@ public sealed class VetisGateway : IVetisGateway
         {
             var submitted = await PostAsync(call, envelope, VetisEnvelope.SubmitAction, call.Endpoint, budget.Token, cancellationToken);
             if (submitted.TimedOut)
-                return TimedOut(applicationId, status, budgetSeconds);
+                return TimedOut(sent, applicationId, status, budgetSeconds, responseXml);
             if (!submitted.Ok)
             {
-                return new VetisExchange
-                {
-                    Status = submitted.Sent ? "FAILED" : "NOT_SENT",
-                    Error = submitted.Error,
-                    Completed = false
-                };
+                return sent.Exchange(
+                    completed: false,
+                    status: submitted.Sent ? "FAILED" : "NOT_SENT",
+                    error: submitted.Error,
+                    responseXml: submitted.ResponseXml);
             }
 
             responseXml = submitted.ResponseXml;
@@ -131,22 +170,21 @@ public sealed class VetisGateway : IVetisGateway
                     break;
 
                 if (budget.IsCancellationRequested)
-                    return TimedOut(applicationId, status, budgetSeconds);
+                    return TimedOut(sent, applicationId, status, budgetSeconds, responseXml);
 
                 await Task.Delay(TimeSpan.FromSeconds(Math.Max(1, call.ResultPollDelaySeconds)), budget.Token);
                 var receive = VetisEnvelope.Receive(call, applicationId);
                 var polled = await PostAsync(call, receive, VetisEnvelope.ReceiveAction, call.Endpoint, budget.Token, cancellationToken);
                 if (polled.TimedOut)
-                    return TimedOut(applicationId, status, budgetSeconds);
+                    return TimedOut(sent, applicationId, status, budgetSeconds, responseXml);
                 if (!polled.Ok)
                 {
-                    return new VetisExchange
-                    {
-                        ApplicationId = applicationId,
-                        Status = status,
-                        Error = polled.Error,
-                        Completed = false
-                    };
+                    return sent.Exchange(
+                        completed: false,
+                        status: status,
+                        error: polled.Error,
+                        responseXml: polled.ResponseXml.Length > 0 ? polled.ResponseXml : responseXml,
+                        applicationId: applicationId);
                 }
 
                 responseXml = polled.ResponseXml;
@@ -156,7 +194,7 @@ public sealed class VetisGateway : IVetisGateway
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            return TimedOut(applicationId, status, budgetSeconds);
+            return TimedOut(sent, applicationId, status, budgetSeconds, responseXml);
         }
 
         _logger.LogInformation("Заявка Ветис {ApplicationId} по операции {Operation}: {Status}", applicationId, operation, status);
@@ -169,28 +207,21 @@ public sealed class VetisGateway : IVetisGateway
                 : $"Заявка {applicationId} не завершена, статус {status}.";
         }
 
-        return new VetisExchange
-        {
-            ApplicationId = applicationId,
-            Status = string.IsNullOrWhiteSpace(status) ? "UNKNOWN" : status,
-            Error = completed ? null : error,
-            Completed = completed
-        };
+        return sent.Exchange(
+            completed,
+            string.IsNullOrWhiteSpace(status) ? "UNKNOWN" : status,
+            completed ? null : error,
+            responseXml,
+            applicationId);
     }
 
-    private static VetisExchange TimedOut(string? applicationId, string status, int seconds)
+    private static VetisExchange TimedOut(SentRequest sent, string? applicationId, string status, int seconds, string responseXml)
     {
         var state = string.IsNullOrWhiteSpace(status) ? "UNKNOWN" : status;
         var error = string.IsNullOrWhiteSpace(applicationId)
             ? $"Ветис не ответил за {seconds} с."
             : $"Заявка {applicationId} не успела завершиться за {seconds} с, статус {state}.";
-        return new VetisExchange
-        {
-            ApplicationId = applicationId,
-            Status = state,
-            Error = error,
-            Completed = false
-        };
+        return sent.Exchange(completed: false, status: state, error: error, responseXml: responseXml, applicationId: applicationId);
     }
 
     /// <summary>
@@ -229,6 +260,7 @@ public sealed class VetisGateway : IVetisGateway
                 return new PostOutcome
                 {
                     Sent = true,
+                    ResponseXml = body,
                     Error = details.Length == 0
                         ? $"Ветис вернул {(int)response.StatusCode}."
                         : $"Ветис вернул {(int)response.StatusCode}: {details}"
@@ -257,6 +289,28 @@ public sealed class VetisGateway : IVetisGateway
     {
         var compact = value.Replace('\r', ' ').Replace('\n', ' ').Trim();
         return compact.Length <= 2000 ? compact : compact[..2000];
+    }
+
+    private sealed record SentRequest(string Operation, string LocalTransactionId, string Parameters, string RequestXml)
+    {
+        public VetisExchange Exchange(
+            bool completed,
+            string status,
+            string? error,
+            string responseXml,
+            string? applicationId = null) =>
+            new()
+            {
+                Completed = completed,
+                ApplicationId = applicationId,
+                Status = status,
+                Error = error,
+                Operation = Operation,
+                LocalTransactionId = LocalTransactionId,
+                Parameters = Parameters,
+                RequestXml = RequestXml,
+                ResponseXml = responseXml
+            };
     }
 
     private sealed class PostOutcome

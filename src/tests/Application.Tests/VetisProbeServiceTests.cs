@@ -1,3 +1,4 @@
+using Application.Tests.Fakes;
 using Application.Vetis;
 using CSharpFunctionalExtensions;
 using Domain.Configuration;
@@ -143,6 +144,49 @@ public class VetisProbeServiceTests
         Assert.Equal("", gateway.LastCall?.ApiKey);
     }
 
+    /// <summary>
+    /// Проверка соединения тоже обращение к API: оно видно во вкладке «Заявки».
+    /// </summary>
+    [Fact]
+    public async Task Check_пишет_заявку_в_журнал()
+    {
+        var applications = new MemoryVetisApplications();
+        var sut = Create(new FakeVetisGateway(), applications: applications);
+
+        await sut.CheckAsync("o1", ReadyRequest(), CancellationToken.None);
+
+        var application = Assert.Single(applications.Store.Values);
+        Assert.Equal("GetBusinessEntityUser", application.Operation);
+        Assert.Equal("o1", application.OrganizationId);
+        Assert.Equal("", application.EnterpriseGuid);
+    }
+
+    [Fact]
+    public async Task Check_с_неполными_настройками_не_обращается_к_API_и_не_пишет_заявку()
+    {
+        var applications = new MemoryVetisApplications();
+        var sut = Create(new FakeVetisGateway(), applications: applications);
+        var request = ReadyRequest();
+        request.ApiKey = "";
+
+        await sut.CheckAsync("o1", request, CancellationToken.None);
+
+        Assert.Empty(applications.Store);
+    }
+
+    [Fact]
+    public async Task List_пишет_заявку_на_каждую_страницу_площадок()
+    {
+        var applications = new MemoryVetisApplications();
+        var sut = Create(new FakeVetisGateway(), applications: applications);
+        var request = new VetisProbeRequest { BasicLogin = "user", BasicPassword = "typed", IssuerId = "issuer" };
+
+        await sut.ListEnterprisesAsync("o1", request, CancellationToken.None);
+
+        Assert.Equal(2, applications.Store.Count);
+        Assert.All(applications.Store.Values, item => Assert.Equal("GetActivityLocationList", item.Operation));
+    }
+
     private static VetisProbeRequest ReadyRequest() => new()
     {
         ApiKey = "key",
@@ -155,12 +199,16 @@ public class VetisProbeServiceTests
     private static VetisProbeService Create(
         FakeVetisGateway gateway,
         MemoryOrganizations? organizations = null,
-        bool enable = true)
+        bool enable = true,
+        MemoryVetisApplications? applications = null)
     {
         return new VetisProbeService(
             gateway,
             organizations ?? new MemoryOrganizations(),
             new MemoryParameters(enable),
+            new VetisApplicationRecorder(
+                applications ?? new MemoryVetisApplications(),
+                NullLogger<VetisApplicationRecorder>.Instance),
             NullLogger<VetisProbeService>.Instance);
     }
 
@@ -217,7 +265,8 @@ public class VetisProbeServiceTests
             {
                 Completed = true,
                 Status = "COMPLETED",
-                ApplicationId = "app-1"
+                ApplicationId = "app-1",
+                Operation = "GetBusinessEntityUser"
             });
         }
 
@@ -227,8 +276,18 @@ public class VetisProbeServiceTests
             return Task.FromResult(new VetisEnterpriseList
             {
                 Completed = true,
-                Enterprises = Enterprises
+                Enterprises = Enterprises,
+                Exchanges =
+                [
+                    new VetisExchange { Operation = "GetActivityLocationList", Completed = true, Status = "COMPLETED" },
+                    new VetisExchange { Operation = "GetActivityLocationList", Completed = true, Status = "COMPLETED" }
+                ]
             });
         }
+
+        public Task<VetisIncomingResult> GetIncomingAsync(
+            VetisCall call,
+            VetisIncomingRequest request,
+            CancellationToken cancellationToken) => throw new NotImplementedException();
     }
 }

@@ -3,6 +3,15 @@
 import { loadConfiguration, saveConfigurationSections } from '../services/ConfigurationService.js';
 import { Label, Number, CheckBox, Text } from '../utils/ui.js';
 import { httpAddressValidation } from '../utils/validators.js';
+import { setVetisMenuVisible } from '../services/VetisMenuService.js';
+
+const VETIS_FIELDS = [
+    "vetisEndpoint",
+    "vetisIncomingInterval",
+    "vetisIncomingPageSize",
+    "vetisApplicationRetention",
+    "vetisFailedApplicationRetention",
+];
 
 const VETIS_DEFAULT_ENDPOINT = "https://api.vetrf.ru/platform/services/3.0/ApplicationManagementService";
 
@@ -25,7 +34,12 @@ class SettingsView {
             allowLegacyAgentApi: "Разрешить старый API узлов (без handshake)",
             vetisEnable: "Использовать Ветис API",
             vetisEndpoint: "Адрес сервиса",
-            vetisHint: "Пока флажок выключен, адрес недоступен и вкладка «Ветис» в организации скрыта.",
+            vetisHint: "Пока флажок выключен, адрес недоступен, вкладка «Ветис» в организации и пункт меню «Ветис» скрыты.",
+            vetisIncomingInterval: "Как часто загружать ВСД (минут)",
+            vetisIncomingPageSize: "Сколько ВСД за запрос (не больше 100)",
+            vetisApplicationRetention: "Хранить выполненные заявки (дней)",
+            vetisFailedApplicationRetention: "Хранить заявки с ошибкой или без ответа (дней)",
+            vetisPositiveNumber: "Нужно целое число больше нуля",
         }
     }
 
@@ -60,6 +74,10 @@ class SettingsView {
         this.vetis = {
             enable: !!vetis.enable,
             endpoint: String(vetis.endpoint || "").trim() || VETIS_DEFAULT_ENDPOINT,
+            incomingFetchIntervalMinutes: vetis.incomingFetchIntervalMinutes ?? 5,
+            incomingFetchPageSize: vetis.incomingFetchPageSize ?? 100,
+            applicationRetentionDays: vetis.applicationRetentionDays ?? 1,
+            failedApplicationRetentionDays: vetis.failedApplicationRetentionDays ?? 7,
         };
 
         return this;
@@ -108,6 +126,10 @@ class SettingsView {
                 ...httpAddressValidation,
                 disabled: !this.vetis.enable
             }),
+            this._vetisNumber(this.labels.vetisIncomingInterval, "vetisIncomingInterval", this.vetis.incomingFetchIntervalMinutes),
+            this._vetisNumber(this.labels.vetisIncomingPageSize, "vetisIncomingPageSize", this.vetis.incomingFetchPageSize),
+            this._vetisNumber(this.labels.vetisApplicationRetention, "vetisApplicationRetention", this.vetis.applicationRetentionDays),
+            this._vetisNumber(this.labels.vetisFailedApplicationRetention, "vetisFailedApplicationRetention", this.vetis.failedApplicationRetentionDays),
             {
                 view: "template",
                 autoheight: true,
@@ -219,7 +241,11 @@ class SettingsView {
                 vetisSettings: prev => ({
                   ...prev,
                   enable: !!values.vetisEnable,
-                  endpoint: SettingsView._vetisEndpoint(values.vetisEndpoint)
+                  endpoint: SettingsView._vetisEndpoint(values.vetisEndpoint),
+                  incomingFetchIntervalMinutes: parseInt(values.vetisIncomingInterval),
+                  incomingFetchPageSize: parseInt(values.vetisIncomingPageSize),
+                  applicationRetentionDays: parseInt(values.vetisApplicationRetention),
+                  failedApplicationRetentionDays: parseInt(values.vetisFailedApplicationRetention)
                 })
               });
     
@@ -227,6 +253,8 @@ class SettingsView {
                 webix.message({ type: "error", text: saveResult.error });
                 return;
             }
+
+            setVetisMenuVisible(!!values.vetisEnable);
     
             webix.message({
                 type: "success",
@@ -243,16 +271,26 @@ class SettingsView {
         return endpoint;
     }
 
-    /// Пока Ветис выключен, адрес сервиса нельзя менять.
-    _setVetisEndpointEnabled(enabled) {
-        const field = $$("vetisEndpoint");
-        if (!field)
-            return;
+    _vetisNumber(label, name, value) {
+        return Number(label, name, value, undefined, {
+            disabled: !this.vetis.enable,
+            validate: input => parseInt(input) > 0,
+            invalidMessage: this.labels.vetisPositiveNumber
+        });
+    }
 
-        if (enabled)
-            field.enable();
-        else
-            field.disable();
+    /// Пока Ветис выключен, адрес сервиса и параметры фоновых задач нельзя менять.
+    _setVetisEndpointEnabled(enabled) {
+        for (const name of VETIS_FIELDS) {
+            const field = $$(name);
+            if (!field)
+                continue;
+
+            if (enabled)
+                field.enable();
+            else
+                field.disable();
+        }
     }
 
 }

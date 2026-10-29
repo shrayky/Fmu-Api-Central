@@ -13,8 +13,10 @@ public class DatabaseNames
     public const string GisMtMarks = "fmu-api-central-gismt-marks";
     public const string AlertTemplates = "fmu-api-central-alert-templates";
     public const string CrptViolations = "fmu-api-central-crpt-violations";
+    public const string VetisIncoming = "fmu-api-central-vetis-incoming";
+    public const string VetisApplications = "fmu-api-central-vetis-applications";
 
-    public static string[] All() => [Users, Instance, InstanceGroup, SettingsSchema, Organization, SoftwareUpdateFiles, MarkCheckingStatistic, GisMtDocuments, GisMtMarks, AlertTemplates, CrptViolations];
+    public static string[] All() => [Users, Instance, InstanceGroup, SettingsSchema, Organization, SoftwareUpdateFiles, MarkCheckingStatistic, GisMtDocuments, GisMtMarks, AlertTemplates, CrptViolations, VetisIncoming, VetisApplications];
 
-    public static string[] ExcludedFromExport() => [Users, SoftwareUpdateFiles, MarkCheckingStatistic, GisMtDocuments, GisMtMarks, CrptViolations];
+    public static string[] ExcludedFromExport() => [Users, SoftwareUpdateFiles, MarkCheckingStatistic, GisMtDocuments, GisMtMarks, CrptViolations, VetisIncoming, VetisApplications];
 }

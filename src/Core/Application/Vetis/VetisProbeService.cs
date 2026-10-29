@@ -16,17 +16,20 @@ public sealed class VetisProbeService
     private readonly IVetisGateway _gateway;
     private readonly IOrganizationRepository _organizations;
     private readonly IParametersService _parameters;
+    private readonly VetisApplicationRecorder _recorder;
     private readonly ILogger<VetisProbeService> _logger;
 
     public VetisProbeService(
         IVetisGateway gateway,
         IOrganizationRepository organizations,
         IParametersService parameters,
+        VetisApplicationRecorder recorder,
         ILogger<VetisProbeService> logger)
     {
         _gateway = gateway;
         _organizations = organizations;
         _parameters = parameters;
+        _recorder = recorder;
         _logger = logger;
     }
 
@@ -40,6 +43,7 @@ public sealed class VetisProbeService
             return Result.Failure<VetisProbeOutcome>(prepared.Error);
 
         var exchange = await _gateway.CheckConnectionAsync(prepared.Value, cancellationToken);
+        await _recorder.RecordAsync(exchange, organizationId, "");
         _logger.LogInformation(
             "Проверка соединения Ветис: {Status} {ApplicationId}",
             exchange.Status,
@@ -73,6 +77,9 @@ public sealed class VetisProbeService
             return Result.Failure<VetisProbeOutcome>(prepared.Error);
 
         var list = await _gateway.ListEnterprisesAsync(prepared.Value, cancellationToken);
+        foreach (var exchange in list.Exchanges)
+            await _recorder.RecordAsync(exchange, organizationId, "");
+
         if (!list.Completed)
         {
             return Result.Success(new VetisProbeOutcome

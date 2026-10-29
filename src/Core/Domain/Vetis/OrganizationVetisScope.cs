@@ -20,7 +20,7 @@ public static class OrganizationVetisScope
         current.IssuerId = (update.IssuerId ?? "").Trim();
         current.InitiatorLogin = (update.InitiatorLogin ?? "").Trim();
         current.IncomingFrom = NormalizeDate(update.IncomingFrom);
-        current.Enterprises = Normalize(update.Enterprises, current.IncomingFrom);
+        current.Enterprises = Normalize(update.Enterprises, current.IncomingFrom, current.Enterprises);
     }
 
     public static string NormalizeDate(string? value)
@@ -38,7 +38,49 @@ public static class OrganizationVetisScope
         return "";
     }
 
-    private static List<OrganizationEnterprise> Normalize(IReadOnlyList<OrganizationEnterprise>? source, string generalDate)
+    /// <summary>
+    /// День карточки сравнивается с календарным днём метки как он записан, без перевода в пояс сервера.
+    /// Тот же день оставляет момент. Другой день — выбор пользователя. Штамп с уже открытой карточки курсор не откатывает.
+    /// </summary>
+    private static string ResolveIncoming(string? stored, string? submitted)
+    {
+        var kept = NormalizeStamp(stored);
+        var next = (submitted ?? "").Trim();
+        if (next.Length == 0)
+            return "";
+
+        if (next.Contains('T'))
+            return kept.Length > 0 ? kept : NormalizeStamp(next);
+
+        var day = NormalizeStamp(next);
+        if (day.Length == 0)
+            return "";
+
+        var submittedDay = day.Length >= 10 ? day[..10] : day;
+        return kept.Length >= 10 && string.Equals(kept[..10], submittedDay, StringComparison.Ordinal)
+            ? kept
+            : day;
+    }
+
+    /// <summary>
+    /// Дата площадки после загрузки ВСД хранит момент, а не день: иначе следующая загрузка вернулась бы к полуночи.
+    /// </summary>
+    private static string NormalizeStamp(string? value)
+    {
+        var day = NormalizeDate(value);
+        if (day.Length > 0)
+            return day;
+
+        var text = (value ?? "").Trim();
+        return text.Contains('T') && VetisDateTime.TryParse(text, out var instant)
+            ? VetisDateTime.Format(instant)
+            : "";
+    }
+
+    private static List<OrganizationEnterprise> Normalize(
+        IReadOnlyList<OrganizationEnterprise>? source,
+        string generalDate,
+        IReadOnlyList<OrganizationEnterprise>? stored)
     {
         var result = new List<OrganizationEnterprise>();
         foreach (var item in source ?? [])
@@ -47,7 +89,8 @@ public static class OrganizationVetisScope
             if (guid.Length == 0 || result.Exists(existing => string.Equals(existing.Guid, guid, StringComparison.OrdinalIgnoreCase)))
                 continue;
 
-            var incoming = NormalizeDate(item.IncomingFrom);
+            var previous = stored?.FirstOrDefault(existing => string.Equals(existing.Guid, guid, StringComparison.OrdinalIgnoreCase));
+            var incoming = ResolveIncoming(previous?.IncomingFrom, item.IncomingFrom);
             if (item.Participates && incoming.Length == 0 && generalDate.Length > 0)
                 incoming = generalDate;
 
@@ -117,7 +160,7 @@ public static class OrganizationVetisScope
                 Name = (item.Name ?? "").Trim(),
                 Address = (item.Address ?? "").Trim(),
                 Presentation = (item.Presentation ?? "").Trim(),
-                IncomingFrom = NormalizeDate(item.IncomingFrom),
+                IncomingFrom = NormalizeStamp(item.IncomingFrom),
                 Participates = item.Participates
             });
         }

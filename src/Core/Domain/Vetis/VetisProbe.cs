@@ -32,6 +32,19 @@ public sealed class VetisExchange
     public string Status { get; init; } = "";
 
     public string? Error { get; init; }
+
+    public string Operation { get; init; } = "";
+
+    public string LocalTransactionId { get; init; } = "";
+
+    public string Parameters { get; init; } = "";
+
+    /// <summary>
+    /// Ключ API в сохранённом запросе заменён маской.
+    /// </summary>
+    public string RequestXml { get; init; } = "";
+
+    public string ResponseXml { get; init; } = "";
 }
 
 public sealed class VetisEnterpriseList
@@ -41,6 +54,33 @@ public sealed class VetisEnterpriseList
     public string? Error { get; init; }
 
     public IReadOnlyList<VetisEnterprise> Enterprises { get; init; } = [];
+
+    public IReadOnlyList<VetisExchange> Exchanges { get; init; } = [];
+}
+
+public sealed class VetisIncomingRequest
+{
+    public string EnterpriseGuid { get; init; } = "";
+
+    public DateTimeOffset Begin { get; init; }
+
+    public DateTimeOffset End { get; init; }
+
+    public int Offset { get; init; }
+
+    public int Count { get; init; } = IncomingChangesWindow.PageSize;
+}
+
+public sealed class VetisIncomingResult
+{
+    public VetisExchange Exchange { get; init; } = new();
+
+    public IReadOnlyList<VetisIncomingVsd> Documents { get; init; } = [];
+
+    /// <summary>
+    /// История изменений содержит и исходящие ВСД: страница полна, даже если входящих в ней меньше.
+    /// </summary>
+    public int PageCount { get; init; }
 }
 
 public sealed class VetisProbeRequest
@@ -70,4 +110,6 @@ public interface IVetisGateway
     Task<VetisExchange> CheckConnectionAsync(VetisCall call, CancellationToken cancellationToken);
 
     Task<VetisEnterpriseList> ListEnterprisesAsync(VetisCall call, CancellationToken cancellationToken);
+
+    Task<VetisIncomingResult> GetIncomingAsync(VetisCall call, VetisIncomingRequest request, CancellationToken cancellationToken);
 }

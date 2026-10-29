@@ -14,6 +14,12 @@ export const MENU_ITEMS = {
         value: "Отклонения ЧЗ",
         icon: "mdi mdi-frame-exclamation"
     },
+    VETIS: {
+        id: "vetis",
+        value: "Ветис",
+        icon: "mdi mdi-vetis",
+        requiresVetis: true
+    },
     INSTANCE_GROUPS: {
         id: "instanceGroups",
         value: "Группы инстансов",
