@@ -12,6 +12,7 @@ using Domain.Entitys.SoftwareUpdateFiles;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging.Abstractions;
 using System.IO.Compression;
+using System.Text;
 using System.Text.Json;
 
 namespace Application.Tests;
@@ -222,6 +223,9 @@ public class CheckerDistributionServiceTests
         Assert.Contains("Не найден", result.Error, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// В строке команды адрес только внутри EncodedCommand (UTF-16LE).
+    /// </summary>
     [Fact]
     public async Task InstallCommand_собирает_ссылку_из_публичного_адреса()
     {
@@ -230,9 +234,12 @@ public class CheckerDistributionServiceTests
         var result = await sut.InstallCommand("token-1");
 
         Assert.True(result.IsSuccess);
+        var marker = "-EncodedCommand ";
+        var encoded = result.Value[(result.Value.IndexOf(marker, StringComparison.Ordinal) + marker.Length)..];
+        var script = Encoding.Unicode.GetString(Convert.FromBase64String(encoded));
         Assert.Contains(
             "https://central.example:2579/api/fmuApiInstance/token-1/checker-distribution",
-            result.Value);
+            script);
     }
 
     [Fact]

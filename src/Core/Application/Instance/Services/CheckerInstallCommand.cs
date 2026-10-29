@@ -37,7 +37,7 @@ public static class CheckerInstallCommand
         script.Append("if (-not $src -or -not $dst) { exit 1 }; ");
         script.Append("$dst.CopyHere($src.Items(), 0x14); ");
         script.Append("$t=0; $prev=-1; $ready=$false; ");
-        script.Append("while ($t -lt 60) { ");
+        script.Append("while ($t -lt 300) { ");
         script.Append("$bytes=0; $nested=$false; ");
         script.Append("foreach ($f in @(Get-ChildItem -LiteralPath $d -Recurse -Force -ErrorAction SilentlyContinue)) { if (-not $f.PSIsContainer) { $bytes+=$f.Length }; if ($f.Name -eq 'fmu-api-check.exe') { $nested=$true } }; ");
         script.Append("if ((Test-Path -LiteralPath $e) -and $nested -and $bytes -gt 0 -and $bytes -eq $prev) { $ready=$true; break }; ");

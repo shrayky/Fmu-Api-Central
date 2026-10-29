@@ -28,7 +28,7 @@ public class CheckerInstallCommandTests
             "if (-not $src -or -not $dst) { exit 1 }; " +
             "$dst.CopyHere($src.Items(), 0x14); " +
             "$t=0; $prev=-1; $ready=$false; " +
-            "while ($t -lt 60) { " +
+            "while ($t -lt 300) { " +
             "$bytes=0; $nested=$false; " +
             "foreach ($f in @(Get-ChildItem -LiteralPath $d -Recurse -Force -ErrorAction SilentlyContinue)) { if (-not $f.PSIsContainer) { $bytes+=$f.Length }; if ($f.Name -eq 'fmu-api-check.exe') { $nested=$true } }; " +
             "if ((Test-Path -LiteralPath $e) -and $nested -and $bytes -gt 0 -and $bytes -eq $prev) { $ready=$true; break }; " +
