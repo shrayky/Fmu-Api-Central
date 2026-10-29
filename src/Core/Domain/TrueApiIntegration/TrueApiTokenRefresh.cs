@@ -26,4 +26,22 @@ public static class TrueApiTokenRefresh
 
         return due;
     }
+
+    public static List<OrganizationEntity> ForXApiKey(IEnumerable<OrganizationEntity> organizations)
+    {
+        var ready = new List<OrganizationEntity>();
+        foreach (var organisation in organizations)
+        {
+            var settings = organisation.TrueApiIntegrationSettings;
+            if (settings is not { Enable: true })
+                continue;
+
+            if (string.IsNullOrWhiteSpace(settings.DigitalSignature))
+                continue;
+
+            ready.Add(organisation);
+        }
+
+        return ready;
+    }
 }

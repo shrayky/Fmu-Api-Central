@@ -60,7 +60,6 @@ public class TrueApiTokenLoaderWorker : BackgroundService
             using var scope = _scopeFactory.CreateScope();
             var repository = scope.ServiceProvider.GetRequiredService<IOrganizationRepository>();
             var organizations = await repository.All();
-            // x-api-key не чаще UUID: тот же список, что и для simpleSignIn.
             var due = TrueApiTokenRefresh.Due(organizations, _applicationState.TrueApiToken);
 
             foreach (var organisation in due)
@@ -88,7 +87,7 @@ public class TrueApiTokenLoaderWorker : BackgroundService
             }
 
             var xApiKeys = scope.ServiceProvider.GetRequiredService<IXApiKeyLoadService>();
-            await xApiKeys.Refresh(due, stoppingToken);
+            await xApiKeys.Refresh(TrueApiTokenRefresh.ForXApiKey(organizations), stoppingToken);
         }
         catch (Exception ex)
         {
