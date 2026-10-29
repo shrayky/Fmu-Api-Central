@@ -27,4 +27,7 @@ public class GisMtProductMapping
 
     [JsonPropertyName("haveExpireDate")]
     public bool HaveExpireDate { get; set; }
+
+    [JsonPropertyName("forbidSaleByExpireDate")]
+    public bool ForbidSaleByExpireDate { get; set; }
 }

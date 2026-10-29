@@ -34,7 +34,8 @@ public static class GroupSettingsApply
                     CheckSmp = item.CheckSmp,
                     CheckMrp = item.CheckMrp,
                     CheckExpireDate = item.CheckExpireDate,
-                    HaveExpireDate = item.HaveExpireDate
+                    HaveExpireDate = item.HaveExpireDate,
+                    ForbidSaleByExpireDate = item.ForbidSaleByExpireDate
                 })
                 .ToList(),
             HostsToPing = hostsToPing

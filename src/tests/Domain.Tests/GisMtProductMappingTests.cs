@@ -11,14 +11,17 @@ public class GisMtProductMappingTests
         var json = JsonSerializer.Serialize(new GisMtProductMapping { HaveExpireDate = true });
 
         Assert.Contains("\"haveExpireDate\":true", json);
+        Assert.Contains("\"forbidSaleByExpireDate\":false", json);
     }
 
     [Fact]
     public void CopyDefaults_копирует_HaveExpireDate()
     {
         var original = AtolToTrueApiGroupMap.Defaults[13];
-        var previous = original.HaveExpireDate;
+        var previousExpire = original.HaveExpireDate;
+        var previousForbid = original.ForbidSaleByExpireDate;
         original.HaveExpireDate = true;
+        original.ForbidSaleByExpireDate = true;
 
         try
         {
@@ -26,10 +29,12 @@ public class GisMtProductMappingTests
                 .Single(item => item.AtolCode == 13);
 
             Assert.True(copy.HaveExpireDate);
+            Assert.True(copy.ForbidSaleByExpireDate);
         }
         finally
         {
-            original.HaveExpireDate = previous;
+            original.HaveExpireDate = previousExpire;
+            original.ForbidSaleByExpireDate = previousForbid;
         }
     }
 }

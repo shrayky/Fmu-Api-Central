@@ -17,12 +17,14 @@ public class GroupSettingsApplyTests
                 AtolCode = 13,
                 TrueApiGroupId = 8,
                 Name = "Молочная продукция",
-                HaveExpireDate = true
+                HaveExpireDate = true,
+                ForbidSaleByExpireDate = true
             }
         };
 
         var result = GroupSettingsApply.Apply(source, new HttpRequestTimeouts(), mappings, []);
 
         Assert.True(result.GisMtProductMappings.Single().HaveExpireDate);
+        Assert.True(result.GisMtProductMappings.Single().ForbidSaleByExpireDate);
     }
 }

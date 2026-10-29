@@ -24,6 +24,9 @@ class SettingsSchemaElementView {
             checkMrp: "Контроль МРЦ",
             checkExpireDate: "Срок годности",
             haveExpireDate: "Есть срок годности",
+            forbidSaleByExpireDate: "Запрет продажи по сроку",
+            help: "?",
+            helpTitle: "Флажки товарных групп",
             addMapping: "Добавить",
             removeMapping: "Удалить",
             fillDefaults: "Заполнить по умолчанию",
@@ -44,13 +47,18 @@ class SettingsSchemaElementView {
             checkInternetConnectionTimeout: "settingsSchemaInternetTimeout",
             syncWithTsPiot: "settingsSchemaSyncWithTsPiot",
             mappingTable: "settingsSchemaMappingTable",
-            hostsTable: "settingsSchemaHostsTable"
+            hostsTable: "settingsSchemaHostsTable",
+            helpWindow: "settingsSchemaMappingHelp"
         };
 
         webix.html.addStyle(
             "#settingsSchemaMappingTable .webix_ss_header .webix_hcell{line-height:48px;}" +
             ".pg-header-twoline{display:flex;flex-direction:column;justify-content:center;" +
-            "line-height:18px !important;white-space:normal;text-align:center;height:48px;box-sizing:border-box;}",
+            "line-height:18px !important;white-space:normal;text-align:center;height:48px;box-sizing:border-box;}" +
+            ".pg-help .webix_template{padding:14px 16px;line-height:1.45;}" +
+            ".pg-help-item{margin-bottom:16px;}" +
+            ".pg-help-title{font-weight:600;}" +
+            ".pg-help-when{margin:2px 0 4px;opacity:0.75;}",
             "pg-header-twoline"
         );
     }
@@ -73,7 +81,7 @@ class SettingsSchemaElementView {
             view: "window",
             id: this.NAMES.windowId,
             modal: true,
-            width: 1070,
+            width: 1200,
             position: "center",
             head: this.LABELS.formTitle,
             body: {
@@ -88,7 +96,7 @@ class SettingsSchemaElementView {
                     ),
                     {
                         view: "tabview",
-                        height: 380,
+                        height: 520,
                         cells: [
                             {
                                 header: this.LABELS.timeouts,
@@ -160,6 +168,12 @@ class SettingsSchemaElementView {
                     width: 200,
                     click: () => this._fillDefaults()
                 },
+                {
+                    view: "button",
+                    value: this.LABELS.help,
+                    width: 40,
+                    click: () => this._openHelpWindow()
+                },
                 {}
             ]
         };
@@ -171,7 +185,7 @@ class SettingsSchemaElementView {
             id: this.NAMES.mappingTable,
             editable: true,
             select: "row",
-            height: 280,
+            height: 420,
             columns: [
                 { id: "atolCode", header: this.LABELS.atolCode, width: 110, editor: "text", sort: "int" },
                 { id: "trueApiGroupId", header: this.LABELS.trueApiGroupId, width: 110, editor: "text", sort: "int" },
@@ -210,6 +224,15 @@ class SettingsSchemaElementView {
                     template: "{common.checkbox()}",
                     checkValue: true,
                     uncheckValue: false
+                },
+                {
+                    id: "forbidSaleByExpireDate",
+                    header: { text: "Запрет продажи<br>по сроку", css: "pg-header-twoline" },
+                    width: 120,
+                    css: { "text-align": "center" },
+                    template: "{common.checkbox()}",
+                    checkValue: true,
+                    uncheckValue: false
                 }
             ],
             headerRowHeight: 56,
@@ -231,7 +254,8 @@ class SettingsSchemaElementView {
             checkSmp: !!row.checkSmp,
             checkMrp: !!row.checkMrp,
             checkExpireDate: !!row.checkExpireDate,
-            haveExpireDate: !!row.haveExpireDate
+            haveExpireDate: !!row.haveExpireDate,
+            forbidSaleByExpireDate: !!row.forbidSaleByExpireDate
         };
     }
 
@@ -251,7 +275,8 @@ class SettingsSchemaElementView {
             checkSmp: false,
             checkMrp: false,
             checkExpireDate: false,
-            haveExpireDate: false
+            haveExpireDate: false,
+            forbidSaleByExpireDate: false
         });
         table.select(id);
         table.showItem(id);
@@ -293,7 +318,7 @@ class SettingsSchemaElementView {
             id: this.NAMES.hostsTable,
             editable: true,
             select: "row",
-            height: 280,
+            height: 420,
             columns: [
                 { id: "value", header: this.LABELS.host, fillspace: true, editor: "text" }
             ],
@@ -355,7 +380,8 @@ class SettingsSchemaElementView {
             checkSmp: !!preset.checkSmp,
             checkMrp: !!preset.checkMrp,
             checkExpireDate: !!preset.checkExpireDate,
-            haveExpireDate: !!preset.haveExpireDate
+            haveExpireDate: !!preset.haveExpireDate,
+            forbidSaleByExpireDate: !!preset.forbidSaleByExpireDate
         });
     }
 
@@ -440,7 +466,8 @@ class SettingsSchemaElementView {
                 checkSmp: !!item.checkSmp,
                 checkMrp: !!item.checkMrp,
                 checkExpireDate: !!item.checkExpireDate,
-                haveExpireDate: !!item.haveExpireDate
+                haveExpireDate: !!item.haveExpireDate,
+                forbidSaleByExpireDate: !!item.forbidSaleByExpireDate
             });
         });
 
@@ -493,6 +520,76 @@ class SettingsSchemaElementView {
         }
 
         return true;
+    }
+
+    _openHelpWindow() {
+        const id = this.NAMES.helpWindow;
+        if ($$(id))
+            $$(id).close();
+
+        webix.ui({
+            view: "window",
+            id,
+            modal: true,
+            position: "center",
+            width: 560,
+            height: 640,
+            head: {
+                view: "toolbar",
+                elements: [
+                    { view: "label", label: this.LABELS.helpTitle },
+                    {
+                        view: "icon",
+                        icon: "wxi-close",
+                        click: () => $$(id).close()
+                    }
+                ]
+            },
+            body: {
+                view: "template",
+                scroll: "y",
+                css: "pg-help",
+                template: this._helpHtml()
+            }
+        }).show();
+    }
+
+    _helpHtml() {
+        const items = [
+            {
+                title: "ЕМЦ",
+                when: "Начало чека (begin) — перед добавлением оплаты",
+                text: "Признак того, что у товара нужно контролировать ЕМЦ. Если цена ниже — отказ «цена ниже минимальной розничной». По умолчанию включён у табака и никотиносодержащей продукции."
+            },
+            {
+                title: "Контроль МРЦ",
+                when: "Начало чека (begin) — перед добавлением оплаты",
+                text: "Включён: цена должна точно совпасть с МРЦ. По умолчанию включён у табака."
+            },
+            {
+                title: "Срок годности!",
+                when: "Начало чека (begin) — перед добавлением оплаты",
+                text: "Нет срока годности у марки — отказ «отсутствует срок годности». Чтобы исключить продажу товара при офлайн-проверке."
+            },
+            {
+                title: "Есть срок годности",
+                when: "Проверка марки (check) — при сканировании марки",
+                text: "Продажу не запрещает. Для Фронтола 29 и выше — признак того, что у этого товара надо показать сообщение «проверь срок годности» при офлайн-проверке."
+            },
+            {
+                title: "Запрет продажи по сроку",
+                when: "Начало чека (begin) — перед добавлением оплаты",
+                text: "Срок уже истёк — отказ продажи. Пустой срок этим флажком не проверяется."
+            }
+        ];
+
+        return items.map(item =>
+            `<div class="pg-help-item">` +
+            `<div class="pg-help-title">${item.title}</div>` +
+            `<div class="pg-help-when">${item.when}</div>` +
+            `<div>${item.text}</div>` +
+            `</div>`
+        ).join("");
     }
 }
 
