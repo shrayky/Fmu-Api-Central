@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Application.Organization.Services;
 using CSharpFunctionalExtensions;
 using Domain.AppState.Interfaces;
@@ -42,6 +43,124 @@ public class OrganizationManagerServiceTests
         Assert.Equal(SecretMask.Placeholder, view.TrueApiIntegrationSettings.Password);
         Assert.Equal("true-api-secret", repository.Store["o1"].TrueApiIntegrationSettings.Password);
         Assert.Equal("thumbprint", view.TrueApiIntegrationSettings.DigitalSignature);
+    }
+
+    /// <summary>
+    /// Список отдаёт маску пароля и API-ключа Ветис, в документе оба значения остаются.
+    /// </summary>
+    [Fact]
+    public async Task List_маскирует_пароль_Ветис()
+    {
+        var repository = new FakeOrganizationRepository();
+        repository.Store["o1"] = new OrganizationEntity
+        {
+            Id = "o1",
+            Name = "Орг",
+            Inn = "1234567890",
+            VetisSettings = new OrganizationVetisSettings
+            {
+                Enable = true,
+                BasicPassword = "vetis-secret",
+                ApiKey = "key"
+            }
+        };
+        var sut = CreateSut(repository);
+
+        var result = await sut.List(1, 50);
+
+        var view = Assert.Single(result.Content);
+        var vetis = view.VetisSettings;
+        Assert.NotNull(vetis);
+        Assert.Equal(SecretMask.Placeholder, vetis.BasicPassword);
+        Assert.Equal(SecretMask.Placeholder, vetis.ApiKey);
+        Assert.True(vetis.Enable);
+        Assert.Equal("vetis-secret", repository.Store["o1"].VetisSettings.BasicPassword);
+        Assert.Equal("key", repository.Store["o1"].VetisSettings.ApiKey);
+    }
+
+    /// <summary>
+    /// Маска и пустой пароль Ветис не затирают сохранённый. Новый API-ключ записывается.
+    /// </summary>
+    [Fact]
+    public async Task Update_не_затирает_пароль_Ветис()
+    {
+        var repository = new FakeOrganizationRepository();
+        repository.Store["o1"] = new OrganizationEntity
+        {
+            Id = "o1",
+            Name = "Орг",
+            Inn = "1234567890",
+            VetisSettings = new OrganizationVetisSettings { BasicPassword = "vetis-secret", ApiKey = "old" }
+        };
+        var sut = CreateSut(repository);
+
+        var result = await sut.Update(new OrganizationView
+        {
+            Id = "o1",
+            Name = "Орг",
+            Inn = "1234567890",
+            TrueApiIntegrationSettings = new TrueApiIntegrationSettings(),
+            VetisSettings = new OrganizationVetisSettings
+            {
+                BasicPassword = SecretMask.Placeholder,
+                ApiKey = "new-key"
+            }
+        });
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("vetis-secret", repository.Store["o1"].VetisSettings.BasicPassword);
+        Assert.Equal("new-key", repository.Store["o1"].VetisSettings.ApiKey);
+    }
+
+    /// <summary>
+    /// Сохранение без вкладки Ветис не присылает vetisSettings. Пустой объект из разбора не должен стирать реквизиты.
+    /// </summary>
+    [Fact]
+    public async Task Update_без_ветис_в_json_не_стирает_сохранённое()
+    {
+        var repository = new FakeOrganizationRepository();
+        repository.Store["o1"] = new OrganizationEntity
+        {
+            Id = "o1",
+            Name = "Орг",
+            Inn = "1234567890",
+            VetisSettings = new OrganizationVetisSettings
+            {
+                Enable = true,
+                ApiKey = "key",
+                BasicLogin = "user",
+                BasicPassword = "vetis-secret",
+                IssuerId = "issuer",
+                InitiatorLogin = "operator",
+                IncomingFrom = "2026-01-01",
+                Enterprises =
+                [
+                    new OrganizationEnterprise
+                    {
+                        Guid = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+                        Name = "Склад",
+                        Participates = true
+                    }
+                ]
+            }
+        };
+        var sut = CreateSut(repository);
+        var json = """{"id":"o1","name":"Новое имя","inn":"1234567890","trueApiIntegrationSettings":{"enable":false}}""";
+        var data = JsonSerializer.Deserialize<OrganizationView>(json, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+
+        var result = await sut.Update(data!);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("Новое имя", repository.Store["o1"].Name);
+        var saved = repository.Store["o1"].VetisSettings;
+        Assert.True(saved.Enable);
+        Assert.Equal("key", saved.ApiKey);
+        Assert.Equal("user", saved.BasicLogin);
+        Assert.Equal("vetis-secret", saved.BasicPassword);
+        Assert.Equal("issuer", saved.IssuerId);
+        Assert.Equal("operator", saved.InitiatorLogin);
+        Assert.Equal("2026-01-01", saved.IncomingFrom);
+        Assert.Equal("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", Assert.Single(saved.Enterprises).Guid);
     }
 
     /// <summary>

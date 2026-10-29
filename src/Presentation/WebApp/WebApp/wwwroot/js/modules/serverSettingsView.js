@@ -2,6 +2,9 @@
 
 import { loadConfiguration, saveConfigurationSections } from '../services/ConfigurationService.js';
 import { Label, Number, CheckBox, Text } from '../utils/ui.js';
+import { httpAddressValidation } from '../utils/validators.js';
+
+const VETIS_DEFAULT_ENDPOINT = "https://api.vetrf.ru/platform/services/3.0/ApplicationManagementService";
 
 class SettingsView {
     constructor(id) {
@@ -20,6 +23,9 @@ class SettingsView {
             logDepth: "Глубина логирования (дней)",
             logLevel: "Уровень логирования",
             allowLegacyAgentApi: "Разрешить старый API узлов (без handshake)",
+            vetisEnable: "Использовать Ветис API",
+            vetisEndpoint: "Адрес сервиса",
+            vetisHint: "Пока флажок выключен, адрес недоступен и вкладка «Ветис» в организации скрыта.",
         }
     }
 
@@ -49,6 +55,11 @@ class SettingsView {
         };
         this.security = {
             allowLegacyAgentApi: configuration.security?.allowLegacyAgentApi !== false,
+        };
+        const vetis = configuration.vetisSettings ?? {};
+        this.vetis = {
+            enable: !!vetis.enable,
+            endpoint: String(vetis.endpoint || "").trim() || VETIS_DEFAULT_ENDPOINT,
         };
 
         return this;
@@ -87,6 +98,22 @@ class SettingsView {
             CheckBox(this.labels.allowLegacyAgentApi, "allowLegacyAgentApi", {
                 value: this.security.allowLegacyAgentApi
             }),
+            CheckBox(this.labels.vetisEnable, "vetisEnable", {
+                value: this.vetis.enable,
+                on: {
+                    onChange: (enabled) => this._setVetisEndpointEnabled(!!enabled)
+                }
+            }),
+            Text(this.labels.vetisEndpoint, "vetisEndpoint", this.vetis.endpoint, {
+                ...httpAddressValidation,
+                disabled: !this.vetis.enable
+            }),
+            {
+                view: "template",
+                autoheight: true,
+                borderless: true,
+                template: this.labels.vetisHint
+            },
         );
 
         const loggerSettings = {
@@ -161,7 +188,8 @@ class SettingsView {
         width: 120,
         click: async function () {
             const form = this.getFormView();
-    
+            SettingsView._vetisEndpoint($$("vetisEndpoint")?.getValue());
+
             if (!form.validate()) return;
     
             const values = form.getValues();
@@ -187,6 +215,11 @@ class SettingsView {
                 security: prev => ({
                   ...prev,
                   allowLegacyAgentApi: !!values.allowLegacyAgentApi
+                }),
+                vetisSettings: prev => ({
+                  ...prev,
+                  enable: !!values.vetisEnable,
+                  endpoint: SettingsView._vetisEndpoint(values.vetisEndpoint)
                 })
               });
     
@@ -201,6 +234,26 @@ class SettingsView {
             });
         }
     };
+
+    static _vetisEndpoint(value) {
+        const endpoint = String(value || "").trim() || VETIS_DEFAULT_ENDPOINT;
+        const field = $$("vetisEndpoint");
+        if (field && field.getValue() !== endpoint)
+            field.setValue(endpoint);
+        return endpoint;
+    }
+
+    /// Пока Ветис выключен, адрес сервиса нельзя менять.
+    _setVetisEndpointEnabled(enabled) {
+        const field = $$("vetisEndpoint");
+        if (!field)
+            return;
+
+        if (enabled)
+            field.enable();
+        else
+            field.disable();
+    }
 
 }
 

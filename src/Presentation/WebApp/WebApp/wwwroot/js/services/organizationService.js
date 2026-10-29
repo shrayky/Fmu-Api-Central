@@ -95,6 +95,45 @@ class OrganizationService {
 
         return true;
     }
+
+    async checkVetis(id, payload) {
+        return this._vetis(id, "check", payload);
+    }
+
+    async listVetisEnterprises(id, payload) {
+        return this._vetis(id, "enterprises", payload);
+    }
+
+    async parseVetisLetter(text) {
+        const data = await this.authService.makeAuthenticatedRequest(`${this.apiEndpoint}/vetis/letter`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text })
+        });
+
+        if (!data.result) {
+            throw new Error(data.error);
+        }
+
+        return data.value;
+    }
+
+    async _vetis(id, action, payload) {
+        const data = await this.authService.makeAuthenticatedRequest(
+            `${this.apiEndpoint}/${encodeURIComponent(id)}/vetis/${action}`,
+            {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            }
+        );
+
+        if (!data.result) {
+            throw new Error(data.error);
+        }
+
+        return data.value;
+    }
 }
 
 export default new OrganizationService();

@@ -8,6 +8,7 @@ using Domain.Entitys.Organization;
 using Domain.Entitys.Organization.Dto;
 using Domain.Entitys.Organization.Interfaces;
 using Domain.GisMt.Models;
+using Domain.Vetis;
 using Domain.TrueApiIntegration;
 using Domain.TrueApiIntegration.Dto;
 using Domain.TrueApiIntegration.Interfaces;
@@ -184,6 +185,8 @@ public class OrganizationManagerService : IOrganizationManagerService
             incoming.Password,
             entity.TrueApiIntegrationSettings?.Password ?? string.Empty);
         entity.TrueApiIntegrationSettings = incoming;
+        if (data.VetisSettings != null)
+            OrganizationVetisScope.Apply(entity.VetisSettings ??= new(), data.VetisSettings);
     }
 
     private OrganizationView ToView(OrganizationEntity entity)
@@ -203,7 +206,8 @@ public class OrganizationManagerService : IOrganizationManagerService
             XApiKeyExpiresAt = entity.XApiKeyExpiresAt,
             GisMtLastStatus = CopyStatus(entity.GisMtLastStatus),
             GisMtProductGroups = CopyGroups(entity.GisMtProductGroups),
-            TrueApiIntegrationSettings = ForClient(entity.TrueApiIntegrationSettings)
+            TrueApiIntegrationSettings = ForClient(entity.TrueApiIntegrationSettings),
+            VetisSettings = ForClient(entity.VetisSettings)
         };
     }
 
@@ -215,6 +219,22 @@ public class OrganizationManagerService : IOrganizationManagerService
             Enable = settings.Enable,
             Password = SecretMask.ForClient(settings.Password),
             DigitalSignature = settings.DigitalSignature
+        };
+    }
+
+    private static OrganizationVetisSettings ForClient(OrganizationVetisSettings? settings)
+    {
+        settings ??= new();
+        return new OrganizationVetisSettings
+        {
+            Enable = settings.Enable,
+            ApiKey = SecretMask.ForClient(settings.ApiKey),
+            BasicLogin = settings.BasicLogin,
+            BasicPassword = SecretMask.ForClient(settings.BasicPassword),
+            IssuerId = settings.IssuerId,
+            InitiatorLogin = settings.InitiatorLogin,
+            IncomingFrom = settings.IncomingFrom,
+            Enterprises = settings.Enterprises ?? []
         };
     }
 

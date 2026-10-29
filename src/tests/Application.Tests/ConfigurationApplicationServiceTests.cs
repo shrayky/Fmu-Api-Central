@@ -1,6 +1,7 @@
 using Application.Configuration.Services;
 using Domain.Configuration;
 using Domain.Configuration.Interfaces;
+using Domain.Vetis;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Application.Tests;
@@ -113,6 +114,47 @@ public class ConfigurationApplicationServiceTests
         Assert.True(ok);
         Assert.Equal("new-couch", parameters.CurrentValue.DatabaseConnection.Password);
         Assert.Equal("new-bot", parameters.CurrentValue.BotSettings.BotToken);
+    }
+
+    /// <summary>
+    /// Флажок и адрес Ветис сохраняются отдельной секцией и попадают в переносимый файл.
+    /// </summary>
+    [Fact]
+    public async Task Update_сохраняет_настройки_Ветис_и_кладёт_их_в_экспорт()
+    {
+        var parameters = new FakeParametersService { CurrentValue = new Parameters() };
+        var sut = new ConfigurationApplicationService(parameters, NullLogger<ConfigurationApplicationService>.Instance);
+        var json = """{"vetisSettings":{"enable":true,"endpoint":"https://api.vetrf.ru/platform/services/3.0/ApplicationManagementService"}}""";
+
+        var ok = await sut.Update(json);
+        var exported = await sut.ExportPortable(CancellationToken.None);
+
+        Assert.True(ok);
+        Assert.True(parameters.CurrentValue.VetisSettings.Enable);
+        Assert.Equal(
+            "https://api.vetrf.ru/platform/services/3.0/ApplicationManagementService",
+            parameters.CurrentValue.VetisSettings.Endpoint);
+        Assert.True(exported.IsSuccess);
+        Assert.Contains("\"enable\": true", exported.Value.Json);
+        Assert.Contains("ApplicationManagementService", exported.Value.Json);
+    }
+
+    /// <summary>
+    /// Пустой адрес в форме не хранится: подставляется боевой ApplicationManagementService.
+    /// </summary>
+    [Fact]
+    public async Task Update_пустой_адрес_Ветис_заменяет_боевым()
+    {
+        var parameters = new FakeParametersService { CurrentValue = new Parameters() };
+        var sut = new ConfigurationApplicationService(parameters, NullLogger<ConfigurationApplicationService>.Instance);
+        var json = """{"vetisSettings":{"enable":true,"endpoint":"  "}}""";
+
+        var ok = await sut.Update(json);
+
+        Assert.True(ok);
+        Assert.Equal(
+            VetisEndpoints.ProductionApplicationManagement,
+            parameters.CurrentValue.VetisSettings.Endpoint);
     }
 
     private sealed class FakeParametersService : IParametersService

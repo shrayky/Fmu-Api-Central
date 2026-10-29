@@ -26,6 +26,7 @@
     <ProjectReference Include="..\..\Core\Shared\Shared.csproj" />
     <ProjectReference Include="..\..\Infrastructure\Authentication\Authentication.csproj" />
     <ProjectReference Include="..\..\Infrastructure\Messages\Messages.csproj" />
+    <ProjectReference Include="..\..\Infrastructure\VetisApi\VetisApi.csproj" />
   </ItemGroup>
 
 </Project>

@@ -34,4 +34,7 @@ public record OrganizationView
 
     [JsonPropertyName("trueApiIntegrationSettings")]
     public TrueApiIntegrationSettings TrueApiIntegrationSettings { get; set; } = new();
+
+    [JsonPropertyName("vetisSettings")]
+    public OrganizationVetisSettings? VetisSettings { get; set; }
 }

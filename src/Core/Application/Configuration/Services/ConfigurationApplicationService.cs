@@ -6,6 +6,7 @@ using Domain.Configuration;
 using Domain.Configuration.Constants;
 using Domain.Configuration.Interfaces;
 using Domain.Configuration.Options;
+using Domain.Vetis;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -71,6 +72,8 @@ public class ConfigurationApplicationService : IConfigurationApplicationService
             parameters.Security ??= new();
             current.Security ??= new();
             parameters.Security.PasswordConfigured = current.Security.PasswordConfigured;
+            parameters.VetisSettings ??= new();
+            parameters.VetisSettings.Endpoint = VetisEndpoints.Resolve(parameters.VetisSettings.Endpoint);
             RestoreMaskedSecrets(parameters, current);
 
             return await _parametersService.Update(parameters);
@@ -94,7 +97,8 @@ public class ConfigurationApplicationService : IConfigurationApplicationService
                 LoggerSettings = current.LoggerSettings,
                 TelegramBotSettings = current.BotSettings,
                 SoftwareUpdateSettings = current.SoftwareUpdateSettings,
-                GisMtSettings = current.GisMtSettings
+                GisMtSettings = current.GisMtSettings,
+                VetisSettings = current.VetisSettings
             };
 
             var json = await JsonHelpers.SerializeAsync(portable);
@@ -136,6 +140,8 @@ public class ConfigurationApplicationService : IConfigurationApplicationService
                 current.SoftwareUpdateSettings = portable.SoftwareUpdateSettings;
             if (portable.GisMtSettings != null)
                 current.GisMtSettings = portable.GisMtSettings;
+            if (portable.VetisSettings != null)
+                current.VetisSettings = portable.VetisSettings;
 
             var updated = await _parametersService.Update(current);
             if (!updated)

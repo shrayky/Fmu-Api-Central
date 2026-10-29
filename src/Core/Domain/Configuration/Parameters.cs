@@ -27,6 +27,9 @@ public class Parameters
     [JsonPropertyName("gisMtSettings")]
     public GisMtSettings GisMtSettings { get; set; } = new();
 
+    [JsonPropertyName("vetisSettings")]
+    public VetisSettings VetisSettings { get; set; } = new();
+
     [JsonPropertyName("security")]
     public SecuritySettings Security { get; set; } = new();
 

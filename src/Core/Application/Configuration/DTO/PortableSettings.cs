@@ -27,4 +27,7 @@ public sealed class PortableSettings
 
     [JsonPropertyName("gisMtSettings")]
     public GisMtSettings? GisMtSettings { get; set; }
+
+    [JsonPropertyName("vetisSettings")]
+    public VetisSettings? VetisSettings { get; set; }
 }

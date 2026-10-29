@@ -14,6 +14,8 @@ public class OrganizationEntity : IHaveStringId
 
     public TrueApiIntegrationSettings TrueApiIntegrationSettings { get; set; } = new();
 
+    public OrganizationVetisSettings VetisSettings { get; set; } = new();
+
     public DateTime? XApiKeyExpiresAt { get; set; }
 
     public GisMtLastStatus GisMtLastStatus { get; set; } = new();
