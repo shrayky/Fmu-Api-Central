@@ -1,4 +1,5 @@
 using Application.Vetis;
+using Domain.Vetis;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -10,16 +11,31 @@ namespace WebApi.Controllers;
 public class VetisController : ControllerBase
 {
     private readonly VetisIncomingQueryService _incoming;
+    private readonly VetisIncomingQuenchService _quench;
+    private readonly VetisQuenchProgressStore _progress;
     private readonly VetisApplicationService _applications;
 
-    public VetisController(VetisIncomingQueryService incoming, VetisApplicationService applications)
+    public VetisController(
+        VetisIncomingQueryService incoming,
+        VetisIncomingQuenchService quench,
+        VetisQuenchProgressStore progress,
+        VetisApplicationService applications)
     {
         _incoming = incoming;
+        _quench = quench;
+        _progress = progress;
         _applications = applications;
     }
 
     [HttpGet("filters")]
     public async Task<IActionResult> Filters() => Ok(await _incoming.FiltersAsync());
+
+    [HttpGet("not-accepted-counts")]
+    public async Task<IActionResult> NotAcceptedCounts()
+    {
+        var result = await _incoming.NotAcceptedCountsAsync();
+        return result.IsSuccess ? Ok(result.Value) : BadRequest(result.Error);
+    }
 
     [HttpGet("incoming")]
     public async Task<IActionResult> Incoming(
@@ -37,6 +53,17 @@ public class VetisController : ControllerBase
     public async Task<IActionResult> IncomingDocument(string id)
     {
         var result = await _incoming.GetAsync(id);
+        return result.IsSuccess ? Ok(result.Value) : BadRequest(result.Error);
+    }
+
+    [HttpGet("incoming/{id}/quench")]
+    public IActionResult QuenchProgress(string id) =>
+        Ok(_progress.Find(id) ?? new VetisQuenchProgress());
+
+    [HttpPost("incoming/{id}/quench")]
+    public async Task<IActionResult> Quench(string id, [FromBody] VetisQuenchCommand? command, CancellationToken cancellationToken)
+    {
+        var result = await _quench.QuenchAsync(id, command?.Facts ?? [], cancellationToken);
         return result.IsSuccess ? Ok(result.Value) : BadRequest(result.Error);
     }
 

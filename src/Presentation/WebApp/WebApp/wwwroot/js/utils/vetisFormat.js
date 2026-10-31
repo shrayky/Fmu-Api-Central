@@ -7,6 +7,7 @@ const INCOMING_STATUSES = {
 
 const OPERATIONS = {
     GetVetDocumentChangesList: "Загрузка ВСД",
+    ProcessIncomingConsignment: "Гашение",
     GetBusinessEntityUser: "Проверка соединения",
     GetActivityLocationList: "Список предприятий",
 };
@@ -60,10 +61,6 @@ export function requestStateText({ hasResponse, error }) {
     return hasResponse ? "Получен" : "Нет ответа";
 }
 
-export function incomingReceivedLabel(row) {
-    return formatIsoMoment(row?.receivedAt);
-}
-
 export function incomingDocumentLabel(row) {
     if (row?.loose)
         return "Без документа";
@@ -73,6 +70,60 @@ export function incomingDocumentLabel(row) {
         .replaceAll("<", "&lt;")
         .replaceAll(">", "&gt;")
         .replaceAll("\"", "&quot;");
+}
+
+export function vetisCountLabel(name, count) {
+    const total = Number(count) || 0;
+    return total > 0 ? `${name} — ${total}` : String(name ?? "");
+}
+
+export function editedActualVolume(incoming, edited) {
+    const volume = parseVolume(incoming);
+    const text = String(edited ?? "").trim();
+    const fact = parseVolume(text);
+    if (!text || volume == null || fact == null || fact < 0 || fact > volume)
+        return { ok: false };
+
+    return { ok: true, value: text.replace(",", ".") };
+}
+
+export function canQuenchRows(vsds) {
+    return (vsds ?? []).some((vsd) => String(vsd?.status ?? "").toUpperCase() === "CONFIRMED");
+}
+
+export function sameIncomingDocument(openedId, requestId) {
+    return openedId != null && openedId === requestId;
+}
+
+export function incomingWindowClosable(openedId, busyId) {
+    return busyId == null || busyId !== openedId;
+}
+
+export function quenchStageText({ index = 0, total = 0, issueNumber = "" } = {}) {
+    const count = Number(total) || 0;
+    const current = Number(index) || 0;
+    const lines = [count > 0 ? `Гашение ${current} из ${count}` : "Гашение"];
+    const number = String(issueNumber ?? "").trim();
+    if (number)
+        lines.push(`ВСД ${number}`);
+
+    lines.push("Отправка в Меркурий");
+    return lines.join("\n");
+}
+
+export function quenchSummary({ quenched = 0, skipped = 0, errors = [] } = {}) {
+    const parts = [`Погашено ${quenched}`];
+    if (skipped)
+        parts.push(`пропущено ${skipped}`);
+    if (errors.length)
+        parts.push(errors.map((item) => item.message).filter(Boolean).join("; "));
+
+    return parts.join(". ");
+}
+
+function parseVolume(value) {
+    const number = Number(String(value ?? "").trim().replace(",", "."));
+    return Number.isFinite(number) ? number : null;
 }
 
 export function incomingFromForSave(loaded, pickerDay) {

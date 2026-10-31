@@ -1,7 +1,14 @@
 const MARGIN = 40;
 
-export function openVetisWindow({ id, title, width, height, body, fill }) {
+export function openVetisWindow({ id, title, width, height, body, fill, canClose }) {
     $$(id)?.destructor();
+
+    const close = () => {
+        if (canClose && !canClose())
+            return;
+
+        $$(id)?.close();
+    };
 
     const dialog = webix.ui({
         view: "window",
@@ -16,7 +23,7 @@ export function openVetisWindow({ id, title, width, height, body, fill }) {
             view: "toolbar",
             elements: [
                 { view: "label", label: title },
-                { view: "icon", icon: "wxi-close", click: () => $$(id).close() },
+                { view: "icon", icon: "wxi-close", click: close },
             ],
         },
         body,
@@ -26,6 +33,9 @@ export function openVetisWindow({ id, title, width, height, body, fill }) {
     const closeOnEsc = () => {
         const opened = $$(id);
         if (!opened)
+            return false;
+
+        if (canClose && !canClose())
             return false;
 
         opened.close();

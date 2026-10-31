@@ -6,6 +6,7 @@ using Domain.Dto.Responces;
 using Domain.Entitys.Organization;
 using Domain.Entitys.Organization.Interfaces;
 using Domain.Vetis;
+using VetisApi.Xml;
 
 namespace Application.Tests.Fakes;
 
@@ -75,17 +76,46 @@ internal sealed class MemoryVetisIncoming : IVetisIncomingRepository
 
     public bool FailSave { get; set; }
 
+    public string? FindError { get; set; }
+
     public int ReleaseCalls { get; private set; }
 
-    public Task<Result<VetisIncomingDocumentEntity?>> Find(string id) =>
-        Task.FromResult(Result.Success(Store.TryGetValue(id, out var found) ? Clone(found) : null));
+    public int FindCalls { get; private set; }
+
+    public int SaveCalls { get; private set; }
+
+    public Task<Result<VetisIncomingDocumentEntity?>> Find(string id)
+    {
+        FindCalls++;
+        return Task.FromResult(FindError == null
+            ? Result.Success(Store.TryGetValue(id, out var found) ? Clone(found) : null)
+            : Result.Failure<VetisIncomingDocumentEntity?>(FindError));
+    }
 
     public Task<Result> Save(VetisIncomingDocumentEntity document)
     {
+        SaveCalls++;
         if (FailSave)
             return Task.FromResult(Result.Failure("БД недоступна"));
 
         Store[document.Id] = Clone(document);
+        return Task.FromResult(Result.Success());
+    }
+
+    public Task<Result<List<VetisIncomingHead>>> HeadsAfter(string afterId, int limit)
+    {
+        var rows = Store.Values
+            .Select(item => new VetisIncomingHead(item.Id, item.Date, item.SortAt))
+            .Where(head => string.CompareOrdinal(head.Id, afterId ?? "") > 0)
+            .OrderBy(head => head.Id, StringComparer.Ordinal)
+            .Take(limit)
+            .ToList();
+        return Task.FromResult(Result.Success(rows));
+    }
+
+    public Task<Result> Delete(string id)
+    {
+        Store.Remove(id);
         return Task.FromResult(Result.Success());
     }
 
@@ -121,6 +151,20 @@ internal sealed class MemoryVetisIncoming : IVetisIncomingRepository
             .ToList();
         return Task.FromResult(Result.Success(rows));
     }
+
+    public string? NotAcceptedError { get; set; }
+
+    public Task<Result<List<VetisIncomingKey>>> NotAcceptedKeys() =>
+        Task.FromResult(NotAcceptedError == null
+            ? Result.Success(Store.Values
+                .Where(item => item.Status == VetisIncomingStatus.NotAccepted)
+                .Select(item => new VetisIncomingKey
+                {
+                    OrganizationId = item.OrganizationId,
+                    EnterpriseGuid = item.EnterpriseGuid
+                })
+                .ToList())
+            : Result.Failure<List<VetisIncomingKey>>(NotAcceptedError));
 
     private static VetisIncomingDocumentEntity Clone(VetisIncomingDocumentEntity entity) =>
         JsonSerializer.Deserialize<VetisIncomingDocumentEntity>(JsonSerializer.Serialize(entity))!;
@@ -176,11 +220,27 @@ internal sealed class ScriptedVetisGateway : IVetisGateway
 
     public List<VetisIncomingRequest> Requests { get; } = [];
 
+    public int QuenchCalls { get; private set; }
+
+    public int ThrowFromCall { get; set; }
+
+    private readonly Queue<VetisExchange> _quench = new();
+
     public VetisCall? LastCall { get; private set; }
 
     public Action<VetisIncomingRequest>? OnIncoming { get; set; }
 
+    public Action? OnQuench { get; set; }
+
+    public bool Hold { get; set; }
+
+    public TaskCompletionSource Entered { get; } = new();
+
+    public TaskCompletionSource Release { get; } = new();
+
     public void Enqueue(VetisIncomingResult result) => _incoming.Enqueue(_ => result);
+
+    public void EnqueueQuench(VetisExchange exchange) => _quench.Enqueue(exchange);
 
     public void Enqueue(Func<VetisIncomingRequest, VetisIncomingResult> result) => _incoming.Enqueue(result);
 
@@ -202,6 +262,39 @@ internal sealed class ScriptedVetisGateway : IVetisGateway
             ? _incoming.Dequeue()
             : _ => Page(0);
         return Task.FromResult(next(request));
+    }
+
+    public async Task<VetisQuenchResult> QuenchAsync(
+        VetisCall call,
+        string rawXml,
+        VetisQuenchOrder order,
+        string uuid,
+        CancellationToken cancellationToken)
+    {
+        LastCall = call;
+        QuenchCalls++;
+        OnQuench?.Invoke();
+        if (ThrowFromCall > 0 && QuenchCalls >= ThrowFromCall)
+            throw new InvalidOperationException("обрыв");
+
+        // Держим только первый вызов: иначе повтор без замка упрётся в Release и тест зависнет вместо падения.
+        if (Hold)
+        {
+            Entered.TrySetResult();
+            if (QuenchCalls == 1)
+                await Release.Task;
+        }
+
+        var exchange = _quench.Count > 0
+            ? _quench.Dequeue()
+            : new VetisExchange { Completed = false, Error = "Нет сценария гашения.", Status = "FAILED" };
+        var quenched = VetisResponseReader.ReadQuenched(exchange.ResponseXml, uuid);
+        return new VetisQuenchResult
+        {
+            Exchange = exchange,
+            Status = quenched?.Status ?? "",
+            ReceivedAt = quenched?.ReceivedAt ?? ""
+        };
     }
 
     public static VetisIncomingResult Page(int pageCount, params VetisIncomingVsd[] documents) =>

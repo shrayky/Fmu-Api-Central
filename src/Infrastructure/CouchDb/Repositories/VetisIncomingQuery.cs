@@ -81,6 +81,48 @@ public static class VetisIncomingQuery
             ["limit"] = limit
         };
 
+    /// <summary>
+    /// Страница непринятых читается от ключа: `skip` на каждом обновлении фильтра дорожает с каждой страницей.
+    /// `data.id` совпадает с `_id`, но у design-документов его нет — по нему курсор их и отсекает.
+    /// </summary>
+    public static Dictionary<string, object> NotAcceptedAfter(string afterId, int limit) =>
+        new()
+        {
+            ["selector"] = new Dictionary<string, object>
+            {
+                ["data.status"] = VetisIncomingStatus.NotAccepted,
+                ["data.id"] = new Dictionary<string, object> { ["$gt"] = afterId ?? "" }
+            },
+            ["sort"] = new[]
+            {
+                new Dictionary<string, string> { ["data.status"] = "asc" },
+                new Dictionary<string, string> { ["data.id"] = "asc" }
+            },
+            ["fields"] = new[] { "data.id", "data.organizationId", "data.enterpriseGuid" },
+            ["use_index"] = new[] { DesignDoc, "status-id-idx" },
+            ["limit"] = limit
+        };
+
+    /// <summary>
+    /// Страница журнала по возрастанию `data.id`. Курсор по `_id` не годится: под `$gt` попадают design-документы,
+    /// а строка без `data` роняет разбор проекции. У design-документов `data.id` нет.
+    /// </summary>
+    public static Dictionary<string, object> HeadsAfter(string afterId, int limit) =>
+        new()
+        {
+            ["selector"] = new Dictionary<string, object>
+            {
+                ["data.id"] = new Dictionary<string, object> { ["$gt"] = afterId ?? "" }
+            },
+            ["sort"] = new[]
+            {
+                new Dictionary<string, string> { ["data.id"] = "asc" }
+            },
+            ["fields"] = new[] { "data.id", "data.date", "data.sortAt" },
+            ["use_index"] = new[] { DesignDoc, "id-idx" },
+            ["limit"] = limit
+        };
+
     private static void AddFilter(
         Dictionary<string, object> selector,
         List<Dictionary<string, string>> sort,

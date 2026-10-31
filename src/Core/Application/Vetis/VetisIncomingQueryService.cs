@@ -73,6 +73,7 @@ public sealed class VetisIncomingQueryService
                     Status = vsd.Status,
                     ProductName = vsd.ProductName,
                     Volume = vsd.Volume,
+                    ActualVolume = vsd.ActualVolume,
                     Transport = VetisTransport.Describe(vsd.RawXml),
                     ConsignorName = vsd.ConsignorName,
                     ReceivedAt = vsd.ReceivedAt,
@@ -84,24 +85,64 @@ public sealed class VetisIncomingQueryService
         return Result.Success(view);
     }
 
-    public async Task<List<VetisFilterOrganization>> FiltersAsync()
+    public Task<List<VetisFilterOrganization>> FiltersAsync() =>
+        DirectoryAsync(new Dictionary<(string OrganizationId, string Guid), int>());
+
+    /// <summary>
+    /// Отдельный обход непринятых: журнал открывается по списку площадок, числа дописываются следом.
+    /// </summary>
+    public async Task<Result<List<VetisFilterOrganization>>> NotAcceptedCountsAsync()
+    {
+        var keys = await _incoming.NotAcceptedKeys();
+        if (keys.IsFailure)
+            return Result.Failure<List<VetisFilterOrganization>>(keys.Error);
+
+        var counts = keys.Value
+            .GroupBy(item => (item.OrganizationId, Guid: item.EnterpriseGuid), KeyComparer.Instance)
+            .ToDictionary(group => group.Key, group => group.Count(), KeyComparer.Instance);
+
+        return Result.Success(await DirectoryAsync(counts));
+    }
+
+    private async Task<List<VetisFilterOrganization>> DirectoryAsync(
+        IReadOnlyDictionary<(string OrganizationId, string Guid), int> counts)
     {
         var organizations = await _organizations.All();
         return organizations
             .Where(item => item.VetisSettings.Enable)
-            .Select(item => new VetisFilterOrganization
+            .Select(item =>
             {
-                Id = item.Id,
-                Name = item.Name,
-                Enterprises = item.VetisSettings.Enterprises
+                var enterprises = item.VetisSettings.Enterprises
                     .Select(enterprise => new VetisFilterEnterprise
                     {
                         Guid = enterprise.Guid,
-                        Name = VetisDirectory.Caption(enterprise)
+                        Name = VetisDirectory.Caption(enterprise),
+                        NotAcceptedCount = counts.GetValueOrDefault((item.Id, enterprise.Guid))
                     })
-                    .ToList()
+                    .ToList();
+                return new VetisFilterOrganization
+                {
+                    Id = item.Id,
+                    Name = item.Name,
+                    NotAcceptedCount = enterprises.Sum(enterprise => enterprise.NotAcceptedCount),
+                    Enterprises = enterprises
+                };
             })
             .ToList();
+    }
+
+    private sealed class KeyComparer : IEqualityComparer<(string OrganizationId, string Guid)>
+    {
+        public static readonly KeyComparer Instance = new();
+
+        public bool Equals((string OrganizationId, string Guid) left, (string OrganizationId, string Guid) right) =>
+            string.Equals(left.OrganizationId, right.OrganizationId, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(left.Guid, right.Guid, StringComparison.OrdinalIgnoreCase);
+
+        public int GetHashCode((string OrganizationId, string Guid) value) =>
+            HashCode.Combine(
+                StringComparer.OrdinalIgnoreCase.GetHashCode(value.OrganizationId ?? ""),
+                StringComparer.OrdinalIgnoreCase.GetHashCode(value.Guid ?? ""));
     }
 
     private static VetisIncomingRow ToRow(VetisIncomingDocumentEntity document, VetisDirectory directory)

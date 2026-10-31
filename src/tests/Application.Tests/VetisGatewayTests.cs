@@ -165,7 +165,13 @@ public class VetisGatewayTests
             </vetDocument>
             <vetDocument><uuid>v-2</uuid><vetDType>OUTGOING</vetDType></vetDocument>
             <vetDocument><uuid>v-3</uuid><vetDocumentType>INCOMING</vetDocumentType><vetDType>PRODUCTIVE</vetDType></vetDocument>
-            <vetDocument><uuid>v-4</uuid><vetDType>TRANSPORT</vetDType></vetDocument>
+            <vetDocument>
+              <uuid>v-4</uuid>
+              <vetDType>TRANSPORT</vetDType>
+              <certifiedConsignment>
+                <consignee><enterprise><guid>ffffffff-ffff-ffff-ffff-ffffffffffff</guid></enterprise></consignee>
+              </certifiedConsignment>
+            </vetDocument>
             <vetDocument><uuid>v-5</uuid><vetDType>RETURNABLE</vetDType></vetDocument>
             <vetDocument>
               <uuid>v-6</uuid>
@@ -174,17 +180,26 @@ public class VetisGatewayTests
               <statusChange><status>CONFIRMED</status><actualDateTime>2026-10-02T12:00:00+07:00</actualDateTime></statusChange>
               <statusChange><status>FINALIZED</status><actualDateTime>2026-10-29T08:00:00+07:00</actualDateTime></statusChange>
             </vetDocument>
+            <vetDocument>
+              <uuid>v-7</uuid>
+              <vetDType>TRANSPORT</vetDType>
+              <certifiedConsignment>
+                <consignee><enterprise><guid>eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee</guid></enterprise></consignee>
+              </certifiedConsignment>
+            </vetDocument>
           </vetDocumentList>
         </root>
         """;
 
     /// <summary>
-    /// В истории изменений есть и исходящие ВСД: их нет в списке, но они занимают место на странице.
+    /// Поставка на площадку приходит как TRANSPORT. OUTGOING, PRODUCTIVE и RETURNABLE в список не входят, но занимают место на странице.
+    /// TRANSPORT остаётся, только если guid предприятия грузополучателя совпадает с площадкой запроса.
     /// </summary>
     [Fact]
     public void ReadIncoming_читает_входящие_ВСД_с_накладной_и_пропускает_исходящие()
     {
-        var rows = VetisResponseReader.ReadIncoming(IncomingResponse);
+        var rows = VetisResponseReader.ReadIncoming(IncomingResponse, "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee");
+        Assert.Equal(["v-1", "v-6", "v-7"], rows.Select(item => item.Uuid));
         var row = rows.Single(item => item.Uuid == "v-1");
         var issued = rows.Single(item => item.Uuid == "v-6");
 
@@ -203,7 +218,7 @@ public class VetisGatewayTests
         Assert.Equal("", issued.ReceivedAt);
         Assert.Equal("2026-10-03T10:00:00+07:00", row.UpdatedAt);
         Assert.Contains("<uuid>v-1</uuid>", row.RawXml);
-        Assert.Equal(6, VetisResponseReader.ListedCount(IncomingResponse));
+        Assert.Equal(7, VetisResponseReader.ListedCount(IncomingResponse));
     }
 
     [Fact]
@@ -226,7 +241,7 @@ public class VetisGatewayTests
 
         Assert.True(result.Exchange.Completed);
         Assert.Equal("GetVetDocumentChangesList", result.Exchange.Operation);
-        Assert.Equal(6, result.PageCount);
+        Assert.Equal(7, result.PageCount);
         Assert.Equal(["v-1", "v-6"], result.Documents.Select(item => item.Uuid));
         Assert.Contains("enterprise-1", handler.Body);
         Assert.Contains("2026-10-01T00:00:00+00:00", handler.Body);

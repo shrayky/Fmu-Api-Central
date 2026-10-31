@@ -73,6 +73,9 @@ public sealed class VetisVsdView
     [JsonPropertyName("volume")]
     public string Volume { get; set; } = "";
 
+    [JsonPropertyName("actualVolume")]
+    public string ActualVolume { get; set; } = "";
+
     [JsonPropertyName("transport")]
     public string Transport { get; set; } = "";
 
@@ -156,6 +159,9 @@ public sealed class VetisFilterEnterprise
 
     [JsonPropertyName("name")]
     public string Name { get; set; } = "";
+
+    [JsonPropertyName("notAcceptedCount")]
+    public int NotAcceptedCount { get; set; }
 }
 
 public sealed class VetisFilterOrganization
@@ -165,6 +171,9 @@ public sealed class VetisFilterOrganization
 
     [JsonPropertyName("name")]
     public string Name { get; set; } = "";
+
+    [JsonPropertyName("notAcceptedCount")]
+    public int NotAcceptedCount { get; set; }
 
     [JsonPropertyName("enterprises")]
     public List<VetisFilterEnterprise> Enterprises { get; set; } = [];

@@ -289,5 +289,12 @@ public class VetisProbeServiceTests
             VetisCall call,
             VetisIncomingRequest request,
             CancellationToken cancellationToken) => throw new NotImplementedException();
+
+        public Task<VetisQuenchResult> QuenchAsync(
+            VetisCall call,
+            string rawXml,
+            VetisQuenchOrder order,
+            string uuid,
+            CancellationToken cancellationToken) => throw new NotImplementedException();
     }
 }

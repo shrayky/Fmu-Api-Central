@@ -3,9 +3,15 @@ import assert from "node:assert/strict";
 import {
     formatIsoMoment,
     formatUnixMoment,
+    canQuenchRows,
+    editedActualVolume,
+    incomingWindowClosable,
+    sameIncomingDocument,
     incomingDocumentLabel,
     incomingFromForSave,
-    incomingReceivedLabel,
+    quenchStageText,
+    quenchSummary,
+    vetisCountLabel,
     incomingStatusLabel,
     incomingStatusCss,
     operationLabel,
@@ -35,6 +41,7 @@ test("у каждого статуса документа свой css-клас�
 
 test("операции Ветис показываются понятными названиями", () => {
     assert.equal(operationLabel("GetVetDocumentChangesList"), "Загрузка ВСД");
+    assert.equal(operationLabel("ProcessIncomingConsignment"), "Гашение");
     assert.equal(operationLabel("GetBusinessEntityUser"), "Проверка соединения");
     assert.equal(operationLabel("GetActivityLocationList"), "Список предприятий");
 });
@@ -91,16 +98,49 @@ test("ISO-дата форматируется без перевода часов
     assert.equal(formatIsoMoment("2026-10-28T09:05:00.000+03:00"), "28.10.2026 09:05");
 });
 
-test("список показывает ту же метку поступления, что и карточка", () => {
-    const row = { receivedAt: "2026-10-25T09:30:00+07:00", sortAt: 0 };
-    assert.equal(incomingReceivedLabel(row), formatIsoMoment(row.receivedAt));
-    assert.equal(incomingReceivedLabel(row), "25.10.2026 09:30");
-    assert.equal(incomingReceivedLabel({ sortAt: 1761363000 }), "");
-});
-
 test("номер накладной в списке экранируется, подпись без документа нет", () => {
     assert.equal(incomingDocumentLabel({ loose: false, number: `ТТН <5> & "a"` }), "ТТН &lt;5&gt; &amp; &quot;a&quot;");
     assert.equal(incomingDocumentLabel({ loose: true, number: "<b>" }), "Без документа");
+});
+
+test("непринятые документы видны в названии площадки", () => {
+    assert.equal(vetisCountLabel("Металлургов, 32", 12), "Металлургов, 32 — 12");
+    assert.equal(vetisCountLabel("Магазин", 0), "Магазин");
+});
+
+test("верный факт нормализуется, неверный не подменяется объёмом", () => {
+    assert.deepEqual(editedActualVolume("10", "4"), { ok: true, value: "4" });
+    assert.deepEqual(editedActualVolume("10", "4,5"), { ok: true, value: "4.5" });
+    assert.deepEqual(editedActualVolume("10", "0"), { ok: true, value: "0" });
+    assert.deepEqual(editedActualVolume("10", "10"), { ok: true, value: "10" });
+    assert.equal(editedActualVolume("10", "11").ok, false);
+    assert.equal(editedActualVolume("10", "-1").ok, false);
+    assert.equal(editedActualVolume("10", "").ok, false);
+    assert.equal(editedActualVolume("10", "много").ok, false);
+});
+
+test("гасить можно только документ с оформленным ВСД", () => {
+    assert.equal(canQuenchRows([{ status: "UTILIZED" }, { status: "confirmed" }]), true);
+    assert.equal(canQuenchRows([{ status: "UTILIZED" }]), false);
+    assert.equal(canQuenchRows([]), false);
+});
+
+test("отчёт гашения применяется только к тому же документу", () => {
+    assert.equal(sameIncomingDocument("d1", "d1"), true);
+    assert.equal(sameIncomingDocument("d2", "d1"), false);
+    assert.equal(sameIncomingDocument(null, "d1"), false);
+});
+
+test("стадия гашения показывает текущий ВСД из общего числа", () => {
+    assert.equal(
+        quenchStageText({ index: 2, total: 5, issueNumber: "30.10.2506" }),
+        "Гашение 2 из 5\nВСД 30.10.2506\nОтправка в Меркурий");
+    assert.equal(quenchStageText({}), "Гашение\nОтправка в Меркурий");
+});
+
+test("итог гашения собирает число и ошибки", () => {
+    assert.equal(quenchSummary({ quenched: 2, skipped: 1, errors: [] }), "Погашено 2. пропущено 1");
+    assert.equal(quenchSummary({ quenched: 0, errors: [{ message: "отказ" }] }), "Погашено 0. отказ");
 });
 
 test("неизменённый день карточки сохраняет момент курсора", () => {
@@ -109,6 +149,12 @@ test("неизменённый день карточки сохраняет мо
         "2026-10-25T09:30:00+07:00");
     assert.equal(incomingFromForSave("2026-10-25T09:30:00+07:00", "2026-10-20"), "2026-10-20");
     assert.equal(incomingFromForSave("2026-10-25T09:30:00+07:00", ""), "");
+});
+
+test("Esc закрыт только у документа, который сейчас гасится", () => {
+    assert.equal(incomingWindowClosable("d1", null), true);
+    assert.equal(incomingWindowClosable("d1", "d1"), false);
+    assert.equal(incomingWindowClosable("d2", "d1"), true);
 });
 
 test("не-ISO значение даты возвращается как есть", () => {

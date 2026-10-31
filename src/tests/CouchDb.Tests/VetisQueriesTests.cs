@@ -101,6 +101,23 @@ public class VetisQueriesTests
         var ids = Assert.IsType<string[]>(VetisIncomingQuery.EnterpriseIds("o1", "e1", 0, 200)["fields"]);
         Assert.Contains("data.id", ids);
         Assert.DoesNotContain("data.vsds", ids);
+
+        var pending = VetisIncomingQuery.NotAcceptedAfter("doc-9", 2000);
+        Assert.False(pending.ContainsKey("skip"));
+        var pendingSelector = Assert.IsType<Dictionary<string, object>>(pending["selector"]);
+        Assert.Equal("notAccepted", pendingSelector["data.status"]);
+        var pendingId = Assert.IsType<Dictionary<string, object>>(pendingSelector["data.id"]);
+        Assert.Equal("doc-9", pendingId["$gt"]);
+        Assert.Equal(new[] { "vetis-incoming", "status-id-idx" }, Assert.IsType<string[]>(pending["use_index"]));
+        Assert.Equal(2000, pending["limit"]);
+        var pendingFields = Assert.IsType<string[]>(pending["fields"]);
+        Assert.Contains("data.id", pendingFields);
+        Assert.DoesNotContain("data.vsds", pendingFields);
+
+        var schema = DatabaseIndexes.DatabaseIndexSchema()[DatabaseNames.VetisIncoming];
+        Assert.Equal(
+            ["data.status", "data.id"],
+            schema.Single(index => index.Name == "status-id-idx").Index.Fields);
     }
 
     [Fact]

@@ -6,6 +6,7 @@ export default async function createVetisView(id) {
     $$("toolbarLabel").setValue("Fmu-Api-Central: Ветис");
 
     const organizations = await vetisService.filters();
+    const counts = vetisService.notAcceptedCounts().catch(() => null);
     const incoming = new VetisIncomingTab(organizations);
     const applications = new VetisApplicationsTab(organizations);
 
@@ -13,6 +14,7 @@ export default async function createVetisView(id) {
     setTimeout(() => {
         incoming.load();
         applications.load();
+        counts.then((organizations) => incoming.applyCounts(organizations));
     }, 10);
 
     return {

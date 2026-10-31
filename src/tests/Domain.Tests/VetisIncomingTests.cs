@@ -97,7 +97,7 @@ public class VetisIncomingDocumentTests
 
         Assert.Equal(VetisIncomingStatus.Partial, document.Status);
         Assert.Equal("2026-10-05T10:00:00+00:00", document.ReceivedAt);
-        Assert.Equal(DateTimeOffset.Parse("2026-10-05T10:00:00+00:00").ToUnixTimeSeconds(), document.SortAt);
+        Assert.Equal(DocumentDay("2026-10-01"), document.SortAt);
     }
 
     [Fact]
@@ -135,18 +135,113 @@ public class VetisIncomingDocumentTests
     }
 
     [Fact]
-    public void SortAt_без_гашения_не_подставляет_дату_обновления_и_оформления()
+    public void SortAt_берётся_из_даты_документа_а_не_из_обновления_и_оформления()
     {
         var updated = VetisIncomingDocumentEntity.Group("o1", "e1",
             [Vsd("v1", "CONFIRMED", number: "ТТН-1", date: "2026-10-01", updatedAt: "2026-10-04T08:00:00+00:00")]).Single();
         var issued = VetisIncomingDocumentEntity.Group("o1", "e1",
             [Vsd("v2", "CONFIRMED", number: "ТТН-2", date: "2026-10-01", issueDate: "2026-10-02T08:00:00+00:00")]).Single();
+        var later = VetisIncomingDocumentEntity.Group("o1", "e1",
+            [Vsd("v3", "CONFIRMED", number: "ТТН-3", date: "2026-10-03")]).Single();
+        var withoutDate = VetisIncomingDocumentEntity.Group("o1", "e1",
+            [Vsd("v4", "CONFIRMED", number: "ТТН-4", date: "")]).Single();
 
         Assert.Equal("", updated.ReceivedAt);
-        Assert.Equal(0, updated.SortAt);
+        Assert.Equal(DocumentDay("2026-10-01"), updated.SortAt);
         Assert.Equal("", issued.ReceivedAt);
-        Assert.Equal(0, issued.SortAt);
+        Assert.Equal(updated.SortAt, issued.SortAt);
+        Assert.True(later.SortAt > updated.SortAt);
+        Assert.Equal(0, withoutDate.SortAt);
     }
+
+    [Fact]
+    public void AlignSortAt_пересчитывает_ключ_из_даты_документа()
+    {
+        var document = new VetisIncomingDocumentEntity
+        {
+            Id = "d1",
+            Date = "2026-10-01",
+            SortAt = 12345,
+            Status = VetisIncomingStatus.Accepted,
+            VsdCount = 7,
+            Vsds = [Vsd("v1", "CONFIRMED", number: "ТТН-1", date: "2026-10-01")]
+        };
+
+        Assert.True(document.AlignSortAt());
+        Assert.Equal(VetisIncomingDocumentEntity.DocumentSortAt("2026-10-01"), document.SortAt);
+        Assert.Equal(VetisIncomingStatus.Accepted, document.Status);
+        Assert.Equal(7, document.VsdCount);
+        Assert.Single(document.Vsds);
+        Assert.False(document.AlignSortAt());
+    }
+
+    [Fact]
+    public void DocumentSortAt_без_даты_даёт_ноль()
+    {
+        Assert.Equal(0, VetisIncomingDocumentEntity.DocumentSortAt(""));
+    }
+
+    [Fact]
+    public void DropForeignTransport_снимает_чужую_перевозку()
+    {
+        var document = new VetisIncomingDocumentEntity
+        {
+            Id = "d1",
+            EnterpriseGuid = "e1",
+            Vsds =
+            [
+                Vsd("v-in", "CONFIRMED", number: "ТТН-1", date: "2026-10-01", rawXml: Shipment("INCOMING", "")),
+                Vsd("v-own", "CONFIRMED", number: "ТТН-1", date: "2026-10-01", rawXml: Shipment("TRANSPORT", "e1")),
+                Vsd("v-foreign", "CONFIRMED", number: "ТТН-1", date: "2026-10-01", rawXml: Shipment("TRANSPORT", "e2"))
+            ]
+        };
+
+        Assert.True(document.DropForeignTransport());
+        Assert.Equal(["v-in", "v-own"], document.Vsds.Select(item => item.Uuid));
+        Assert.False(document.DropForeignTransport());
+    }
+
+    [Fact]
+    public void DropForeignTransport_оставляет_документ_без_ВСД()
+    {
+        var document = new VetisIncomingDocumentEntity
+        {
+            Id = "d1",
+            EnterpriseGuid = "e1",
+            Vsds = [Vsd("v-foreign", "CONFIRMED", number: "ТТН-1", date: "2026-10-01", rawXml: Shipment("TRANSPORT", "e2"))]
+        };
+
+        Assert.True(document.DropForeignTransport());
+        Assert.Empty(document.Vsds);
+    }
+
+    [Fact]
+    public void DropForeignTransport_битый_xml_не_снимает()
+    {
+        var document = new VetisIncomingDocumentEntity
+        {
+            Id = "d1",
+            EnterpriseGuid = "e1",
+            Vsds = [Vsd("v-broken", "CONFIRMED", number: "ТТН-1", date: "2026-10-01", rawXml: "не xml")]
+        };
+
+        Assert.False(document.DropForeignTransport());
+        Assert.Single(document.Vsds);
+    }
+
+    private static string Shipment(string type, string consigneeGuid) => consigneeGuid.Length == 0
+        ? $"""<vetDocument><vetDType>{type}</vetDType></vetDocument>"""
+        : $"""
+            <vetDocument>
+              <vetDType>{type}</vetDType>
+              <certifiedConsignment>
+                <consignee><enterprise><guid>{consigneeGuid}</guid></enterprise></consignee>
+              </certifiedConsignment>
+            </vetDocument>
+            """;
+
+    private static long DocumentDay(string date) =>
+        new DateTimeOffset(DateOnly.Parse(date), TimeOnly.MinValue, TimeSpan.Zero).ToUnixTimeSeconds();
 
     private static VetisIncomingVsd Vsd(
         string uuid,
@@ -156,7 +251,8 @@ public class VetisIncomingDocumentTests
         string issueDate = "2026-10-01T08:00:00+00:00",
         string consignor = "Поставщик",
         string receivedAt = "",
-        string updatedAt = "") =>
+        string updatedAt = "",
+        string rawXml = "") =>
         new()
         {
             Uuid = uuid,
@@ -167,7 +263,8 @@ public class VetisIncomingDocumentTests
             IssueDate = issueDate,
             ConsignorName = consignor,
             ReceivedAt = receivedAt,
-            UpdatedAt = updatedAt
+            UpdatedAt = updatedAt,
+            RawXml = rawXml
         };
 }
 

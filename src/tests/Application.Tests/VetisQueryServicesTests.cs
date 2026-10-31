@@ -124,6 +124,51 @@ public class VetisIncomingQueryServiceTests
         Assert.Equal(["Металлургов, 32", "Магазин-2"], organization.Enterprises.Select(item => item.Name));
     }
 
+    [Fact]
+    public async Task Filters_не_ждут_подсчёт_непринятых()
+    {
+        var world = PendingDocuments();
+
+        var organization = Assert.Single(await world.Sut.FiltersAsync());
+
+        Assert.Equal(0, organization.NotAcceptedCount);
+        Assert.All(organization.Enterprises, item => Assert.Equal(0, item.NotAcceptedCount));
+    }
+
+    [Fact]
+    public async Task NotAcceptedCounts_отдаёт_ошибку_базы_а_не_нули()
+    {
+        var world = PendingDocuments();
+        world.Incoming.NotAcceptedError = "CouchDB недоступна";
+
+        var result = await world.Sut.NotAcceptedCountsAsync();
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("CouchDB недоступна", result.Error);
+    }
+
+    [Fact]
+    public async Task NotAcceptedCounts_считают_непринятые_документы_по_площадкам()
+    {
+        var world = PendingDocuments();
+
+        var organization = Assert.Single((await world.Sut.NotAcceptedCountsAsync()).Value);
+
+        Assert.Equal(3, organization.NotAcceptedCount);
+        Assert.Equal(2, organization.Enterprises.Single(item => item.Guid == "e1").NotAcceptedCount);
+        Assert.Equal(1, organization.Enterprises.Single(item => item.Guid == "e2").NotAcceptedCount);
+    }
+
+    private static World PendingDocuments()
+    {
+        var world = new World();
+        world.AddDocument("d1", "o1", "e1", sortAt: 3, status: VetisIncomingStatus.NotAccepted);
+        world.AddDocument("d2", "o1", "e1", sortAt: 2, status: VetisIncomingStatus.NotAccepted);
+        world.AddDocument("d3", "o1", "e1", sortAt: 1, status: VetisIncomingStatus.Partial);
+        world.AddDocument("d4", "o1", "e2", sortAt: 1, status: VetisIncomingStatus.NotAccepted);
+        return world;
+    }
+
     private sealed class World
     {
         public World()

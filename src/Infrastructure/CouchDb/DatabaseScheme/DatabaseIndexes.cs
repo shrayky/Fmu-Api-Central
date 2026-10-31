@@ -1,4 +1,4 @@
-﻿using CouchDb.Models;
+using CouchDb.Models;
 using CouchDb.Repositories;
 
 namespace CouchDb.DatabaseScheme;
@@ -28,6 +28,8 @@ public class DatabaseIndexes
     private static CouchDbIndexDefinition[] VetisIncomingIndexSchema() =>
         [
             new("sort-at-idx", new(["data.sortAt"])),
+            new("status-id-idx", new(["data.status", "data.id"]), VetisIncomingQuery.DesignDoc),
+            new("id-idx", new(["data.id"]), VetisIncomingQuery.DesignDoc),
             ..VetisIncomingQuery.FilterIndexes().Select(index =>
                 new CouchDbIndexDefinition(index.Name, new(index.Fields), VetisIncomingQuery.DesignDoc))
         ];

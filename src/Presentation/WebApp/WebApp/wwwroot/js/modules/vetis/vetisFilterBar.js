@@ -1,4 +1,4 @@
-import { incomingStatusLabel } from '../../utils/vetisFormat.js';
+import { incomingStatusLabel, vetisCountLabel } from '../../utils/vetisFormat.js';
 
 const ALL = "__all__";
 const STATUSES = ["accepted", "partial", "notAccepted", "rejected"];
@@ -23,7 +23,7 @@ export class VetisFilterBar {
                 id: this.ids.organization,
                 width: 320,
                 value: ALL,
-                options: [{ id: ALL, value: "Все организации" }, ...this.organizations.map((item) => ({ id: item.id, value: item.name }))],
+                options: this._organizationOptions(),
                 on: { onChange: (organizationId) => this._organizationChanged(organizationId) },
             },
             {
@@ -42,7 +42,7 @@ export class VetisFilterBar {
                 view: "richselect",
                 id: this.ids.status,
                 width: 200,
-                value: ALL,
+                value: "notAccepted",
                 options: [{ id: ALL, value: "Все статусы" }, ...STATUSES.map((status) => ({ id: status, value: incomingStatusLabel(status) }))],
                 on: { onChange: () => this.onChange() },
             });
@@ -72,21 +72,52 @@ export class VetisFilterBar {
     }
 
     _organizationChanged(organizationId) {
+        this._showEnterprises(organizationId, ALL);
+        this.onChange();
+    }
+
+    apply(organizations) {
+        this.organizations = organizations || [];
+        const organization = $$(this.ids.organization);
+        if (!organization)
+            return;
+
+        const selected = organization.getValue();
+        const enterpriseId = $$(this.ids.enterprise)?.getValue();
+        organization.blockEvent();
+        organization.define("options", this._organizationOptions());
+        organization.refresh();
+        const next = this.organizations.some((item) => item.id === selected) ? selected : ALL;
+        organization.setValue(next);
+        organization.unblockEvent();
+        this._showEnterprises(next, enterpriseId);
+    }
+
+    _organizationOptions() {
+        return [
+            { id: ALL, value: "Все организации" },
+            ...this.organizations.map((item) => ({ id: item.id, value: vetisCountLabel(item.name, item.notAcceptedCount) })),
+        ];
+    }
+
+    _showEnterprises(organizationId, keepEnterpriseId) {
         const enterprise = $$(this.ids.enterprise);
         const organization = this.organizations.find((item) => item.id === organizationId);
         const enterprises = organization?.enterprises ?? [];
+        const options = [{ id: ALL, value: "Все предприятия" }, ...enterprises.map((item) => ({
+            id: item.guid,
+            value: vetisCountLabel(item.name, item.notAcceptedCount),
+        }))];
 
         enterprise.blockEvent();
-        enterprise.define("options", [{ id: ALL, value: "Все предприятия" }, ...enterprises.map((item) => ({ id: item.guid, value: item.name }))]);
+        enterprise.define("options", options);
         enterprise.refresh();
-        enterprise.setValue(ALL);
+        const keep = options.some((item) => item.id === keepEnterpriseId) ? keepEnterpriseId : ALL;
+        enterprise.setValue(keep);
         enterprise.unblockEvent();
-        if (organization) {
+        if (organization)
             enterprise.enable();
-        } else {
+        else
             enterprise.disable();
-        }
-
-        this.onChange();
     }
 }

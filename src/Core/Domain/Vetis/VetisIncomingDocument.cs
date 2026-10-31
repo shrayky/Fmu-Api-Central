@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json.Serialization;
@@ -24,6 +25,9 @@ public sealed class VetisIncomingVsd
 
     [JsonPropertyName("volume")]
     public string Volume { get; set; } = "";
+
+    [JsonPropertyName("actualVolume")]
+    public string ActualVolume { get; set; } = "";
 
     [JsonPropertyName("consignorName")]
     public string ConsignorName { get; set; } = "";
@@ -156,7 +160,43 @@ public sealed class VetisIncomingDocumentEntity : IHaveStringId
         VsdCount = Vsds.Count;
         AcceptedCount = Vsds.Count(item => VetisIncomingStatus.IsUtilized(item.Status));
         ReceivedAt = LatestReceipt();
-        SortAt = VetisDateTime.TryParse(ReceivedAt, out var instant) ? instant.ToUnixTimeSeconds() : 0;
+        SortAt = DocumentSortAt(Date);
+    }
+
+    /// <summary>
+    /// Полночь UTC календарного дня: порядок дат не зависит от пояса хоста.
+    /// </summary>
+    public static long DocumentSortAt(string date)
+    {
+        if (!DateOnly.TryParseExact((date ?? "").Trim(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var day))
+            return 0;
+
+        return new DateTimeOffset(day, TimeOnly.MinValue, TimeSpan.Zero).ToUnixTimeSeconds();
+    }
+
+    /// <summary>
+    /// Ключ списка пересчитывается без Refresh: у проекции без ВСД счётчики обнулились бы.
+    /// </summary>
+    public bool AlignSortAt()
+    {
+        var aligned = DocumentSortAt(Date);
+        if (SortAt == aligned)
+            return false;
+
+        SortAt = aligned;
+        return true;
+    }
+
+    /// <summary>
+    /// Чужая перевозка в журнале даёт «Погасить» на исходящий TRANSPORT.
+    /// </summary>
+    public bool DropForeignTransport()
+    {
+        var foreign = Vsds
+            .Where(vsd => VetisIncomingShipment.IsForeignTransport(vsd.RawXml, EnterpriseGuid))
+            .Select(vsd => vsd.Uuid)
+            .ToList();
+        return Drop(foreign);
     }
 
     /// <summary>

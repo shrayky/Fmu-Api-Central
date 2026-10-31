@@ -1,5 +1,5 @@
 import vetisService from '../../services/vetisService.js';
-import { formatIsoMoment, incomingDocumentLabel, incomingReceivedLabel, incomingStatusCss, incomingStatusLabel, vsdCountText } from '../../utils/vetisFormat.js';
+import { formatIsoMoment, incomingDocumentLabel, incomingStatusCss, incomingStatusLabel, vsdCountText } from '../../utils/vetisFormat.js';
 import { VetisFilterBar } from './vetisFilterBar.js';
 import { VetisPagedTable } from './vetisPagedTable.js';
 import { openIncomingWindow } from './vetisIncomingWindow.js';
@@ -10,12 +10,12 @@ export class VetisIncomingTab {
             prefix: "vetisIncoming",
             organizations,
             withStatus: true,
-            onChange: () => this.load(),
+            onChange: () => this.refresh(),
         });
         this.table = new VetisPagedTable({
             id: "vetisIncomingTable",
             fetchPage: (filters, skip, limit) => vetisService.incoming(filters, skip, limit),
-            onOpen: (row) => openIncomingWindow(row),
+            onOpen: (row) => openIncomingWindow(row, { onQuenched: () => this.refresh() }),
         });
     }
 
@@ -24,7 +24,6 @@ export class VetisIncomingTab {
             rows: [
                 this.filterBar.config(),
                 this.table.config([
-                    { id: "receivedAt", header: "Получен", width: 140, template: (row) => incomingReceivedLabel(row) },
                     { id: "date", header: "Дата документа", width: 130, template: (row) => formatIsoMoment(row.date) },
                     { id: "number", header: "Документ", width: 180, template: (row) => incomingDocumentLabel(row) },
                     { id: "consignor", header: "Поставщик", fillspace: true },
@@ -39,6 +38,23 @@ export class VetisIncomingTab {
 
     load() {
         return this.table.reload(this.filterBar.values());
+    }
+
+    refresh() {
+        const table = this.load();
+        this._loadCounts();
+        return table;
+    }
+
+    applyCounts(organizations) {
+        if (organizations)
+            this.filterBar.apply(organizations);
+    }
+
+    _loadCounts() {
+        return vetisService.notAcceptedCounts()
+            .then((organizations) => this.applyCounts(organizations))
+            .catch(() => {});
     }
 
     _statusBadge(status) {

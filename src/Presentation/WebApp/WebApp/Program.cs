@@ -39,7 +39,8 @@ app.UseStaticFiles(new StaticFileOptions
 {
     OnPrepareResponse = prm =>
     {
-        prm.Context.Response.Headers.Append("Cache-Control", "publc, max-age=3600");
+        // Модули ES грузятся пачкой: закэшированный час назад файл с новым соседом ломает импорт и роняет весь экран.
+        prm.Context.Response.Headers.CacheControl = "no-cache";
     }
 });
 

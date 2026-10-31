@@ -76,9 +76,11 @@ public static class VetisResponseReader
     }
 
     /// <summary>
-    /// В документе тип — vetDType. vetDocumentType есть в запросе: пустой тип нельзя оставлять как входящий.
+    /// В документе тип — vetDType. Поставка на площадку приходит как TRANSPORT; INCOMING в этом поле почти не встречается.
+    /// Пустой тип и vetDocumentType из запроса входящим не считаются.
+    /// Список изменений запрашивается по предприятию без роли, поэтому TRANSPORT чужой площадки сюда тоже попадает.
     /// </summary>
-    public static IReadOnlyList<VetisIncomingVsd> ReadIncoming(string xml)
+    public static IReadOnlyList<VetisIncomingVsd> ReadIncoming(string xml, string enterpriseGuid)
     {
         if (!TryParse(xml, out var document))
             return [];
@@ -88,11 +90,15 @@ public static class VetisResponseReader
         {
             var uuid = Direct(element, "uuid");
             var type = Direct(element, "vetDType");
-            if (string.IsNullOrWhiteSpace(uuid) || !string.Equals(type, "INCOMING", StringComparison.OrdinalIgnoreCase))
+            if (string.IsNullOrWhiteSpace(uuid) || !IsIncomingShipment(type))
+                continue;
+
+            var consignment = element.Elements().FirstOrDefault(child => child.Name.LocalName == "certifiedConsignment");
+            if (!string.Equals(type, "INCOMING", StringComparison.OrdinalIgnoreCase)
+                && !IsOwnSite(consignment, enterpriseGuid))
                 continue;
 
             var raw = element.ToString(SaveOptions.DisableFormatting);
-            var consignment = element.Elements().FirstOrDefault(child => child.Name.LocalName == "certifiedConsignment");
             var batch = consignment?.Elements().FirstOrDefault(child => child.Name.LocalName == "batch");
             var source = ReferencedIncomingDocument.Read(raw);
             result.Add(new VetisIncomingVsd
@@ -115,6 +121,29 @@ public static class VetisResponseReader
         }
 
         return result;
+    }
+
+    public static VetisIncomingVsd? ReadQuenched(string xml, string uuid)
+    {
+        if (!TryParse(xml, out var document) || string.IsNullOrWhiteSpace(uuid))
+            return null;
+
+        // В stockEntry лежит vetDocument только с uuid. Статус и дата — у следующего документа с тем же uuid.
+        var matches = document.Descendants()
+            .Where(element => element.Name.LocalName == "vetDocument"
+                && string.Equals(Direct(element, "uuid"), uuid, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        var match = matches.FirstOrDefault(element => !string.IsNullOrWhiteSpace(Direct(element, "vetDStatus")))
+            ?? matches.FirstOrDefault();
+        if (match == null)
+            return null;
+
+        return new VetisIncomingVsd
+        {
+            Uuid = uuid,
+            Status = Direct(match, "vetDStatus"),
+            ReceivedAt = ReceiptAt(match)
+        };
     }
 
     public static int ListedCount(string xml) =>
@@ -140,6 +169,20 @@ public static class VetisResponseReader
         }
 
         return text;
+    }
+
+    private static bool IsIncomingShipment(string type) =>
+        string.Equals(type, "INCOMING", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(type, "TRANSPORT", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsOwnSite(XElement? consignment, string enterpriseGuid)
+    {
+        var member = consignment?.Elements().FirstOrDefault(element => element.Name.LocalName == "consignee");
+        var enterprise = member?.Elements().FirstOrDefault(element => element.Name.LocalName == "enterprise");
+        var guid = enterprise?.Elements().FirstOrDefault(element => element.Name.LocalName == "guid")?.Value.Trim();
+        return !string.IsNullOrWhiteSpace(guid)
+            && !string.IsNullOrWhiteSpace(enterpriseGuid)
+            && string.Equals(guid, enterpriseGuid.Trim(), StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsVetDocumentItem(XElement element) =>

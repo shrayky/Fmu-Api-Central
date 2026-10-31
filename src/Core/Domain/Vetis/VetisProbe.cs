@@ -112,4 +112,15 @@ public interface IVetisGateway
     Task<VetisEnterpriseList> ListEnterprisesAsync(VetisCall call, CancellationToken cancellationToken);
 
     Task<VetisIncomingResult> GetIncomingAsync(VetisCall call, VetisIncomingRequest request, CancellationToken cancellationToken);
+
+    Task<VetisQuenchResult> QuenchAsync(VetisCall call, string rawXml, VetisQuenchOrder order, string uuid, CancellationToken cancellationToken);
+}
+
+public sealed class VetisQuenchResult
+{
+    public VetisExchange Exchange { get; init; } = new();
+
+    public string Status { get; init; } = "";
+
+    public string ReceivedAt { get; init; } = "";
 }

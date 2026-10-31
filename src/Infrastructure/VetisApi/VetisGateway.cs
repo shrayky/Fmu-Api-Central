@@ -52,8 +52,46 @@ public sealed class VetisGateway : IVetisGateway
         return new VetisIncomingResult
         {
             Exchange = exchange,
-            Documents = VetisResponseReader.ReadIncoming(exchange.ResponseXml),
+            Documents = VetisResponseReader.ReadIncoming(exchange.ResponseXml, request.EnterpriseGuid),
             PageCount = VetisResponseReader.ListedCount(exchange.ResponseXml)
+        };
+    }
+
+    public async Task<VetisQuenchResult> QuenchAsync(
+        VetisCall call,
+        string rawXml,
+        VetisQuenchOrder order,
+        string uuid,
+        CancellationToken cancellationToken)
+    {
+        var built = ProcessIncomingConsignmentXml.Create(call, rawXml, order, DateOnly.FromDateTime(DateTime.Now));
+        if (built.IsFailure)
+        {
+            return new VetisQuenchResult
+            {
+                Exchange = new VetisExchange
+                {
+                    Operation = ProcessIncomingConsignmentXml.Operation,
+                    Parameters = ProcessIncomingConsignmentXml.Describe(uuid, order),
+                    Status = "NOT_SENT",
+                    Completed = false,
+                    Error = built.Error
+                }
+            };
+        }
+
+        var exchange = await SubmitAndWaitAsync(
+            call,
+            ProcessIncomingConsignmentXml.Operation,
+            built.Value,
+            ProcessIncomingConsignmentXml.Describe(uuid, order),
+            cancellationToken);
+        var quenched = VetisResponseReader.ReadQuenched(exchange.ResponseXml, uuid);
+        return new VetisQuenchResult
+        {
+            Exchange = exchange,
+            Status = quenched?.Status ?? "",
+            ReceivedAt = quenched?.ReceivedAt ?? ""
         };
     }
 

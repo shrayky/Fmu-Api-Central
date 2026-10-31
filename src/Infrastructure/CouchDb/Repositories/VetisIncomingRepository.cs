@@ -6,6 +6,11 @@ namespace CouchDb.Repositories;
 
 public class VetisIncomingRepository : BaseCouchDbRepository<VetisIncomingDocumentEntity>, IVetisIncomingRepository
 {
+    private const int NotAcceptedPageSize = 2000;
+
+    // Предохранитель от бесконечного листания, если CouchDB всегда отдаёт полную страницу.
+    private const int MaxNotAcceptedPages = 500;
+
     public VetisIncomingRepository(IServiceProvider services) : base(
         services.GetRequiredService<Context>().VetisIncoming, services)
     {
@@ -70,7 +75,7 @@ public class VetisIncomingRepository : BaseCouchDbRepository<VetisIncomingDocume
         }
     }
 
-    private async Task<Result> Delete(string id)
+    public async Task<Result> Delete(string id)
     {
         if (!_appState.DbState())
             return Result.Failure(DatabaseUnavailable);
@@ -93,5 +98,52 @@ public class VetisIncomingRepository : BaseCouchDbRepository<VetisIncomingDocume
             return Result.Failure<List<VetisIncomingDocumentEntity>>(DatabaseUnavailable);
 
         return await ExecuteMangoQueryAsync(VetisIncomingQuery.List(filter, skip, limit));
+    }
+
+    public async Task<Result<List<VetisIncomingHead>>> HeadsAfter(string afterId, int limit)
+    {
+        if (!_appState.DbState())
+            return Result.Failure<List<VetisIncomingHead>>(DatabaseUnavailable);
+
+        var loaded = await ExecuteMangoQueryAsync(VetisIncomingQuery.HeadsAfter(afterId, limit));
+        return loaded.IsFailure
+            ? Result.Failure<List<VetisIncomingHead>>(loaded.Error)
+            : Result.Success(loaded.Value
+                .Select(document => new VetisIncomingHead(document.Id, document.Date, document.SortAt))
+                .ToList());
+    }
+
+    public async Task<Result<List<VetisIncomingKey>>> NotAcceptedKeys()
+    {
+        if (!_appState.DbState())
+            return Result.Failure<List<VetisIncomingKey>>(DatabaseUnavailable);
+
+        try
+        {
+            var keys = new List<VetisIncomingKey>();
+            var afterId = "";
+            for (var page = 0; page < MaxNotAcceptedPages; page++)
+            {
+                var loaded = await ExecuteMangoQueryAsync(VetisIncomingQuery.NotAcceptedAfter(afterId, NotAcceptedPageSize));
+                if (loaded.IsFailure)
+                    return Result.Failure<List<VetisIncomingKey>>(loaded.Error);
+
+                keys.AddRange(loaded.Value.Select(document => new VetisIncomingKey
+                {
+                    OrganizationId = document.OrganizationId,
+                    EnterpriseGuid = document.EnterpriseGuid
+                }));
+                if (loaded.Value.Count < NotAcceptedPageSize)
+                    return Result.Success(keys);
+
+                afterId = loaded.Value[^1].Id;
+            }
+
+            return Result.Failure<List<VetisIncomingKey>>($"Страниц больше {MaxNotAcceptedPages}.");
+        }
+        catch (Exception ex)
+        {
+            return Result.Failure<List<VetisIncomingKey>>($"Ошибка подсчёта непринятых документов Ветис: {ex.Message}");
+        }
     }
 }
