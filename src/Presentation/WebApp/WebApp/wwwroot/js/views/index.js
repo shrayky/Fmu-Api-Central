@@ -13,7 +13,7 @@ import informationView from '../modules/informationView.js';
 import createAuthView from '../modules/authView.js';
 import createCouchDbSettingsView from '../modules/couchDbSettingsView.js';
 import createGisMtSettingsView from '../modules/gisMtSettingsView.js';
-import createServerSettingsView from '../modules/serverSettingsView.js';
+import createServerSettingsView from '../modules/serverSettings/serverSettingsView.js';
 import createLogsView from '../modules/logsView.js';
 import createSoftwareUpdatesListView from '../modules/softwareUpdates/softwareUpdatesListView.js';
 import createInstanceListView from '../modules/instanceMonitoring/instanceListView.js';
