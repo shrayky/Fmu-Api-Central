@@ -15,11 +15,15 @@ public class VetisIncomingQueryServiceTests
         var world = new World();
         world.AddDocument("d1", "o1", "e1", sortAt: 10);
         world.AddDocument("d2", "o1", "e2", sortAt: 9);
+        world.Incoming.Store["d1"].QuenchedBy = "Автогашение";
+        world.Incoming.Store["d1"].QuenchedAt = "2026-10-30T12:00:00+07:00";
 
         var page = (await world.Sut.ListAsync("", "", "", 0, 10)).Value;
 
         var first = page.Rows.Single(item => item.Id == "d1");
         Assert.Equal("2026-10-29T06:15:00+07:00", first.ReceivedAt);
+        Assert.Equal("Автогашение", first.QuenchedBy);
+        Assert.Equal("2026-10-30T12:00:00+07:00", first.QuenchedAt);
         Assert.Equal("Колбасный дворик", first.OrganizationName);
         Assert.Equal("Металлургов, 32", first.EnterpriseName);
         Assert.Equal("Магазин-2", page.Rows.Single(item => item.Id == "d2").EnterpriseName);

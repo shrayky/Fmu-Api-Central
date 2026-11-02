@@ -165,6 +165,8 @@ public sealed class VetisIncomingQueryService
         row.EnterpriseName = directory.EnterpriseName(document.OrganizationId, document.EnterpriseGuid);
         row.Status = document.Status;
         row.ReceivedAt = document.ReceivedAt;
+        row.QuenchedBy = document.QuenchedBy;
+        row.QuenchedAt = document.QuenchedAt;
         row.VsdCount = document.VsdCount;
         row.AcceptedCount = document.AcceptedCount;
         row.SortAt = document.SortAt;

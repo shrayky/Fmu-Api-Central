@@ -1,7 +1,9 @@
+using System.Text;
 using Application.Configuration.Services;
 using Domain.Configuration;
 using Domain.Configuration.Interfaces;
 using Domain.Vetis;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Application.Tests;
@@ -24,7 +26,7 @@ public class ConfigurationApplicationServiceTests
         var json = """{"security":{"passwordConfigured":false},"databaseConnection":{"enable":false},"loggerSettings":{},"serverSettings":{}}""";
         var ok = await sut.Update(json);
 
-        Assert.True(ok);
+        Assert.True(ok.IsSuccess);
         Assert.True(parameters.CurrentValue.Security.PasswordConfigured);
     }
 
@@ -44,7 +46,7 @@ public class ConfigurationApplicationServiceTests
         var json = """{"security":{"allowLegacyAgentApi":false},"databaseConnection":{"enable":false},"loggerSettings":{},"serverSettings":{}}""";
         var ok = await sut.Update(json);
 
-        Assert.True(ok);
+        Assert.True(ok.IsSuccess);
         Assert.False(parameters.CurrentValue.Security.AllowLegacyAgentApi);
     }
 
@@ -89,7 +91,7 @@ public class ConfigurationApplicationServiceTests
         var json = """{"databaseConnection":{"password":"***"},"telegramBotSettings":{"botToken":"***"}}""";
         var ok = await sut.Update(json);
 
-        Assert.True(ok);
+        Assert.True(ok.IsSuccess);
         Assert.Equal("couch-secret", parameters.CurrentValue.DatabaseConnection.Password);
         Assert.Equal("telegram-secret", parameters.CurrentValue.BotSettings.BotToken);
     }
@@ -111,7 +113,7 @@ public class ConfigurationApplicationServiceTests
         var json = """{"databaseConnection":{"password":"new-couch"},"telegramBotSettings":{"botToken":"new-bot"}}""";
         var ok = await sut.Update(json);
 
-        Assert.True(ok);
+        Assert.True(ok.IsSuccess);
         Assert.Equal("new-couch", parameters.CurrentValue.DatabaseConnection.Password);
         Assert.Equal("new-bot", parameters.CurrentValue.BotSettings.BotToken);
     }
@@ -129,7 +131,7 @@ public class ConfigurationApplicationServiceTests
         var ok = await sut.Update(json);
         var exported = await sut.ExportPortable(CancellationToken.None);
 
-        Assert.True(ok);
+        Assert.True(ok.IsSuccess);
         Assert.True(parameters.CurrentValue.VetisSettings.Enable);
         Assert.Equal(
             "https://api.vetrf.ru/platform/services/3.0/ApplicationManagementService",
@@ -151,10 +153,44 @@ public class ConfigurationApplicationServiceTests
 
         var ok = await sut.Update(json);
 
-        Assert.True(ok);
+        Assert.True(ok.IsSuccess);
         Assert.Equal(
             VetisEndpoints.ProductionApplicationManagement,
             parameters.CurrentValue.VetisSettings.Endpoint);
+    }
+
+    [Fact]
+    public async Task Update_не_пишет_неположительный_пакет_или_период_автогашения()
+    {
+        var parameters = new FakeParametersService { CurrentValue = new Parameters() };
+        parameters.CurrentValue.VetisSettings.Enable = true;
+        var sut = new ConfigurationApplicationService(parameters, NullLogger<ConfigurationApplicationService>.Instance);
+        var json = """{"vetisSettings":{"enable":false,"autoQuenchIntervalMinutes":0,"autoQuenchBatchSize":20}}""";
+
+        var result = await sut.Update(json);
+
+        Assert.True(result.IsFailure);
+        Assert.Contains("больше нуля", result.Error);
+        Assert.True(parameters.CurrentValue.VetisSettings.Enable);
+        Assert.Equal(15, parameters.CurrentValue.VetisSettings.AutoQuenchIntervalMinutes);
+    }
+
+    [Fact]
+    public async Task Import_не_пишет_неположительный_пакет_автогашения()
+    {
+        var parameters = new FakeParametersService { CurrentValue = new Parameters() };
+        parameters.CurrentValue.VetisSettings.Enable = true;
+        var sut = new ConfigurationApplicationService(parameters, NullLogger<ConfigurationApplicationService>.Instance);
+        var json = """{"formatVersion":1,"vetisSettings":{"enable":false,"autoQuenchIntervalMinutes":15,"autoQuenchBatchSize":0}}""";
+        var bytes = Encoding.UTF8.GetBytes(json);
+        IFormFile file = new FormFile(new MemoryStream(bytes), 0, bytes.Length, "file", "settings.json");
+
+        var result = await sut.ImportPortable(file, CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Contains("больше нуля", result.Error);
+        Assert.True(parameters.CurrentValue.VetisSettings.Enable);
+        Assert.Equal(20, parameters.CurrentValue.VetisSettings.AutoQuenchBatchSize);
     }
 
     private sealed class FakeParametersService : IParametersService

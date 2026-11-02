@@ -35,6 +35,9 @@ export function buildConfigurationUpdaters(values) {
             endpoint: vetisEndpoint(values.vetisEndpoint),
             incomingFetchIntervalMinutes: parseInt(values.vetisIncomingInterval),
             incomingFetchPageSize: parseInt(values.vetisIncomingPageSize),
+            autoQuenchIntervalMinutes: parseInt(values.vetisAutoQuenchInterval),
+            autoQuenchBatchSize: parseInt(values.vetisAutoQuenchBatch),
+            requireVehicleForQuench: !!values.vetisRequireVehicle,
             applicationRetentionDays: parseInt(values.vetisApplicationRetention),
             failedApplicationRetentionDays: parseInt(values.vetisFailedApplicationRetention)
         })

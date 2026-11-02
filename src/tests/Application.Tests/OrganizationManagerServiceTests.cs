@@ -163,6 +163,60 @@ public class OrganizationManagerServiceTests
         Assert.Equal("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", Assert.Single(saved.Enterprises).Guid);
     }
 
+    [Fact]
+    public async Task Update_не_пишет_организацию_с_нулевой_задержкой_автогашения()
+    {
+        var repository = new FakeOrganizationRepository();
+        repository.Store["o1"] = new OrganizationEntity
+        {
+            Id = "o1",
+            Name = "Орг",
+            Inn = "1234567890",
+            VetisSettings = new OrganizationVetisSettings { AutoQuenchDelayHours = 2 }
+        };
+        var sut = CreateSut(repository);
+
+        var result = await sut.Update(new OrganizationView
+        {
+            Id = "o1",
+            Name = "Орг",
+            Inn = "1234567890",
+            VetisSettings = new OrganizationVetisSettings { AutoQuench = true, AutoQuenchDelayHours = 0 }
+        });
+
+        Assert.True(result.IsFailure);
+        Assert.Contains("больше нуля", result.Error);
+        Assert.False(repository.Store["o1"].VetisSettings.AutoQuench);
+        Assert.Equal(2, repository.Store["o1"].VetisSettings.AutoQuenchDelayHours);
+    }
+
+    [Fact]
+    public async Task Update_сохраняет_автогашение_организации()
+    {
+        var repository = new FakeOrganizationRepository();
+        repository.Store["o1"] = new OrganizationEntity
+        {
+            Id = "o1",
+            Name = "Орг",
+            Inn = "1234567890"
+        };
+        var sut = CreateSut(repository);
+
+        var result = await sut.Update(new OrganizationView
+        {
+            Id = "o1",
+            Name = "Орг",
+            Inn = "1234567890",
+            VetisSettings = new OrganizationVetisSettings { AutoQuench = true, AutoQuenchDelayHours = 6 }
+        });
+
+        Assert.True(result.IsSuccess);
+        Assert.True(repository.Store["o1"].VetisSettings.AutoQuench);
+        Assert.Equal(6, repository.Store["o1"].VetisSettings.AutoQuenchDelayHours);
+        Assert.True((await sut.List(1, 50)).Content.Single().VetisSettings!.AutoQuench);
+        Assert.Equal(6, (await sut.List(1, 50)).Content.Single().VetisSettings!.AutoQuenchDelayHours);
+    }
+
     /// <summary>
     /// Срок x-api-key хранится в документе организации и виден в списке.
     /// </summary>

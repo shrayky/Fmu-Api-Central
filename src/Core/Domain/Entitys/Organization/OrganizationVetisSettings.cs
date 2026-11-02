@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using CSharpFunctionalExtensions;
 
 namespace Domain.Entitys.Organization;
 
@@ -48,4 +49,20 @@ public sealed class OrganizationVetisSettings
 
     [JsonPropertyName("enterprises")]
     public List<OrganizationEnterprise> Enterprises { get; set; } = [];
+
+    [JsonPropertyName("autoQuench")]
+    public bool AutoQuench { get; set; }
+
+    [JsonPropertyName("autoQuenchDelayHours")]
+    public int AutoQuenchDelayHours { get; set; } = 1;
+
+    /// <summary>
+    /// Уже лежащий ноль не должен гасить в ту же минуту: запись такой задержки не принимает.
+    /// </summary>
+    public int DelayHours() => AutoQuenchDelayHours > 0 ? AutoQuenchDelayHours : 1;
+
+    public Result CheckDelay() =>
+        AutoQuenchDelayHours > 0
+            ? Result.Success()
+            : Result.Failure("Задержка перед автогашением: нужно целое число больше нуля.");
 }

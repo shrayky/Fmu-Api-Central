@@ -7,7 +7,7 @@ namespace Application.Configuration.Interfaces
     public interface IConfigurationApplicationService
     {
         Task<string> Current();
-        Task<bool> Update(string jsonConfiguration);
+        Task<Result> Update(string jsonConfiguration);
         object AppInformation();
 
         Task<Result<PortableSettingsFile>> ExportPortable(CancellationToken cancellationToken);

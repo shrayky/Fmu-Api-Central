@@ -96,6 +96,8 @@ public class VetisQueriesTests
         Assert.Contains("data.id", fields);
         Assert.Contains("data.vsdCount", fields);
         Assert.Contains("data.receivedAt", fields);
+        Assert.Contains("data.quenchedBy", fields);
+        Assert.Contains("data.quenchedAt", fields);
         Assert.DoesNotContain("data.vsds", fields);
 
         var ids = Assert.IsType<string[]>(VetisIncomingQuery.EnterpriseIds("o1", "e1", 0, 200)["fields"]);
@@ -181,5 +183,39 @@ public class VetisQueriesTests
         Assert.Equal(1000L, created["$lt"]);
         Assert.Equal(200, query["limit"]);
         Assert.DoesNotContain("data.requestXml", Assert.IsType<string[]>(query["fields"]));
+    }
+
+    [Fact]
+    public void Incoming_для_автогашения_идёт_от_старых_без_skip()
+    {
+        var first = VetisIncomingQuery.Oldest(organizationId: "o1", status: "notAccepted", dated: true, afterSortAt: 0, afterId: "", limit: 20);
+
+        Assert.False(first.ContainsKey("skip"));
+        var selector = Assert.IsType<Dictionary<string, object>>(first["selector"]);
+        Assert.Equal("o1", selector["data.organizationId"]);
+        Assert.Equal("notAccepted", selector["data.status"]);
+        var sortAt = Assert.IsType<Dictionary<string, object>>(selector["data.sortAt"]);
+        Assert.Equal(0L, sortAt["$gt"]);
+        Assert.False(selector.ContainsKey("$or"));
+        var sort = Assert.IsType<Dictionary<string, string>[]>(first["sort"]);
+        Assert.Equal("asc", sort[2]["data.sortAt"]);
+        Assert.Equal("asc", sort[3]["data.id"]);
+        Assert.Equal(new[] { "vetis-incoming", "organizationId-status-sort-at-id-idx" }, Assert.IsType<string[]>(first["use_index"]));
+        Assert.DoesNotContain("data.vsds", Assert.IsType<string[]>(first["fields"]));
+
+        var next = VetisIncomingQuery.Oldest("o1", "partial", dated: true, afterSortAt: 100, afterId: "doc-b", limit: 20);
+        var nextSelector = Assert.IsType<Dictionary<string, object>>(next["selector"]);
+        Assert.True(nextSelector.ContainsKey("$or"));
+        Assert.False(next.ContainsKey("skip"));
+
+        var undated = VetisIncomingQuery.Oldest("o1", "notAccepted", dated: false, afterSortAt: 0, afterId: "doc-a", limit: 20);
+        var undatedSelector = Assert.IsType<Dictionary<string, object>>(undated["selector"]);
+        Assert.Equal(0L, undatedSelector["data.sortAt"]);
+        var undatedId = Assert.IsType<Dictionary<string, object>>(undatedSelector["data.id"]);
+        Assert.Equal("doc-a", undatedId["$gt"]);
+
+        var index = DatabaseIndexes.DatabaseIndexSchema()[DatabaseNames.VetisIncoming]
+            .Single(item => item.Name == "organizationId-status-sort-at-id-idx");
+        Assert.Equal(["data.organizationId", "data.status", "data.sortAt", "data.id"], index.Index.Fields);
     }
 }

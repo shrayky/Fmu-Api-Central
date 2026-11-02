@@ -10,6 +10,10 @@ class VetisService {
         return this._get("filters");
     }
 
+    jobs() {
+        return this._get("jobs");
+    }
+
     notAcceptedCounts() {
         return this._get("not-accepted-counts");
     }

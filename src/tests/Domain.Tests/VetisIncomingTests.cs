@@ -127,11 +127,15 @@ public class VetisIncomingDocumentTests
             Vsd("v2", "CONFIRMED", number: "ТТН-1", date: "2026-10-01")
         ]).Single();
 
+        document.QuenchedBy = "Автогашение";
+        document.QuenchedAt = "2026-10-30T12:00:00+07:00";
         document.Merge([Vsd("v1", "UTILIZED", number: "ТТН-1", date: "2026-10-01"), Vsd("v3", "UTILIZED", number: "ТТН-1", date: "2026-10-01")]);
 
         Assert.Equal(["v1", "v2", "v3"], document.Vsds.Select(item => item.Uuid).OrderBy(item => item));
         Assert.Equal("UTILIZED", document.Vsds.Single(item => item.Uuid == "v1").Status);
         Assert.Equal(VetisIncomingStatus.Partial, document.Status);
+        Assert.Equal("Автогашение", document.QuenchedBy);
+        Assert.Equal("2026-10-30T12:00:00+07:00", document.QuenchedAt);
     }
 
     [Fact]

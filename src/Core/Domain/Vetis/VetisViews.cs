@@ -45,6 +45,12 @@ public class VetisIncomingRow
 
     [JsonPropertyName("receivedAt")]
     public string ReceivedAt { get; set; } = "";
+
+    [JsonPropertyName("quenchedBy")]
+    public string QuenchedBy { get; set; } = "";
+
+    [JsonPropertyName("quenchedAt")]
+    public string QuenchedAt { get; set; } = "";
 }
 
 public sealed class VetisIncomingView : VetisIncomingRow

@@ -15,8 +15,9 @@ public class VetisIncomingLoadServiceTests
     {
         var world = new World(enable: false);
 
-        await world.Sut.LoadAsync(CancellationToken.None);
+        var saved = await world.Sut.LoadAsync(CancellationToken.None);
 
+        Assert.Equal(0, saved);
         Assert.Empty(world.Gateway.Requests);
         Assert.Empty(world.Applications.Store);
     }
@@ -32,8 +33,9 @@ public class VetisIncomingLoadServiceTests
             Vsd("v2", "UTILIZED", "ТТН-1"),
             Vsd("v3", "CONFIRMED", "ТТН-2")));
 
-        await world.Sut.LoadAsync(CancellationToken.None);
+        var saved = await world.Sut.LoadAsync(CancellationToken.None);
 
+        Assert.Equal(2, saved);
         Assert.Equal(2, world.Incoming.Store.Count);
         var first = world.Incoming.Store.Values.Single(item => item.Number == "ТТН-1");
         Assert.Equal(2, first.Vsds.Count);

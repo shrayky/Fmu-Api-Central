@@ -16,6 +16,7 @@ public static class VetisApiRegistration
         });
         services.AddScoped<IVetisGateway, VetisGateway>();
         services.AddHostedService<VetisIncomingWorker>();
+        services.AddHostedService<VetisAutoQuenchWorker>();
         services.AddHostedService<VetisApplicationCleanupWorker>();
         return services;
     }

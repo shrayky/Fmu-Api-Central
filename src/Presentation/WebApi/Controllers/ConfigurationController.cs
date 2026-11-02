@@ -31,10 +31,9 @@ namespace WebApi.Controllers
         public async Task<IActionResult> AppConfigurationUpload([FromBody] JsonDocument request)
         {
             var content = request.RootElement.GetProperty("Content").GetRawText();
-            var success = await _configurationService.Update(content);
-            
-            if (!success)
-                BadRequest("Ошибка обновления конфигурации");
+            var updated = await _configurationService.Update(content);
+            if (updated.IsFailure)
+                return BadRequest(updated.Error);
 
             return Content(content, "application/json");
         }

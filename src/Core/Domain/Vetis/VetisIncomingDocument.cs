@@ -95,6 +95,12 @@ public sealed class VetisIncomingDocumentEntity : IHaveStringId
     [JsonPropertyName("acceptedCount")]
     public int AcceptedCount { get; set; }
 
+    [JsonPropertyName("quenchedBy")]
+    public string QuenchedBy { get; set; } = "";
+
+    [JsonPropertyName("quenchedAt")]
+    public string QuenchedAt { get; set; } = "";
+
     [JsonPropertyName("vsds")]
     public List<VetisIncomingVsd> Vsds { get; set; } = [];
 

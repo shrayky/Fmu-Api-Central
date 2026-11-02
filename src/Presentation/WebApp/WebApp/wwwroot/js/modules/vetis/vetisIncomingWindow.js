@@ -1,11 +1,12 @@
 import vetisService from '../../services/vetisService.js';
 import { copyText } from '../../utils/copyText.js';
-import { canQuenchRows, editedActualVolume, formatIsoMoment, incomingStatusLabel, incomingWindowClosable, quenchStageText, quenchSummary, sameIncomingDocument, vsdStatusLabel, vsdXmlFileName } from '../../utils/vetisFormat.js';
+import { canQuenchRows, editedActualVolume, formatIsoMoment, incomingStatusLine, incomingWindowClosable, quenchLockedByProgress, quenchStageText, quenchSummary, sameIncomingDocument, vsdStatusLabel, vsdXmlFileName } from '../../utils/vetisFormat.js';
 import { openVetisWindow } from './vetisWindow.js';
 
 const WINDOW_ID = "vetisIncomingWindow";
 const TABLE_ID = "vetisIncomingVsds";
 const INFO_ID = "vetisIncomingInfo";
+const QUENCH_BUTTON_ID = "vetisIncomingQuench";
 
 let openedId = null;
 let busyId = null;
@@ -26,7 +27,7 @@ export async function openIncomingWindow(row, { onQuenched } = {}) {
         ? `ВСД без входящего документа от ${date}`
         : `Документ № ${incoming.number} от ${date}`;
 
-    openVetisWindow({
+    const dialog = openVetisWindow({
         id: WINDOW_ID,
         title,
         fill: true,
@@ -39,6 +40,7 @@ export async function openIncomingWindow(row, { onQuenched } = {}) {
                     elements: [
                         {
                             view: "button",
+                            id: QUENCH_BUTTON_ID,
                             value: "Погасить",
                             width: 140,
                             disabled: !canQuenchRows(incoming.vsds),
@@ -112,6 +114,7 @@ export async function openIncomingWindow(row, { onQuenched } = {}) {
             ],
         },
     });
+    watchForeignQuench(dialog, incoming.id);
 }
 
 function infoHtml(incoming) {
@@ -126,7 +129,7 @@ function infoLines(incoming) {
         ["Организация", incoming.organizationName],
         ["Предприятие", incoming.enterpriseName],
         ["Поставщик", incoming.consignor],
-        ["Статус", incomingStatusLabel(incoming.status)],
+        ["Статус", incomingStatusLine(incoming)],
     ];
 }
 
@@ -194,6 +197,76 @@ function applyQuenchReport(report, requestId) {
 }
 
 const QUENCH_POLL_MS = 400;
+
+function watchForeignQuench(dialog, documentId) {
+    let stopped = false;
+    let sawRunning = false;
+    const pull = () => {
+        if (stopped || busyId === documentId)
+            return;
+
+        vetisService.quenchProgress(documentId)
+            .then((progress) => {
+                if (stopped || busyId === documentId || !sameIncomingDocument(openedId, documentId))
+                    return;
+
+                const opened = $$(WINDOW_ID);
+                if (!opened)
+                    return;
+
+                if (quenchLockedByProgress(progress)) {
+                    sawRunning = true;
+                    $$(QUENCH_BUTTON_ID)?.disable();
+                    setFactEditable(false);
+                    showQuenchStage(opened, quenchStageText(progress));
+                    return;
+                }
+
+                if (!sawRunning)
+                    return;
+
+                sawRunning = false;
+                hideQuenchStage(opened);
+                reloadIncoming(documentId);
+            })
+            .catch(() => {});
+    };
+
+    pull();
+    const timer = window.setInterval(pull, QUENCH_POLL_MS);
+    const stop = () => {
+        stopped = true;
+        window.clearInterval(timer);
+    };
+    dialog.attachEvent("onDestruct", stop);
+}
+
+async function reloadIncoming(documentId) {
+    try {
+        const incoming = await vetisService.incomingDocument(documentId);
+        if (!sameIncomingDocument(openedId, documentId))
+            return;
+
+        applyQuenchReport({ document: incoming }, documentId);
+        const button = $$(QUENCH_BUTTON_ID);
+        if (canQuenchRows(incoming.vsds))
+            button?.enable();
+        else
+            button?.disable();
+        setFactEditable(true);
+    } catch (error) {
+        webix.message({ type: "error", text: error.message });
+    }
+}
+
+function setFactEditable(editable) {
+    const table = $$(TABLE_ID);
+    if (!table)
+        return;
+
+    table.define("editable", editable);
+    table.refresh();
+}
 
 function watchQuench(documentId) {
     let stopped = false;

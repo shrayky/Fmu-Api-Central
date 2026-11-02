@@ -1,5 +1,5 @@
-import { incomingFromForSave } from '../../utils/vetisFormat.js';
-import { Text, CheckBox, PasswordBox } from '../../utils/ui.js';
+import { incomingFromForSave, positiveSetting } from '../../utils/vetisFormat.js';
+import { Text, CheckBox, PasswordBox, Number as NumberField } from '../../utils/ui.js';
 import { newUuid } from '../../utils/uuid.js';
 import { copyText } from '../../utils/copyText.js';
 import { loadConfiguration } from '../../services/ConfigurationService.js';
@@ -36,6 +36,9 @@ class OrganizationElementView {
             passwordHint: "Пустое поле не стирает уже сохранённые API-ключ и пароль. На экран приходит маска.",
             incomingFrom: "Дата начала получения",
             incomingHint: "Если дата задана, включение галки подставляет её в пустую дату площадки.",
+            autoQuench: "Автогашение",
+            autoQuenchDelay: "Задержка перед автогашением (часов)",
+            positiveNumber: "Нужно целое число больше нуля",
             presentation: "Представление",
             address: "Адрес",
             rowDate: "Дата начала",
@@ -85,7 +88,9 @@ class OrganizationElementView {
             apiUser: "vetisApiUser",
             apiPassword: "vetisApiPassword",
             issuerId: "vetisIssuerId",
-            operatorLogin: "vetisOperatorLogin"
+            operatorLogin: "vetisOperatorLogin",
+            autoQuench: "organizationVetisAutoQuench",
+            autoQuenchDelay: "organizationVetisAutoQuenchDelay"
         };
     }
 
@@ -394,6 +399,13 @@ class OrganizationElementView {
                         autoheight: true,
                         borderless: true
                     },
+                    CheckBox(this.LABELS.autoQuench, this.NAMES.autoQuench, {
+                        value: !!vetis.autoQuench
+                    }),
+                    NumberField(this.LABELS.autoQuenchDelay, this.NAMES.autoQuenchDelay, vetis.autoQuenchDelayHours ?? 1, undefined, {
+                        validate: (input) => positiveSetting(input),
+                        invalidMessage: this.LABELS.positiveNumber
+                    }),
                     {
                         cols: [
                             { view: "button", value: this.LABELS.check, width: 210, click: () => this._probe("check") },
@@ -908,6 +920,8 @@ class OrganizationElementView {
             issuerId: String($$(this.NAMES.issuerId)?.getValue() || ""),
             initiatorLogin: String($$(this.NAMES.operatorLogin)?.getValue() || ""),
             incomingFrom: this._fromDate($$(this.NAMES.vetisIncomingFrom)?.getValue()),
+            autoQuench: !!$$(this.NAMES.autoQuench)?.getValue(),
+            autoQuenchDelayHours: parseInt($$(this.NAMES.autoQuenchDelay)?.getValue(), 10),
             enterprises
         };
     }
@@ -920,6 +934,11 @@ class OrganizationElementView {
 
         if (!data.inn) {
             webix.message({ text: this.LABELS.invalidInnMessage, type: "error" });
+            return false;
+        }
+
+        if ($$(this.NAMES.apiKey) && !positiveSetting(data.vetisSettings?.autoQuenchDelayHours)) {
+            webix.message({ text: this.LABELS.positiveNumber, type: "error" });
             return false;
         }
 

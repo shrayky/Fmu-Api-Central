@@ -28,6 +28,39 @@ export function incomingStatusLabel(status) {
     return INCOMING_STATUSES[status]?.label ?? status ?? "";
 }
 
+function escapeHtml(value) {
+    return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll("\"", "&quot;");
+}
+
+export function jobStatusHtml(jobs, error) {
+    if (error)
+        return `<div>${escapeHtml(error)}</div>`;
+
+    const list = jobs ?? [];
+    if (list.length === 0)
+        return "Задания ещё не сообщили статус.";
+
+    return list
+        .map((job) => `<div><b>${escapeHtml(job?.title)}:</b> ${escapeHtml(job?.text)}</div>`)
+        .join("");
+}
+
+export function incomingStatusLine(incoming) {
+    const parts = [incomingStatusLabel(incoming?.status)].filter((part) => part);
+    const author = String(incoming?.quenchedBy ?? "").trim();
+    const quenchedAt = formatIsoMoment(incoming?.quenchedAt).trim();
+    if (author)
+        parts.push(author);
+    if (quenchedAt)
+        parts.push(quenchedAt);
+
+    return parts.join(", ");
+}
+
 export function incomingStatusCss(status) {
     return INCOMING_STATUSES[status]?.css ?? "";
 }
@@ -85,6 +118,14 @@ export function editedActualVolume(incoming, edited) {
         return { ok: false };
 
     return { ok: true, value: text.replace(",", ".") };
+}
+
+export function positiveSetting(value) {
+    return parseInt(value, 10) > 0;
+}
+
+export function quenchLockedByProgress(progress) {
+    return !!progress?.running;
 }
 
 export function canQuenchRows(vsds) {

@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Application.Vetis;
 using Domain.Vetis;
 using Microsoft.AspNetCore.Authorization;
@@ -14,18 +15,24 @@ public class VetisController : ControllerBase
     private readonly VetisIncomingQuenchService _quench;
     private readonly VetisQuenchProgressStore _progress;
     private readonly VetisApplicationService _applications;
+    private readonly IVetisJobStatusStore _jobs;
 
     public VetisController(
         VetisIncomingQueryService incoming,
         VetisIncomingQuenchService quench,
         VetisQuenchProgressStore progress,
-        VetisApplicationService applications)
+        VetisApplicationService applications,
+        IVetisJobStatusStore jobs)
     {
         _incoming = incoming;
         _quench = quench;
         _progress = progress;
         _applications = applications;
+        _jobs = jobs;
     }
+
+    [HttpGet("jobs")]
+    public IActionResult Jobs() => Ok(_jobs.Current());
 
     [HttpGet("filters")]
     public async Task<IActionResult> Filters() => Ok(await _incoming.FiltersAsync());
@@ -63,7 +70,8 @@ public class VetisController : ControllerBase
     [HttpPost("incoming/{id}/quench")]
     public async Task<IActionResult> Quench(string id, [FromBody] VetisQuenchCommand? command, CancellationToken cancellationToken)
     {
-        var result = await _quench.QuenchAsync(id, command?.Facts ?? [], cancellationToken);
+        var author = User.FindFirst(ClaimTypes.Name)?.Value ?? "";
+        var result = await _quench.QuenchAsync(id, command?.Facts ?? [], cancellationToken, author: author);
         return result.IsSuccess ? Ok(result.Value) : BadRequest(result.Error);
     }
 

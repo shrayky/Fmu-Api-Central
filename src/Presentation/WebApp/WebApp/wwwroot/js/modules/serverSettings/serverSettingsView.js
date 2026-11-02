@@ -19,6 +19,9 @@ const fieldNames = [
     "vetisEndpoint",
     "vetisIncomingInterval",
     "vetisIncomingPageSize",
+    "vetisAutoQuenchInterval",
+    "vetisAutoQuenchBatch",
+    "vetisRequireVehicle",
     "vetisApplicationRetention",
     "vetisFailedApplicationRetention",
 ];

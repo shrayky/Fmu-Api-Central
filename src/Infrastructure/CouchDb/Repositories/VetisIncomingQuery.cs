@@ -13,7 +13,7 @@ public static class VetisIncomingQuery
     [
         "_id", "_rev", "data.id", "data.organizationId", "data.enterpriseGuid", "data.number", "data.date",
         "data.type", "data.loose", "data.consignor", "data.status", "data.sortAt", "data.receivedAt",
-        "data.vsdCount", "data.acceptedCount"
+        "data.quenchedBy", "data.quenchedAt", "data.vsdCount", "data.acceptedCount"
     ];
 
     /// <summary>
@@ -122,6 +122,67 @@ public static class VetisIncomingQuery
             ["use_index"] = new[] { DesignDoc, "id-idx" },
             ["limit"] = limit
         };
+
+    /// <summary>
+    /// Страница для автогашения. skip нельзя: гашение меняет статус, и следующая страница с тем же skip пропустит строку.
+    /// Продолжение датированных идёт парой (sortAt, id). Документы без даты читаются отдельно, курсор у них только id.
+    /// </summary>
+    public static Dictionary<string, object> Oldest(
+        string organizationId,
+        string status,
+        bool dated,
+        long afterSortAt,
+        string afterId,
+        int limit)
+    {
+        var selector = new Dictionary<string, object>
+        {
+            ["data.organizationId"] = organizationId,
+            ["data.status"] = status
+        };
+        if (dated)
+        {
+            selector["data.sortAt"] = new Dictionary<string, object> { ["$gt"] = 0L };
+            if (afterSortAt > 0 || (afterId ?? "").Length > 0)
+            {
+                selector["$or"] = new object[]
+                {
+                    new Dictionary<string, object>
+                    {
+                        ["data.sortAt"] = new Dictionary<string, object> { ["$gt"] = afterSortAt }
+                    },
+                    new Dictionary<string, object>
+                    {
+                        ["data.sortAt"] = afterSortAt,
+                        ["data.id"] = new Dictionary<string, object> { ["$gt"] = afterId ?? "" }
+                    }
+                };
+            }
+        }
+        else
+        {
+            selector["data.sortAt"] = 0L;
+            selector["data.id"] = new Dictionary<string, object> { ["$gt"] = afterId ?? "" };
+        }
+
+        return new Dictionary<string, object>
+        {
+            ["selector"] = selector,
+            ["sort"] = new[]
+            {
+                new Dictionary<string, string> { ["data.organizationId"] = "asc" },
+                new Dictionary<string, string> { ["data.status"] = "asc" },
+                new Dictionary<string, string> { ["data.sortAt"] = "asc" },
+                new Dictionary<string, string> { ["data.id"] = "asc" }
+            },
+            ["fields"] = new[] { "data.id", "data.date", "data.sortAt" },
+            ["use_index"] = new[] { DesignDoc, "organizationId-status-sort-at-id-idx" },
+            ["limit"] = limit
+        };
+    }
+
+    public static (string Name, string[] Fields) OldestIndex() =>
+        ("organizationId-status-sort-at-id-idx", ["data.organizationId", "data.status", "data.sortAt", "data.id"]);
 
     private static void AddFilter(
         Dictionary<string, object> selector,

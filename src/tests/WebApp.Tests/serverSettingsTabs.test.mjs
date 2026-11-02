@@ -148,16 +148,27 @@ test("вкладка Ветис содержит параметры сервис
             ["field", "vetisEndpoint", "https://api.vetrf.ru/platform/services/3.0/ApplicationManagementService"],
             ["field", "vetisIncomingInterval", 5],
             ["field", "vetisIncomingPageSize", 100],
+            ["field", "vetisAutoQuenchInterval", 15],
+            ["field", "vetisAutoQuenchBatch", 20],
+            ["field", "vetisRequireVehicle", false],
             ["field", "vetisApplicationRetention", 1],
             ["field", "vetisFailedApplicationRetention", 7],
         ]
     );
 
-    for (const name of ["vetisEndpoint", "vetisIncomingInterval", "vetisIncomingPageSize", "vetisApplicationRetention", "vetisFailedApplicationRetention"])
+    for (const name of ["vetisEndpoint", "vetisIncomingInterval", "vetisIncomingPageSize", "vetisAutoQuenchInterval", "vetisAutoQuenchBatch", "vetisRequireVehicle", "vetisApplicationRetention", "vetisFailedApplicationRetention"])
         assert.equal(find(tab.body, (node) => node.name === name).disabled, true);
 
     const hint = find(tab.body, (node) => node.view === "template");
     assert.match(hint.template, /вкладка «Ветис» в организации/);
+    assert.deepEqual(
+        outline(tab.body).filter((item) => item[0] === "section").map((item) => item[1]),
+        ["Получение ВСД", "Автогашение", "Гашение", "Заявки"]
+    );
+    assert.equal(
+        find(tab.body, (node) => node.name === "vetisAutoQuenchBatch").label,
+        "Сколько входящих документов гасить за запуск"
+    );
 });
 
 test("флажок Ветис открывает адрес и параметры загрузки", () => {
@@ -188,11 +199,17 @@ test("флажок Ветис открывает адрес и параметр�
         ["enable", "vetisEndpoint"],
         ["enable", "vetisIncomingInterval"],
         ["enable", "vetisIncomingPageSize"],
+        ["enable", "vetisAutoQuenchInterval"],
+        ["enable", "vetisAutoQuenchBatch"],
+        ["enable", "vetisRequireVehicle"],
         ["enable", "vetisApplicationRetention"],
         ["enable", "vetisFailedApplicationRetention"],
         ["disable", "vetisEndpoint"],
         ["disable", "vetisIncomingInterval"],
         ["disable", "vetisIncomingPageSize"],
+        ["disable", "vetisAutoQuenchInterval"],
+        ["disable", "vetisAutoQuenchBatch"],
+        ["disable", "vetisRequireVehicle"],
         ["disable", "vetisApplicationRetention"],
         ["disable", "vetisFailedApplicationRetention"],
     ]);
@@ -215,6 +232,12 @@ test("параметры Ветис требуют адрес http и числа
     assert.equal(interval.validate("0"), false);
     assert.equal(interval.validate("3"), true);
     assert.equal(interval.invalidMessage, "Нужно целое число больше нуля");
+    const batch = find(tab.body, (node) => node.name === "vetisAutoQuenchBatch");
+    assert.equal(batch.validate("0"), false);
+    assert.equal(batch.validate("20"), true);
+    const quenchInterval = find(tab.body, (node) => node.name === "vetisAutoQuenchInterval");
+    assert.equal(quenchInterval.validate("-1"), false);
+    assert.equal(quenchInterval.validate("15"), true);
 });
 
 test("кнопка сохранения стоит над вкладками сервера и Ветис", async () => {
@@ -259,6 +282,9 @@ test("сохранение раскладывает значения по сек
         vetisEndpoint: "  ",
         vetisIncomingInterval: "6",
         vetisIncomingPageSize: "50",
+        vetisAutoQuenchInterval: "15",
+        vetisAutoQuenchBatch: "20",
+        vetisRequireVehicle: 1,
         vetisApplicationRetention: "2",
         vetisFailedApplicationRetention: "8",
     };
@@ -285,6 +311,9 @@ test("сохранение раскладывает значения по сек
         endpoint: VETIS_DEFAULT_ENDPOINT,
         incomingFetchIntervalMinutes: 6,
         incomingFetchPageSize: 50,
+        autoQuenchIntervalMinutes: 15,
+        autoQuenchBatchSize: 20,
+        requireVehicleForQuench: true,
         applicationRetentionDays: 2,
         failedApplicationRetentionDays: 8,
     });
@@ -323,6 +352,9 @@ test("загрузка подставляет адрес Ветис и разр�
     assert.equal(mapped.vetis.incomingFetchPageSize, 100);
     assert.equal(mapped.vetis.applicationRetentionDays, 1);
     assert.equal(mapped.vetis.failedApplicationRetentionDays, 7);
+    assert.equal(mapped.vetis.autoQuenchIntervalMinutes, 15);
+    assert.equal(mapped.vetis.autoQuenchBatchSize, 20);
+    assert.equal(mapped.vetis.requireVehicleForQuench, false);
 
     const explicit = mapServerSettings({
         serverSettings: { apiIpPort: 1, corsOrigins: [], trustedProxies: [] },

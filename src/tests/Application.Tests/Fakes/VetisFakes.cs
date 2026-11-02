@@ -78,6 +78,8 @@ internal sealed class MemoryVetisIncoming : IVetisIncomingRepository
 
     public string? FindError { get; set; }
 
+    public HashSet<string> FailFindIds { get; } = new(StringComparer.Ordinal);
+
     public int ReleaseCalls { get; private set; }
 
     public int FindCalls { get; private set; }
@@ -87,9 +89,10 @@ internal sealed class MemoryVetisIncoming : IVetisIncomingRepository
     public Task<Result<VetisIncomingDocumentEntity?>> Find(string id)
     {
         FindCalls++;
-        return Task.FromResult(FindError == null
-            ? Result.Success(Store.TryGetValue(id, out var found) ? Clone(found) : null)
-            : Result.Failure<VetisIncomingDocumentEntity?>(FindError));
+        if (FindError != null || FailFindIds.Contains(id))
+            return Task.FromResult(Result.Failure<VetisIncomingDocumentEntity?>(FindError ?? "Журнал недоступен"));
+
+        return Task.FromResult(Result.Success(Store.TryGetValue(id, out var found) ? Clone(found) : null));
     }
 
     public Task<Result> Save(VetisIncomingDocumentEntity document)
@@ -100,6 +103,36 @@ internal sealed class MemoryVetisIncoming : IVetisIncomingRepository
 
         Store[document.Id] = Clone(document);
         return Task.FromResult(Result.Success());
+    }
+
+    public int OldestCalls { get; private set; }
+
+    public List<string> OldestOrganizations { get; } = [];
+
+    public Task<Result<List<VetisIncomingHead>>> OldestAfter(
+        string organizationId,
+        string status,
+        bool dated,
+        long afterSortAt,
+        string afterId,
+        int limit)
+    {
+        OldestCalls++;
+        OldestOrganizations.Add(organizationId);
+        var cursor = afterId ?? "";
+        var firstDated = dated && afterSortAt <= 0 && cursor.Length == 0;
+        var rows = Store.Values
+            .Where(item => item.OrganizationId == organizationId && item.Status == status)
+            .Where(item => dated ? item.SortAt > 0 : item.SortAt == 0)
+            .Where(item => dated
+                ? firstDated || item.SortAt > afterSortAt || (item.SortAt == afterSortAt && string.CompareOrdinal(item.Id, cursor) > 0)
+                : string.CompareOrdinal(item.Id, cursor) > 0)
+            .OrderBy(item => item.SortAt)
+            .ThenBy(item => item.Id, StringComparer.Ordinal)
+            .Take(limit)
+            .Select(item => new VetisIncomingHead(item.Id, item.Date, item.SortAt))
+            .ToList();
+        return Task.FromResult(Result.Success(rows));
     }
 
     public Task<Result<List<VetisIncomingHead>>> HeadsAfter(string afterId, int limit)
@@ -222,6 +255,8 @@ internal sealed class ScriptedVetisGateway : IVetisGateway
 
     public int QuenchCalls { get; private set; }
 
+    public List<string> QuenchedUuids { get; } = [];
+
     public int ThrowFromCall { get; set; }
 
     private readonly Queue<VetisExchange> _quench = new();
@@ -273,6 +308,7 @@ internal sealed class ScriptedVetisGateway : IVetisGateway
     {
         LastCall = call;
         QuenchCalls++;
+        QuenchedUuids.Add(uuid);
         OnQuench?.Invoke();
         if (ThrowFromCall > 0 && QuenchCalls >= ThrowFromCall)
             throw new InvalidOperationException("обрыв");

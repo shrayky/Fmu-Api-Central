@@ -17,6 +17,7 @@ public sealed class VetisIncomingQuenchService
     private readonly VetisIncomingQueryService _query;
     private readonly IParametersService _parameters;
     private readonly VetisQuenchProgressStore _progress;
+    private readonly TimeProvider _clock;
 
     public VetisIncomingQuenchService(
         IVetisGateway gateway,
@@ -25,7 +26,8 @@ public sealed class VetisIncomingQuenchService
         VetisApplicationRecorder recorder,
         VetisIncomingQueryService query,
         IParametersService parameters,
-        VetisQuenchProgressStore progress)
+        VetisQuenchProgressStore progress,
+        TimeProvider? clock = null)
     {
         _gateway = gateway;
         _incoming = incoming;
@@ -34,15 +36,18 @@ public sealed class VetisIncomingQuenchService
         _query = query;
         _parameters = parameters;
         _progress = progress;
+        _clock = clock ?? TimeProvider.System;
     }
 
     public async Task<Result<VetisQuenchReport>> QuenchAsync(
         string documentId,
         IReadOnlyList<VetisQuenchFact> facts,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IReadOnlyCollection<string>? onlyUuids = null,
+        string? author = null)
     {
         if (!await _progress.TryEnter(documentId, cancellationToken))
-            return Result.Failure<VetisQuenchReport>("Гашение уже выполняется.");
+            return Result.Failure<VetisQuenchReport>(VetisQuench.AlreadyRunning);
 
         try
         {
@@ -53,7 +58,10 @@ public sealed class VetisIncomingQuenchService
                 return Result.Failure<VetisQuenchReport>("Документ не найден.");
 
             var document = found.Value;
-            if (!document.Vsds.Any(vsd => VetisQuench.CanQuench(vsd.Status)))
+            var only = onlyUuids == null
+                ? null
+                : new HashSet<string>(onlyUuids.Where(item => !string.IsNullOrWhiteSpace(item)), StringComparer.OrdinalIgnoreCase);
+            if (!document.Vsds.Any(vsd => Chosen(vsd, only)))
                 return Result.Failure<VetisQuenchReport>("Нет ВСД для гашения.");
 
             var organization = await _organizations.GetById(document.OrganizationId);
@@ -65,21 +73,34 @@ public sealed class VetisIncomingQuenchService
             if (call == null)
                 return Result.Failure<VetisQuenchReport>("Настройки Ветис не заполнены, гашение не отправлено.");
 
+            var requireVehicle = server.RequireVehicleForQuench;
+
             var requested = (facts ?? [])
                 .GroupBy(item => (item.Uuid ?? "").Trim(), StringComparer.OrdinalIgnoreCase)
                 .Where(group => group.Key.Length > 0)
                 .ToDictionary(group => group.Key, group => group.Last().ActualVolume ?? "", StringComparer.OrdinalIgnoreCase);
 
             var report = new VetisQuenchReport();
-            var total = document.Vsds.Count(vsd => VetisQuench.CanQuench(vsd.Status));
+            var quenchedAt = VetisDateTime.Format(_clock.GetLocalNow());
+            var total = document.Vsds.Count(vsd => Chosen(vsd, only));
             var index = 0;
             // Merge подменяет элемент того же списка, и прямой перебор обрывается.
             foreach (var vsd in document.Vsds.ToList())
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                if (!VetisQuench.CanQuench(vsd.Status))
+                if (!VetisQuench.CanQuench(vsd.Status) || (only != null && !only.Contains(vsd.Uuid)))
                 {
                     report.Skipped++;
+                    continue;
+                }
+
+                if (requireVehicle && !VetisTransport.HasVehicleNumber(vsd.RawXml))
+                {
+                    report.Errors.Add(new VetisQuenchError
+                    {
+                        Uuid = vsd.Uuid,
+                        Message = "В ВСД нет номера автомобиля, гашение не отправлено."
+                    });
                     continue;
                 }
 
@@ -128,7 +149,7 @@ public sealed class VetisIncomingQuenchService
                 }
 
                 // Сохраняем сразу: обрыв на следующем ВСД не должен откатить уже принятое Меркурием гашение.
-                var stored = await StoreQuench(document.Id, vsd.Uuid, apply);
+                var stored = await StoreQuench(document.Id, vsd.Uuid, apply, author, quenchedAt);
                 if (stored.Outcome == QuenchStore.Failed)
                     return Result.Failure<VetisQuenchReport>("ВСД погашены, но документ не сохранён: " + stored.Error);
                 if (stored.Outcome == QuenchStore.Missing)
@@ -155,6 +176,9 @@ public sealed class VetisIncomingQuenchService
             _progress.Exit(documentId);
         }
     }
+
+    private static bool Chosen(VetisIncomingVsd vsd, HashSet<string>? only) =>
+        VetisQuench.CanQuench(vsd.Status) && (only == null || only.Contains(vsd.Uuid));
 
     private const string AlreadyUtilized =
         "должен быть в состоянии \"оформлен\" (т.е. не погашен)";
@@ -190,7 +214,9 @@ public sealed class VetisIncomingQuenchService
     private async Task<QuenchStored> StoreQuench(
         string documentId,
         string uuid,
-        Action<VetisIncomingVsd> apply)
+        Action<VetisIncomingVsd> apply,
+        string? author,
+        string quenchedAt)
     {
         var fresh = await _incoming.Find(documentId);
         if (fresh.IsFailure)
@@ -205,6 +231,12 @@ public sealed class VetisIncomingQuenchService
 
         apply(target);
         fresh.Value.Merge([target]);
+        if (!string.IsNullOrWhiteSpace(author))
+        {
+            fresh.Value.QuenchedBy = author.Trim();
+            fresh.Value.QuenchedAt = quenchedAt;
+        }
+
         var saved = await _incoming.Save(fresh.Value);
         return saved.IsFailure
             ? new QuenchStored(QuenchStore.Failed, saved.Error)

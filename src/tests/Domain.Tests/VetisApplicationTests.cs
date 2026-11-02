@@ -1,3 +1,4 @@
+using CSharpFunctionalExtensions;
 using Domain.Configuration.Options;
 using Domain.Entitys.Organization;
 using Domain.Vetis;
@@ -69,6 +70,9 @@ public class VetisSettingsScheduleTests
         Assert.Equal(100, settings.IncomingPageSize());
         Assert.Equal(TimeSpan.FromDays(1), settings.CompletedRetention());
         Assert.Equal(TimeSpan.FromDays(7), settings.FailedRetention());
+        Assert.Equal(TimeSpan.FromMinutes(15), settings.AutoQuenchInterval());
+        Assert.Equal(20, settings.AutoQuenchBatch());
+        Assert.False(settings.RequireVehicleForQuench);
     }
 
     [Fact]
@@ -86,6 +90,19 @@ public class VetisSettingsScheduleTests
         Assert.Equal(100, settings.IncomingPageSize());
         Assert.Equal(TimeSpan.FromDays(1), settings.CompletedRetention());
         Assert.Equal(TimeSpan.FromDays(7), settings.FailedRetention());
+        Assert.Equal(TimeSpan.FromMinutes(15), settings.AutoQuenchInterval());
+        Assert.Equal(20, settings.AutoQuenchBatch());
+    }
+
+    [Fact]
+    public void Автогашение_не_сохраняется_с_неположительным_периодом_или_пакетом()
+    {
+        Assert.True(new VetisSettings { AutoQuenchIntervalMinutes = 0, AutoQuenchBatchSize = 20 }.CheckAutoQuenchNumbers().IsFailure);
+        Assert.Equal(
+            "Сколько входящих документов гасить за запуск: нужно целое число больше нуля.",
+            new VetisSettings { AutoQuenchIntervalMinutes = 15, AutoQuenchBatchSize = 0 }.CheckAutoQuenchNumbers().Error);
+        Assert.True(new VetisSettings { AutoQuenchIntervalMinutes = 15, AutoQuenchBatchSize = -1 }.CheckAutoQuenchNumbers().IsFailure);
+        Assert.True(new VetisSettings { AutoQuenchIntervalMinutes = 15, AutoQuenchBatchSize = 20 }.CheckAutoQuenchNumbers().IsSuccess);
     }
 
     [Fact]
@@ -109,6 +126,36 @@ public class VetisCursorTests
         var merged = OrganizationVetisScope.Merge(stored, [new VetisEnterprise { Guid = "e1", Name = "Склад" }]);
 
         Assert.Equal("2026-10-20T08:30:00+07:00", merged.Single().IncomingFrom);
+    }
+
+    [Fact]
+    public void Apply_переносит_автогашение_и_не_трогает_площадки()
+    {
+        var current = new OrganizationVetisSettings
+        {
+            Enterprises = [new OrganizationEnterprise { Guid = "e1", Name = "Склад", Participates = true }]
+        };
+        var update = new OrganizationVetisSettings
+        {
+            AutoQuench = true,
+            AutoQuenchDelayHours = 4,
+            Enterprises = [new OrganizationEnterprise { Guid = "e1", Name = "Склад", Participates = true }]
+        };
+
+        OrganizationVetisScope.Apply(current, update);
+
+        Assert.True(current.AutoQuench);
+        Assert.Equal(4, current.AutoQuenchDelayHours);
+        Assert.Equal("e1", current.Enterprises.Single().Guid);
+    }
+
+    [Fact]
+    public void Задержка_автогашения_по_умолчанию_час_и_ноль_не_принимается()
+    {
+        Assert.Equal(1, new OrganizationVetisSettings().AutoQuenchDelayHours);
+        Assert.Equal(1, new OrganizationVetisSettings { AutoQuenchDelayHours = 0 }.DelayHours());
+        Assert.True(new OrganizationVetisSettings { AutoQuenchDelayHours = 0 }.CheckDelay().IsFailure);
+        Assert.True(new OrganizationVetisSettings { AutoQuenchDelayHours = 3 }.CheckDelay().IsSuccess);
     }
 
     [Fact]

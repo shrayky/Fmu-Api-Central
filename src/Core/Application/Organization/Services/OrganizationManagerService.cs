@@ -168,6 +168,13 @@ public class OrganizationManagerService : IOrganizationManagerService
         if (string.IsNullOrEmpty(inn))
             return Result.Failure<OrganizationView>("Укажите ИНН организации");
 
+        if (data.VetisSettings != null)
+        {
+            var delay = data.VetisSettings.CheckDelay();
+            if (delay.IsFailure)
+                return Result.Failure<OrganizationView>(delay.Error);
+        }
+
         data.Name = name;
         data.Inn = inn;
         data.TrueApiIntegrationSettings ??= new TrueApiIntegrationSettings();
@@ -234,6 +241,8 @@ public class OrganizationManagerService : IOrganizationManagerService
             IssuerId = settings.IssuerId,
             InitiatorLogin = settings.InitiatorLogin,
             IncomingFrom = settings.IncomingFrom,
+            AutoQuench = settings.AutoQuench,
+            AutoQuenchDelayHours = settings.AutoQuenchDelayHours,
             Enterprises = settings.Enterprises ?? []
         };
     }

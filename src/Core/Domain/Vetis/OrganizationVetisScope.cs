@@ -20,6 +20,8 @@ public static class OrganizationVetisScope
         current.IssuerId = (update.IssuerId ?? "").Trim();
         current.InitiatorLogin = (update.InitiatorLogin ?? "").Trim();
         current.IncomingFrom = NormalizeDate(update.IncomingFrom);
+        current.AutoQuench = update.AutoQuench;
+        current.AutoQuenchDelayHours = update.AutoQuenchDelayHours;
         current.Enterprises = Normalize(update.Enterprises, current.IncomingFrom, current.Enterprises);
     }
 

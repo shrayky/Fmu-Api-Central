@@ -4,6 +4,8 @@ import {
     formatIsoMoment,
     formatUnixMoment,
     canQuenchRows,
+    positiveSetting,
+    quenchLockedByProgress,
     editedActualVolume,
     incomingWindowClosable,
     sameIncomingDocument,
@@ -13,12 +15,14 @@ import {
     quenchSummary,
     vetisCountLabel,
     incomingStatusLabel,
+    incomingStatusLine,
     incomingStatusCss,
     operationLabel,
     vsdStatusLabel,
     vsdCountText,
     vsdXmlFileName,
     requestStateText,
+    jobStatusHtml,
 } from "../../Presentation/WebApp/WebApp/wwwroot/js/utils/vetisFormat.js";
 
 test("статусы входящего документа показываются по-русски", () => {
@@ -26,6 +30,26 @@ test("статусы входящего документа показывают�
     assert.equal(incomingStatusLabel("partial"), "Принят частично");
     assert.equal(incomingStatusLabel("notAccepted"), "Не принят");
     assert.equal(incomingStatusLabel("rejected"), "Отклонён");
+});
+
+test("статус заданий рисует пришедший список и прячет разметку", () => {
+    assert.equal(jobStatusHtml([]), "Задания ещё не сообщили статус.");
+    assert.equal(
+        jobStatusHtml([{ title: "Автогашение", text: "Ожидает до 02.11.2026 10:32. За прошлый запуск погашено документов 4" }]),
+        "<div><b>Автогашение:</b> Ожидает до 02.11.2026 10:32. За прошлый запуск погашено документов 4</div>"
+    );
+    assert.match(jobStatusHtml([{ title: "<b>", text: "a<b" }]), /&lt;b&gt;/);
+    assert.match(jobStatusHtml(null, "нет связи"), /нет связи/);
+});
+
+test("автор и время гашения стоят в строке статуса", () => {
+    assert.equal(incomingStatusLine({ status: "accepted" }), "Принят");
+    assert.equal(incomingStatusLine({
+        status: "accepted",
+        quenchedBy: "admin",
+        quenchedAt: "2026-11-02T10:01:00+07:00",
+    }), "Принят, admin, 02.11.2026 10:01");
+    assert.equal(incomingStatusLine({ status: "partial", quenchedBy: "  ", quenchedAt: "" }), "Принят частично");
 });
 
 test("неизвестный статус документа показывается как есть", () => {
@@ -117,6 +141,21 @@ test("верный факт нормализуется, неверный не п
     assert.equal(editedActualVolume("10", "-1").ok, false);
     assert.equal(editedActualVolume("10", "").ok, false);
     assert.equal(editedActualVolume("10", "много").ok, false);
+});
+
+test("период, пакет и задержка — целое число больше нуля", () => {
+    assert.equal(positiveSetting("1"), true);
+    assert.equal(positiveSetting("15"), true);
+    assert.equal(positiveSetting("0"), false);
+    assert.equal(positiveSetting("-3"), false);
+    assert.equal(positiveSetting(""), false);
+    assert.equal(positiveSetting("нет"), false);
+});
+
+test("чужое гашение закрывает кнопку, пока стадия идёт", () => {
+    assert.equal(quenchLockedByProgress({ running: true }), true);
+    assert.equal(quenchLockedByProgress({ running: false }), false);
+    assert.equal(quenchLockedByProgress(null), false);
 });
 
 test("гасить можно только документ с оформленным ВСД", () => {

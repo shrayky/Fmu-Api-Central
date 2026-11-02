@@ -23,6 +23,9 @@ export function mapServerSettings(configuration) {
             incomingFetchPageSize: vetis.incomingFetchPageSize ?? 100,
             applicationRetentionDays: vetis.applicationRetentionDays ?? 1,
             failedApplicationRetentionDays: vetis.failedApplicationRetentionDays ?? 7,
+            autoQuenchIntervalMinutes: vetis.autoQuenchIntervalMinutes ?? 15,
+            autoQuenchBatchSize: vetis.autoQuenchBatchSize ?? 20,
+            requireVehicleForQuench: !!vetis.requireVehicleForQuench,
         }
     };
 }

@@ -40,6 +40,100 @@ public class VetisIncomingQuenchServiceTests
     }
 
     [Fact]
+    public async Task Quench_по_списку_uuid_не_трогает_остальные_оформленные()
+    {
+        var world = new World();
+        world.Incoming.Store["d1"] = Document(Vsd("v1", "CONFIRMED", "10"), Vsd("v2", "CONFIRMED", "10"));
+        world.Gateway.EnqueueQuench(Done("v2"));
+
+        var report = (await world.Sut.QuenchAsync(
+            "d1",
+            [],
+            CancellationToken.None,
+            new HashSet<string>(["v2"], StringComparer.OrdinalIgnoreCase))).Value;
+
+        Assert.Equal(1, report.Quenched);
+        Assert.Empty(report.Errors);
+        Assert.Equal(1, world.Gateway.QuenchCalls);
+        Assert.Equal("CONFIRMED", world.Incoming.Store["d1"].Vsds.Single(item => item.Uuid == "v1").Status);
+        Assert.Equal("UTILIZED", world.Incoming.Store["d1"].Vsds.Single(item => item.Uuid == "v2").Status);
+        Assert.Equal("10", world.Incoming.Store["d1"].Vsds.Single(item => item.Uuid == "v2").ActualVolume);
+    }
+
+    [Fact]
+    public async Task Quench_пишет_автора_и_время_а_следующее_гашение_их_заменяет()
+    {
+        var world = new World();
+        world.Incoming.Store["d1"] = Document(Vsd("v1", "CONFIRMED", "10"), Vsd("v2", "CONFIRMED", "10"));
+        world.Gateway.EnqueueQuench(Done("v1"));
+        world.Gateway.EnqueueQuench(Done("v2"));
+        var expectedAt = VetisDateTime.Format(world.Clock.GetLocalNow());
+
+        var first = (await world.Sut.QuenchAsync(
+            "d1",
+            [new VetisQuenchFact { Uuid = "v1", ActualVolume = "10" }],
+            CancellationToken.None,
+            new HashSet<string>(["v1"], StringComparer.OrdinalIgnoreCase),
+            "Иванов")).Value;
+
+        Assert.Equal("Иванов", world.Incoming.Store["d1"].QuenchedBy);
+        Assert.Equal(expectedAt, world.Incoming.Store["d1"].QuenchedAt);
+        Assert.Equal("Иванов", first.Document!.QuenchedBy);
+        Assert.Equal(expectedAt, first.Document.QuenchedAt);
+        Assert.Equal("CONFIRMED", world.Incoming.Store["d1"].Vsds.Single(item => item.Uuid == "v2").Status);
+
+        var second = (await world.Sut.QuenchAsync("d1", [], CancellationToken.None, author: VetisQuench.AutoAuthor)).Value;
+
+        Assert.Equal(VetisQuench.AutoAuthor, world.Incoming.Store["d1"].QuenchedBy);
+        Assert.Equal(expectedAt, world.Incoming.Store["d1"].QuenchedAt);
+        Assert.Equal(VetisQuench.AutoAuthor, second.Document!.QuenchedBy);
+    }
+
+    [Fact]
+    public async Task Quench_без_погашенных_ВСД_и_пустой_логин_не_ставят_автора()
+    {
+        var blocked = new World();
+        blocked.Parameters.Value.VetisSettings.RequireVehicleForQuench = true;
+        blocked.Incoming.Store["d1"] = Document(Vsd("v1", "CONFIRMED", "10", rawXml: "<vetDocument><wagonNumber>123</wagonNumber></vetDocument>"));
+
+        var report = (await blocked.Sut.QuenchAsync("d1", [], CancellationToken.None, author: "Иванов")).Value;
+
+        Assert.Equal(0, report.Quenched);
+        Assert.Equal("", blocked.Incoming.Store["d1"].QuenchedBy);
+        Assert.Equal("", blocked.Incoming.Store["d1"].QuenchedAt);
+
+        var kept = new World();
+        kept.Incoming.Store["d1"] = Document(Vsd("v1", "CONFIRMED", "10"));
+        kept.Incoming.Store["d1"].QuenchedBy = "Иванов";
+        kept.Incoming.Store["d1"].QuenchedAt = "2026-10-01T08:00:00+07:00";
+        kept.Gateway.EnqueueQuench(Done("v1"));
+
+        await kept.Sut.QuenchAsync("d1", [], CancellationToken.None, author: " ");
+
+        Assert.Equal("Иванов", kept.Incoming.Store["d1"].QuenchedBy);
+        Assert.Equal("2026-10-01T08:00:00+07:00", kept.Incoming.Store["d1"].QuenchedAt);
+    }
+
+    [Fact]
+    public async Task Quench_запрет_без_номера_автомобиля_не_отправляет_гашение()
+    {
+        var world = new World();
+        world.Parameters.Value.VetisSettings.RequireVehicleForQuench = true;
+        world.Incoming.Store["d1"] = Document(
+            Vsd("v1", "CONFIRMED", "10", rawXml: "<vetDocument><wagonNumber>123</wagonNumber></vetDocument>"),
+            Vsd("v2", "CONFIRMED", "10", rawXml: "<vetDocument><vehicleNumber>А000АА77</vehicleNumber></vetDocument>"));
+        world.Gateway.EnqueueQuench(Done("v2"));
+
+        var report = (await world.Sut.QuenchAsync("d1", [], CancellationToken.None)).Value;
+
+        Assert.Equal(1, world.Gateway.QuenchCalls);
+        Assert.Equal("v1", Assert.Single(report.Errors).Uuid);
+        Assert.Contains("номера автомобиля", report.Errors[0].Message);
+        Assert.Equal("CONFIRMED", world.Incoming.Store["d1"].Vsds.Single(item => item.Uuid == "v1").Status);
+        Assert.Equal("UTILIZED", world.Incoming.Store["d1"].Vsds.Single(item => item.Uuid == "v2").Status);
+    }
+
+    [Fact]
     public async Task Quench_после_ошибки_продолжает_следующий_ВСД()
     {
         var world = new World();
@@ -290,7 +384,7 @@ public class VetisIncomingQuenchServiceTests
         var report = (await first).Value;
 
         Assert.True(second.IsFailure);
-        Assert.Equal("Гашение уже выполняется.", second.Error);
+        Assert.Equal(VetisQuench.AlreadyRunning, second.Error);
         Assert.Equal(1, world.Gateway.QuenchCalls);
         Assert.Equal(1, report.Quenched);
         Assert.Null(world.Progress.Find("d1"));
@@ -312,13 +406,13 @@ public class VetisIncomingQuenchServiceTests
             """
     };
 
-    private static VetisIncomingVsd Vsd(string uuid, string status, string volume, string issueNumber = "") => new()
+    private static VetisIncomingVsd Vsd(string uuid, string status, string volume, string issueNumber = "", string rawXml = "<vetDocument/>") => new()
     {
         Uuid = uuid,
         Status = status,
         Volume = volume,
         IssueNumber = issueNumber,
-        RawXml = "<vetDocument/>"
+        RawXml = rawXml
     };
 
     private static VetisIncomingDocumentEntity Document(params VetisIncomingVsd[] vsds) => new()
@@ -347,10 +441,13 @@ public class VetisIncomingQuenchServiceTests
                     InitiatorLogin = "operator"
                 }
             };
+            Clock = new FixedClock(new DateTimeOffset(2026, 10, 30, 12, 0, 0, TimeSpan.FromHours(7)));
             var recorder = new VetisApplicationRecorder(Applications, NullLogger<VetisApplicationRecorder>.Instance);
             var query = new VetisIncomingQueryService(Incoming, Organizations);
-            Sut = new VetisIncomingQuenchService(Gateway, Incoming, Organizations, recorder, query, Parameters, Progress);
+            Sut = new VetisIncomingQuenchService(Gateway, Incoming, Organizations, recorder, query, Parameters, Progress, Clock);
         }
+
+        public FixedClock Clock { get; }
 
         public ScriptedVetisGateway Gateway { get; } = new();
 

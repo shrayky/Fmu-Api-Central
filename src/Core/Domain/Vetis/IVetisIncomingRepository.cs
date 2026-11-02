@@ -42,5 +42,16 @@ public interface IVetisIncomingRepository
     /// </summary>
     Task<Result<List<VetisIncomingHead>>> HeadsAfter(string afterId, int limit);
 
+    /// <summary>
+    /// Страница от старых к новым. dated — документы с датой, иначе sortAt ноль. Курсор — последняя пара страницы.
+    /// </summary>
+    Task<Result<List<VetisIncomingHead>>> OldestAfter(
+        string organizationId,
+        string status,
+        bool dated,
+        long afterSortAt,
+        string afterId,
+        int limit);
+
     Task<Result> Delete(string id);
 }

@@ -6,6 +6,10 @@ namespace Domain.Vetis;
 
 public static class VetisQuench
 {
+    public const string AutoAuthor = "Автогашение";
+
+    public const string AlreadyRunning = "Гашение уже выполняется.";
+
     public const string AcceptAll = "ACCEPT_ALL";
 
     public const string Partially = "PARTIALLY";

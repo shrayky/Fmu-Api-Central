@@ -113,6 +113,26 @@ public class VetisIncomingRepository : BaseCouchDbRepository<VetisIncomingDocume
                 .ToList());
     }
 
+    public async Task<Result<List<VetisIncomingHead>>> OldestAfter(
+        string organizationId,
+        string status,
+        bool dated,
+        long afterSortAt,
+        string afterId,
+        int limit)
+    {
+        if (!_appState.DbState())
+            return Result.Failure<List<VetisIncomingHead>>(DatabaseUnavailable);
+
+        var loaded = await ExecuteMangoQueryAsync(
+            VetisIncomingQuery.Oldest(organizationId, status, dated, afterSortAt, afterId, limit));
+        return loaded.IsFailure
+            ? Result.Failure<List<VetisIncomingHead>>(loaded.Error)
+            : Result.Success(loaded.Value
+                .Select(document => new VetisIncomingHead(document.Id, document.Date, document.SortAt))
+                .ToList());
+    }
+
     public async Task<Result<List<VetisIncomingKey>>> NotAcceptedKeys()
     {
         if (!_appState.DbState())

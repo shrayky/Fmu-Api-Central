@@ -12,7 +12,9 @@ namespace VetisApi.Workers;
 /// </summary>
 public sealed class VetisIncomingWorker(
     IServiceScopeFactory scopeFactory,
-    ILogger<VetisIncomingWorker> logger) : BackgroundService
+    IVetisJobStatusStore jobs,
+    ILogger<VetisIncomingWorker> logger,
+    TimeSpan? startDelay = null) : BackgroundService
 {
     private static readonly TimeSpan StartDelay = TimeSpan.FromSeconds(30);
 
@@ -32,7 +34,9 @@ public sealed class VetisIncomingWorker(
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         logger.LogInformation("Воркер загрузки входящих ВСД запущен");
-        await WaitAsync(StartDelay, stoppingToken);
+        var opening = startDelay ?? StartDelay;
+        Report(VetisJobPhase.Starting, DateTimeOffset.Now, DateTimeOffset.Now.Add(opening), null, null);
+        await WaitAsync(opening, stoppingToken);
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -40,7 +44,10 @@ public sealed class VetisIncomingWorker(
             try
             {
                 using var scope = scopeFactory.CreateScope();
-                var settings = (await scope.ServiceProvider.GetRequiredService<IParametersService>().Current()).VetisSettings;
+                var settings = (await scope.ServiceProvider.GetRequiredService<IParametersService>().Current()).VetisSettings ?? new();
+                if (!_sortDone || !_transportDone)
+                    Report(VetisJobPhase.Preparing, DateTimeOffset.Now, null, null, null);
+
                 if (!_sortDone)
                 {
                     var budget = Stopwatch.StartNew();
@@ -76,21 +83,36 @@ public sealed class VetisIncomingWorker(
                 // Пока снятие не закончено, загрузка дописала бы ВСД между Find и Save снятия, и сохранение вернуло бы старый список.
                 if (_sortDone && _transportDone)
                 {
+                    var now = DateTimeOffset.Now;
                     if (settings.Enable)
-                        await scope.ServiceProvider.GetRequiredService<IVetisIncomingLoader>().LoadAsync(stoppingToken);
-
-                    // Только после успешной загрузки: сбой оставляет короткий повтор, а не интервал журнала.
-                    delay = settings.IncomingInterval();
+                    {
+                        Report(VetisJobPhase.Running, now, null, null, null);
+                        var saved = await scope.ServiceProvider.GetRequiredService<IVetisIncomingLoader>().LoadAsync(stoppingToken);
+                        // Только после успешной загрузки: сбой оставляет короткий повтор, а не интервал журнала.
+                        delay = settings.IncomingInterval();
+                        var finished = DateTimeOffset.Now;
+                        Report(VetisJobPhase.Waiting, finished, finished.Add(delay), saved, null);
+                    }
+                    else
+                    {
+                        delay = settings.IncomingInterval();
+                        Report(VetisJobPhase.Stopped, now, now.Add(delay), null, null);
+                    }
                 }
             }
             catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
             {
                 logger.LogError(ex, "Ошибка воркера загрузки входящих ВСД");
+                var failed = DateTimeOffset.Now;
+                Report(VetisJobPhase.Failed, failed, failed.Add(RetryDelay), null, ex.Message);
             }
 
             await WaitAsync(delay, stoppingToken);
         }
     }
+
+    private void Report(VetisJobPhase phase, DateTimeOffset at, DateTimeOffset? nextAt, int? count, string? error) =>
+        jobs.Report(new VetisJobUpdate("incoming", "Получение ВСД", "записано документов", 1, phase, at, nextAt, count, error));
 
     private static async Task WaitAsync(TimeSpan delay, CancellationToken stoppingToken)
     {

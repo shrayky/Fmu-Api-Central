@@ -48,6 +48,25 @@ public static class VetisTransport
         return string.Join(" ", new[] { type, numbers }.Where(part => part.Length > 0));
     }
 
+    public static bool HasVehicleNumber(string? rawXml)
+    {
+        if (string.IsNullOrWhiteSpace(rawXml))
+            return false;
+
+        XElement xml;
+        try
+        {
+            xml = XElement.Parse(rawXml);
+        }
+        catch (System.Xml.XmlException)
+        {
+            return false;
+        }
+
+        return xml.Descendants().Any(element =>
+            element.Name.LocalName == "vehicleNumber" && element.Value.Trim().Length > 0);
+    }
+
     private static string Direct(XElement? parent, string localName) =>
         parent?.Elements().FirstOrDefault(element => element.Name.LocalName == localName)?.Value.Trim() ?? "";
 }

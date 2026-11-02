@@ -50,7 +50,7 @@ public class ConfigurationApplicationService : IConfigurationApplicationService
         return await reader.ReadToEndAsync();
     }
 
-    public async Task<bool> Update(string jsonConfiguration)
+    public async Task<Result> Update(string jsonConfiguration)
     {
         try
         {
@@ -65,7 +65,7 @@ public class ConfigurationApplicationService : IConfigurationApplicationService
             if (parameters == null)
             {
                 _logger.LogError("Не удалось десериализовать конфигурацию из входящего json");
-                return false;
+                return Result.Failure("Не удалось прочитать настройки");
             }
 
             var current = await _parametersService.Current();
@@ -73,16 +73,22 @@ public class ConfigurationApplicationService : IConfigurationApplicationService
             current.Security ??= new();
             parameters.Security.PasswordConfigured = current.Security.PasswordConfigured;
             parameters.VetisSettings ??= new();
+            var numbers = parameters.VetisSettings.CheckAutoQuenchNumbers();
+            if (numbers.IsFailure)
+                return numbers;
+
             parameters.VetisSettings.Endpoint = VetisEndpoints.Resolve(parameters.VetisSettings.Endpoint);
             RestoreMaskedSecrets(parameters, current);
 
-            return await _parametersService.Update(parameters);
+            return await _parametersService.Update(parameters)
+                ? Result.Success()
+                : Result.Failure("Не удалось сохранить настройки");
 
         }
         catch (JsonException ex)
         {
             _logger.LogError(ex, "Ошибка разбора входящего JSON конфигурации");
-            return false;
+            return Result.Failure("Ошибка разбора настроек");
         }
     }
 
@@ -141,7 +147,13 @@ public class ConfigurationApplicationService : IConfigurationApplicationService
             if (portable.GisMtSettings != null)
                 current.GisMtSettings = portable.GisMtSettings;
             if (portable.VetisSettings != null)
+            {
+                var numbers = portable.VetisSettings.CheckAutoQuenchNumbers();
+                if (numbers.IsFailure)
+                    return numbers;
+
                 current.VetisSettings = portable.VetisSettings;
+            }
 
             var updated = await _parametersService.Update(current);
             if (!updated)

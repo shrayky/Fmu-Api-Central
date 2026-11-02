@@ -42,20 +42,27 @@ public sealed class VetisIncomingLoadService : IVetisIncomingLoader
         _clock = clock ?? TimeProvider.System;
     }
 
-    public async Task LoadAsync(CancellationToken cancellationToken)
+    public async Task<int> LoadAsync(CancellationToken cancellationToken)
     {
         var server = (await _parameters.Current()).VetisSettings ?? new();
         if (!server.Enable)
-            return;
+            return 0;
 
+        var saved = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var organization in await _organizations.All())
         {
             if (organization.VetisSettings.Enable)
-                await LoadOrganizationAsync(organization, server, cancellationToken);
+                await LoadOrganizationAsync(organization, server, saved, cancellationToken);
         }
+
+        return saved.Count;
     }
 
-    private async Task LoadOrganizationAsync(OrganizationEntity organization, VetisSettings server, CancellationToken cancellationToken)
+    private async Task LoadOrganizationAsync(
+        OrganizationEntity organization,
+        VetisSettings server,
+        HashSet<string> saved,
+        CancellationToken cancellationToken)
     {
         var call = VetisCallFactory.ForOrganization(server, organization.VetisSettings);
         if (call == null)
@@ -66,7 +73,7 @@ public sealed class VetisIncomingLoadService : IVetisIncomingLoader
 
         foreach (var enterprise in organization.VetisSettings.Enterprises.Where(item => item.Participates))
         {
-            var cursor = await ReadEnterpriseAsync(call, organization, enterprise, server, cancellationToken);
+            var cursor = await ReadEnterpriseAsync(call, organization, enterprise, server, saved, cancellationToken);
             if (cursor.IsFailure)
             {
                 _logger.LogWarning(
@@ -89,6 +96,7 @@ public sealed class VetisIncomingLoadService : IVetisIncomingLoader
         OrganizationEntity organization,
         OrganizationEnterprise enterprise,
         VetisSettings server,
+        HashSet<string> saved,
         CancellationToken cancellationToken)
     {
         var end = _clock.GetLocalNow();
@@ -130,9 +138,9 @@ public sealed class VetisIncomingLoadService : IVetisIncomingLoader
                     break;
                 }
 
-                var saved = await SaveDocumentsAsync(organization.Id, enterprise.Guid, result.Documents);
-                if (saved.IsFailure)
-                    return Result.Failure<DateTimeOffset>("ВСД получены, но не сохранены: " + saved.Error);
+                var stored = await SaveDocumentsAsync(organization.Id, enterprise.Guid, result.Documents, saved);
+                if (stored.IsFailure)
+                    return Result.Failure<DateTimeOffset>("ВСД получены, но не сохранены: " + stored.Error);
 
                 latestUpdate = Latest(latestUpdate, result.Documents);
                 if (result.PageCount < pageSize)
@@ -153,7 +161,11 @@ public sealed class VetisIncomingLoadService : IVetisIncomingLoader
             : Result.Success(cursor.Value);
     }
 
-    private async Task<Result> SaveDocumentsAsync(string organizationId, string enterpriseGuid, IReadOnlyList<VetisIncomingVsd> vsds)
+    private async Task<Result> SaveDocumentsAsync(
+        string organizationId,
+        string enterpriseGuid,
+        IReadOnlyList<VetisIncomingVsd> vsds,
+        HashSet<string> saved)
     {
         var grouped = VetisIncomingDocumentEntity.Group(organizationId, enterpriseGuid, vsds);
         var owner = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -184,11 +196,13 @@ public sealed class VetisIncomingLoadService : IVetisIncomingLoader
                 target.Drop(movedAway);
             }
 
-            var saved = await _incoming.Save(target);
-            if (saved.IsFailure)
-                return saved;
+            var written = await _incoming.Save(target);
+            if (written.IsFailure)
+                return written;
 
             keep.Add(target.Id);
+            // Одна накладная на двух страницах списка не должна считаться дважды.
+            saved.Add(target.Id);
             uuids.AddRange(target.Vsds.Select(item => item.Uuid));
         }
 

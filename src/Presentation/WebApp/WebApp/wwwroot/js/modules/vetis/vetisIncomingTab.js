@@ -31,6 +31,8 @@ export class VetisIncomingTab {
                     { id: "enterpriseName", header: "Предприятие", width: 240 },
                     { id: "vsd", header: "ВСД", width: 90, template: (row) => vsdCountText(row) },
                     { id: "status", header: "Статус", width: 170, template: (row) => this._statusBadge(row.status) },
+                    { id: "quenchedBy", header: "Автор", width: 160 },
+                    { id: "quenchedAt", header: "Погашен", width: 150, template: (row) => formatIsoMoment(row.quenchedAt) },
                 ]),
             ],
         };
