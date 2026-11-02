@@ -8,6 +8,7 @@ using Domain.Dto.Responces;
 using Domain.Entitys.Instance;
 using Domain.Entitys.Instance.Dto;
 using Domain.Entitys.Instance.Interfaces;
+using Domain.Entitys.InstanceGroup;
 using Domain.Entitys.Interfaces;
 using Domain.Entitys.SoftwareUpdateFiles;
 using Microsoft.AspNetCore.Http;
@@ -350,16 +351,99 @@ public class CheckerDistributionServiceTests
         return parameters;
     }
 
+    [Fact]
+    public async Task Build_кладёт_settings_json_рядом_с_exe()
+    {
+        var dir = Directory.CreateTempSubdirectory();
+        try
+        {
+            var template = Path.Combine(dir.FullName, "update.zip");
+            var package = ZipWithFullPackage();
+            await File.WriteAllBytesAsync(template, package);
+            var body = """{"serverConfig":{"apiIpPort":2599}}"""u8.ToArray();
+            var groups = new FakeGroupSettings();
+            groups.Files["g1"] = body;
+            var sut = CreateSut(WithAddress(), dir.FullName, new FakeUpdates(), new FakeInstances { GroupId = "g1" }, groups);
+
+            var result = await sut.Build("inst-token-1");
+
+            Assert.True(result.IsSuccess);
+            using var zip = new ZipArchive(result.Value.Content, ZipArchiveMode.Read);
+            var settings = zip.GetEntry("fmu-api-check/12.1/settings.json");
+            Assert.NotNull(settings);
+            await using var stream = settings.Open();
+            using var memory = new MemoryStream();
+            await stream.CopyToAsync(memory);
+            Assert.Equal(body, memory.ToArray());
+            var config = zip.GetEntry("fmu-api-check/12.1/config.json");
+            Assert.NotNull(config);
+            await using var configStream = config.Open();
+            var json = await JsonSerializer.DeserializeAsync<JsonElement>(configStream);
+            Assert.Equal("https://central.example:2579", json.GetProperty("serverAddress").GetString());
+            Assert.Equal("inst-token-1", json.GetProperty("token").GetString());
+            Assert.Equal(package, await File.ReadAllBytesAsync(template));
+        }
+        finally
+        {
+            dir.Delete(true);
+        }
+    }
+
+    [Fact]
+    public async Task Build_без_группы_и_без_файла_не_кладёт_settings_json()
+    {
+        var dir = Directory.CreateTempSubdirectory();
+        try
+        {
+            await File.WriteAllBytesAsync(Path.Combine(dir.FullName, "update.zip"), ZipWithFullPackage());
+            var sut = CreateSut(WithAddress(), dir.FullName, new FakeUpdates(), new FakeInstances { GroupId = "g1" });
+
+            var result = await sut.Build("inst-token-1");
+
+            Assert.True(result.IsSuccess);
+            using var zip = new ZipArchive(result.Value.Content, ZipArchiveMode.Read);
+            Assert.Null(zip.GetEntry("fmu-api-check/12.1/settings.json"));
+            Assert.NotNull(zip.GetEntry("fmu-api-check/12.1/config.json"));
+        }
+        finally
+        {
+            dir.Delete(true);
+        }
+    }
+
+    [Fact]
+    public async Task Build_ошибка_чтения_файла_группы_не_отдаёт_пакет()
+    {
+        var dir = Directory.CreateTempSubdirectory();
+        try
+        {
+            await File.WriteAllBytesAsync(Path.Combine(dir.FullName, "update.zip"), ZipWithFullPackage());
+            var groups = new FakeGroupSettings { FailRead = true };
+            var sut = CreateSut(WithAddress(), dir.FullName, new FakeUpdates(), new FakeInstances { GroupId = "g1" }, groups);
+
+            var result = await sut.Build("inst-token-1");
+
+            Assert.True(result.IsFailure);
+            Assert.Equal("Не удалось прочитать настройки группы", result.Error);
+        }
+        finally
+        {
+            dir.Delete(true);
+        }
+    }
+
     private static CheckerDistributionService CreateSut(
         IParametersService parameters,
         string folder,
         ISoftwareUpdatesManagerService updates,
-        FakeInstances? instances = null)
+        FakeInstances? instances = null,
+        FakeGroupSettings? groups = null)
         => new(
             parameters,
             new FakeLocator(folder),
             updates,
             instances ?? new FakeInstances(),
+            groups ?? new FakeGroupSettings(),
             NullLogger<CheckerDistributionService>.Instance);
 
     private static async Task<string?> TokenFromBuild(CheckerDistributionService sut, string token)
@@ -402,13 +486,14 @@ public class CheckerDistributionServiceTests
     private sealed class FakeInstances : IInstanceRepository
     {
         public bool Found { get; init; } = true;
+        public string GroupId { get; init; } = string.Empty;
 
         public Task<Result<InstanceEntity>> ByToken(string token)
         {
             if (!Found)
                 return Task.FromResult(Result.Failure<InstanceEntity>($"Не найден fmu-api с токеном {token}"));
 
-            return Task.FromResult(Result.Success(new InstanceEntity { Id = token }));
+            return Task.FromResult(Result.Success(new InstanceEntity { Id = token, GroupId = GroupId }));
         }
 
         public Task<Result> Update(InstanceEntity instance) => throw new NotSupportedException();
@@ -419,6 +504,35 @@ public class CheckerDistributionServiceTests
         public Task<Result<List<InstanceEntity>>> All() => throw new NotSupportedException();
         public Task<Result<List<InstanceEntity>>> ByGroupIds(IReadOnlyList<string> groupIds) => throw new NotSupportedException();
         public Task<Result> ClearGroupLink(string groupId) => throw new NotSupportedException();
+    }
+
+    private sealed class FakeGroupSettings : IInstanceGroupRepository
+    {
+        public Dictionary<string, byte[]> Files { get; } = new();
+        public bool FailRead { get; init; }
+
+        public Task<Result<CheckerSettingsRead>> ReadCheckerSettings(string groupId)
+        {
+            if (FailRead)
+                return Task.FromResult(Result.Failure<CheckerSettingsRead>("чтение"));
+
+            if (!Files.TryGetValue(groupId, out var content))
+                return Task.FromResult(Result.Success(new CheckerSettingsRead(false, [])));
+
+            return Task.FromResult(Result.Success(new CheckerSettingsRead(true, content)));
+        }
+
+        public Task<Result> Create(InstanceGroupEntity entity) => throw new NotSupportedException();
+        public Task<Result> Update(InstanceGroupEntity entity) => throw new NotSupportedException();
+        public Task<Result<InstanceGroupEntity>> GetById(string id) => throw new NotSupportedException();
+        public Task<Result> Delete(string id) => throw new NotSupportedException();
+        public Task<PaginatedResponse<InstanceGroupEntity>> List(int pageNumber, int pageSize) => throw new NotSupportedException();
+        public Task<List<InstanceGroupEntity>> All() => throw new NotSupportedException();
+        public Task<List<InstanceGroupEntity>> ByListId(List<string> ids) => throw new NotSupportedException();
+        public Task<Result> ClearSettingsSchemaLink(string settingsSchemaId) => throw new NotSupportedException();
+        public Task<Result> ClearOrganizationLink(string organizationId) => throw new NotSupportedException();
+        public Task<Result> SaveCheckerSettings(string groupId, byte[] content) => throw new NotSupportedException();
+        public Task<Result> DeleteCheckerSettings(string groupId) => throw new NotSupportedException();
     }
 
     private sealed class FakeLocator : ICheckerTemplateLocator
