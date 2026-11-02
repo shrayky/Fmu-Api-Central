@@ -24,6 +24,21 @@ public class AlertTemplateManagerTests
         Assert.Equal(1, repository.Items.Count(template => template.Id == "check-online-nodes"));
     }
 
+    [Fact]
+    public async Task EnsureDefaults_добавляет_выключенный_шаблон_непогашенных_Ветис()
+    {
+        var repository = new MemoryTemplates();
+        var sut = new AlertTemplateManager(NullLogger<AlertTemplateManager>.Instance, repository);
+
+        var result = await sut.EnsureDefaults();
+
+        Assert.True(result.IsSuccess);
+        var template = Assert.Single(repository.Items, item => item.Id == "check-vetis-open-documents");
+        Assert.Equal("Непогашенные документы Ветис", template.Name);
+        Assert.False(template.Enabled);
+        Assert.Empty(template.Scheduler);
+    }
+
     private sealed class MemoryTemplates : IAlertTemplateRepository
     {
         public List<AlertTemplateEntity> Items { get; } = [];

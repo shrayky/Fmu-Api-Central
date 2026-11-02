@@ -20,6 +20,7 @@ using Domain.Entitys.Organization;
 using Domain.Entitys.Organization.Interfaces;
 using Domain.TrueApiIntegration;
 using Domain.TrueApiIntegration.Interfaces;
+using Domain.Vetis;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -209,6 +210,99 @@ public class AlertTemplateRunServiceTests
     }
 
     [Fact]
+    public async Task Preview_скрипт_Ветис_считает_непринятые_и_частичные_по_организации()
+    {
+        var script = AlertTemplateDefaults.All()
+            .Single(template => template.Id == "check-vetis-open-documents")
+            .Script;
+        var incoming = new MemoryVetisIncoming();
+        incoming.Store["d1"] = OpenDocument("d1", "o1", VetisIncomingStatus.NotAccepted);
+        incoming.Store["d2"] = OpenDocument("d2", "o1", VetisIncomingStatus.NotAccepted);
+        incoming.Store["d3"] = OpenDocument("d3", "o1", VetisIncomingStatus.Partial);
+        incoming.Store["d4"] = OpenDocument("d4", "o2", VetisIncomingStatus.Accepted);
+        incoming.Store["d5"] = OpenDocument("d5", "o2", VetisIncomingStatus.Rejected);
+        var sut = CreateSut(
+            new FakeMessageService("tg"),
+            globalEnabled: true,
+            DateTime.Now,
+            organizations:
+            [
+                new OrganizationEntity { Id = "o1", Name = "Ромашка" },
+                new OrganizationEntity { Id = "o2", Name = "Василек" },
+                new OrganizationEntity { Id = "o3", Name = "Лютик" }
+            ],
+            incoming: incoming);
+
+        var result = await sut.Preview(script);
+
+        Assert.True(result.IsSuccess);
+        Assert.Contains("Ромашка", result.Value.Message);
+        Assert.Contains("<u>3</u>", result.Value.Message);
+        Assert.Contains("не принят: 2", result.Value.Message);
+        Assert.Contains("частично: 1", result.Value.Message);
+        Assert.DoesNotContain("Василек", result.Value.Message);
+        Assert.DoesNotContain("Лютик", result.Value.Message);
+    }
+
+    [Fact]
+    public async Task Preview_логирует_если_журнал_Ветис_недоступен_и_молчит()
+    {
+        var script = AlertTemplateDefaults.All()
+            .Single(template => template.Id == "check-vetis-open-documents")
+            .Script;
+        var logger = new ListLogger<AlertTemplateRunService>();
+        var incoming = new MemoryVetisIncoming { OpenError = "CouchDB недоступна" };
+        incoming.Store["d1"] = OpenDocument("d1", "o1", VetisIncomingStatus.NotAccepted);
+        var sut = CreateSut(
+            new FakeMessageService("tg"),
+            globalEnabled: true,
+            DateTime.Now,
+            logger: logger,
+            organizations: [new OrganizationEntity { Id = "o1", Name = "Ромашка" }],
+            incoming: incoming,
+            licenseView: "Expires: 18.11.2026");
+
+        var result = await sut.Preview(script);
+
+        Assert.True(result.IsSuccess);
+        Assert.DoesNotContain("Ромашка", result.Value.Message);
+        Assert.Contains(logger.Messages, message => message.Contains("CouchDB недоступна"));
+    }
+
+    [Fact]
+    public async Task RunDueTemplates_непогашенные_Ветис_уходят_в_канал_организации()
+    {
+        var script = AlertTemplateDefaults.All()
+            .Single(template => template.Id == "check-vetis-open-documents")
+            .Script;
+        var incoming = new MemoryVetisIncoming();
+        incoming.Store["d1"] = OpenDocument("d1", "o1", VetisIncomingStatus.NotAccepted);
+        incoming.Store["d2"] = OpenDocument("d2", "o2", VetisIncomingStatus.Partial);
+        var sender = new FakeMessageService("tg");
+        var now = DateTime.Now;
+        var sut = CreateSut(
+            sender,
+            globalEnabled: true,
+            now,
+            script,
+            organizations:
+            [
+                new OrganizationEntity { Id = "o1", Name = "Ромашка" },
+                new OrganizationEntity { Id = "o2", Name = "Василек" }
+            ],
+            group1OrganizationIds: ["o1"],
+            incoming: incoming);
+
+        var result = await sut.RunDueTemplates(now);
+
+        Assert.True(result.IsSuccess);
+        Assert.Contains(sender.Sends, send => send.ChatId == 100 && send.Message.Contains("Ромашка"));
+        Assert.DoesNotContain(sender.Sends, send => send.ChatId == 100 && send.Message.Contains("Василек"));
+        Assert.Contains(sender.Sends, send => send.ChatId == 200 && send.Message.Contains("Василек"));
+        Assert.DoesNotContain(sender.Sends, send => send.ChatId == 200 && send.Message.Contains("Ромашка"));
+    }
+
+    [Fact]
     public async Task Preview_скрипт_сертификатов_сообщает_об_истёкшем()
     {
         var script = AlertTemplateDefaults.All()
@@ -386,7 +480,8 @@ public class AlertTemplateRunServiceTests
         IReadOnlyList<DigitalSignature>? certificates = null,
         IReadOnlyList<string>? group1OrganizationIds = null,
         string? licenseView = null,
-        ILogger<AlertTemplateRunService>? logger = null)
+        ILogger<AlertTemplateRunService>? logger = null,
+        MemoryVetisIncoming? incoming = null)
     {
         var factory = new FakeMessageServiceFactory
         {
@@ -458,8 +553,17 @@ public class AlertTemplateRunServiceTests
             groups,
             factory,
             new FakeDigitalSignatureService(certificates),
-            new FakeCryptoProLicenseService(licenseView));
+            new FakeCryptoProLicenseService(licenseView),
+            incoming ?? new MemoryVetisIncoming());
     }
+
+    private static VetisIncomingDocumentEntity OpenDocument(string id, string organizationId, string status) =>
+        new()
+        {
+            Id = id,
+            OrganizationId = organizationId,
+            Status = status
+        };
 
     private sealed class FakeTemplateRepository : IAlertTemplateRepository
     {

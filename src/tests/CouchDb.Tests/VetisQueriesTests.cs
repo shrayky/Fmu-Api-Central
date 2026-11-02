@@ -123,6 +123,24 @@ public class VetisQueriesTests
     }
 
     [Fact]
+    public void Open_листает_статус_по_индексу_без_XML()
+    {
+        var query = VetisIncomingQuery.StatusAfter(VetisIncomingStatus.Partial, "doc-9", 2000);
+
+        Assert.False(query.ContainsKey("skip"));
+        var selector = Assert.IsType<Dictionary<string, object>>(query["selector"]);
+        Assert.Equal(VetisIncomingStatus.Partial, selector["data.status"]);
+        var id = Assert.IsType<Dictionary<string, object>>(selector["data.id"]);
+        Assert.Equal("doc-9", id["$gt"]);
+        Assert.Equal(new[] { "vetis-incoming", "status-id-idx" }, Assert.IsType<string[]>(query["use_index"]));
+        Assert.Equal(2000, query["limit"]);
+        var fields = Assert.IsType<string[]>(query["fields"]);
+        Assert.Contains("data.id", fields);
+        Assert.Contains("data.organizationId", fields);
+        Assert.DoesNotContain("data.vsds", fields);
+    }
+
+    [Fact]
     public void Applications_листает_по_убыванию_времени_без_xml()
     {
         var query = VetisApplicationQuery.List(new VetisApplicationFilter { OrganizationId = "o1" }, skip: 0, limit: 51);

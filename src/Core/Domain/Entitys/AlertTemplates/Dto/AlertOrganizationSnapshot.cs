@@ -7,4 +7,6 @@ public record AlertOrganizationSnapshot
     public string Inn { get; init; } = string.Empty;
     public string CertificateNumber { get; init; } = string.Empty;
     public string? CertificateWorkUntil { get; init; }
+    public int VetisNotAccepted { get; init; }
+    public int VetisPartial { get; init; }
 }

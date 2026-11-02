@@ -166,4 +166,49 @@ public class VetisIncomingRepository : BaseCouchDbRepository<VetisIncomingDocume
             return Result.Failure<List<VetisIncomingKey>>($"Ошибка подсчёта непринятых документов Ветис: {ex.Message}");
         }
     }
+
+    public async Task<Result<List<VetisOpenKey>>> OpenKeys()
+    {
+        if (!_appState.DbState())
+            return Result.Failure<List<VetisOpenKey>>(DatabaseUnavailable);
+
+        try
+        {
+            var keys = new List<VetisOpenKey>();
+            foreach (var status in new[] { VetisIncomingStatus.NotAccepted, VetisIncomingStatus.Partial })
+            {
+                var page = await ReadOpenPage(status);
+                if (page.IsFailure)
+                    return Result.Failure<List<VetisOpenKey>>(page.Error);
+
+                keys.AddRange(page.Value);
+            }
+
+            return Result.Success(keys);
+        }
+        catch (Exception ex)
+        {
+            return Result.Failure<List<VetisOpenKey>>($"Ошибка подсчёта непогашенных документов Ветис: {ex.Message}");
+        }
+    }
+
+    private async Task<Result<List<VetisOpenKey>>> ReadOpenPage(string status)
+    {
+        var keys = new List<VetisOpenKey>();
+        var afterId = "";
+        for (var page = 0; page < MaxNotAcceptedPages; page++)
+        {
+            var loaded = await ExecuteMangoQueryAsync(VetisIncomingQuery.StatusAfter(status, afterId, NotAcceptedPageSize));
+            if (loaded.IsFailure)
+                return Result.Failure<List<VetisOpenKey>>(loaded.Error);
+
+            keys.AddRange(loaded.Value.Select(document => new VetisOpenKey(document.OrganizationId, status)));
+            if (loaded.Value.Count < NotAcceptedPageSize)
+                return Result.Success(keys);
+
+            afterId = loaded.Value[^1].Id;
+        }
+
+        return Result.Failure<List<VetisOpenKey>>($"Страниц больше {MaxNotAcceptedPages}.");
+    }
 }

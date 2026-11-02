@@ -131,3 +131,5 @@ public sealed class VetisIncomingKey
 
     public string EnterpriseGuid { get; init; } = "";
 }
+
+public readonly record struct VetisOpenKey(string OrganizationId, string Status);

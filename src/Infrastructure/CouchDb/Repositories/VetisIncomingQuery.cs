@@ -86,11 +86,17 @@ public static class VetisIncomingQuery
     /// `data.id` совпадает с `_id`, но у design-документов его нет — по нему курсор их и отсекает.
     /// </summary>
     public static Dictionary<string, object> NotAcceptedAfter(string afterId, int limit) =>
+        StatusAfter(VetisIncomingStatus.NotAccepted, afterId, limit);
+
+    /// <summary>
+    /// Страница одного статуса от ключа. Индекс равенства по status, поэтому «Не принят» и «Принят частично» читаются отдельными проходами.
+    /// </summary>
+    public static Dictionary<string, object> StatusAfter(string status, string afterId, int limit) =>
         new()
         {
             ["selector"] = new Dictionary<string, object>
             {
-                ["data.status"] = VetisIncomingStatus.NotAccepted,
+                ["data.status"] = status,
                 ["data.id"] = new Dictionary<string, object> { ["$gt"] = afterId ?? "" }
             },
             ["sort"] = new[]

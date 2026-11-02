@@ -38,6 +38,11 @@ public interface IVetisIncomingRepository
     Task<Result<List<VetisIncomingKey>>> NotAcceptedKeys();
 
     /// <summary>
+    /// «Не принят» и «Принят частично» без XML: оповещению нужна пара организация-статус.
+    /// </summary>
+    Task<Result<List<VetisOpenKey>>> OpenKeys();
+
+    /// <summary>
     /// Страница журнала по возрастанию id: после выравнивания у многих документов один ключ, и skip по нему дублирует строки.
     /// </summary>
     Task<Result<List<VetisIncomingHead>>> HeadsAfter(string afterId, int limit);

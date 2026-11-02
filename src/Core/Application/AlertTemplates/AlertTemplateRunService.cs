@@ -17,6 +17,7 @@ using Domain.Entitys.Organization.Interfaces;
 using Domain.TrueApiIntegration;
 using Domain.TrueApiIntegration.Interfaces;
 using Domain.Entitys.SettingsSchema;
+using Domain.Vetis;
 using Microsoft.Extensions.Logging;
 
 namespace Application.AlertTemplates;
@@ -39,6 +40,7 @@ public class AlertTemplateRunService : IAlertTemplateRunService
     private readonly IMessageServiceFactory _messageServiceFactory;
     private readonly IDigitalSignatureService _signatures;
     private readonly ICryptoProLicenseService _licenses;
+    private readonly IVetisIncomingRepository _incoming;
 
     public AlertTemplateRunService(
         ILogger<AlertTemplateRunService> logger,
@@ -53,7 +55,8 @@ public class AlertTemplateRunService : IAlertTemplateRunService
         IInstanceGroupRepository groups,
         IMessageServiceFactory messageServiceFactory,
         IDigitalSignatureService signatures,
-        ICryptoProLicenseService licenses)
+        ICryptoProLicenseService licenses,
+        IVetisIncomingRepository incoming)
     {
         _logger = logger;
         _templates = templates;
@@ -68,6 +71,7 @@ public class AlertTemplateRunService : IAlertTemplateRunService
         _messageServiceFactory = messageServiceFactory;
         _signatures = signatures;
         _licenses = licenses;
+        _incoming = incoming;
     }
 
     public async Task<Result> RunDueTemplates(DateTime now)
@@ -314,6 +318,8 @@ public class AlertTemplateRunService : IAlertTemplateRunService
             .GroupBy(certificate => certificate.Number.Trim(), StringComparer.OrdinalIgnoreCase)
             .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
 
+        var open = await LoadVetisOpen();
+
         return organizations
             .Select(organization =>
             {
@@ -327,9 +333,39 @@ public class AlertTemplateRunService : IAlertTemplateRunService
                         snapshot.CertificateNumber);
                 }
 
+                if (open.TryGetValue(snapshot.Id, out var counts))
+                    snapshot = snapshot with
+                    {
+                        VetisNotAccepted = counts.NotAccepted,
+                        VetisPartial = counts.Partial
+                    };
+
                 return snapshot;
             })
             .ToList();
+    }
+
+    /// <summary>
+    /// Сбой журнала не останавливает остальные шаблоны: счётчики остаются нулями.
+    /// </summary>
+    private async Task<Dictionary<string, (int NotAccepted, int Partial)>> LoadVetisOpen()
+    {
+        var keys = await _incoming.OpenKeys();
+        if (keys.IsFailure)
+        {
+            _logger.LogWarning("Входящие Ветис для шаблонов недоступны: {Error}", keys.Error);
+            return new Dictionary<string, (int NotAccepted, int Partial)>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        return keys.Value
+            .Where(item => !string.IsNullOrWhiteSpace(item.OrganizationId))
+            .GroupBy(item => item.OrganizationId, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                group => group.Key,
+                group => (
+                    NotAccepted: group.Count(item => item.Status == VetisIncomingStatus.NotAccepted),
+                    Partial: group.Count(item => item.Status == VetisIncomingStatus.Partial)),
+                StringComparer.OrdinalIgnoreCase);
     }
 
     private static AlertOrganizationSnapshot ToOrganizationSnapshot(

@@ -53,6 +53,8 @@ interface AlertOrganization {
     inn: string;
     certificateNumber: string;
     certificateWorkUntil?: string;
+    vetisNotAccepted: number;
+    vetisPartial: number;
 }
 
 interface AlertCryptoProLicense {

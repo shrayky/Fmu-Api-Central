@@ -15,7 +15,8 @@ public static class AlertTemplateDefaults
         Template("check-ts-piot-versions", "Версии ТС ПИоТ", CheckTsPiotVersions),
         Template("crpt-violations-yesterday", "Сводка отклонений ЧЗ", CrptViolationsYesterday),
         Template("check-organization-certificates", "Сертификаты организаций", CheckOrganizationCertificates),
-        Template("check-cryptopro-license", "Лицензия КриптоПро", CheckCryptoProLicense)
+        Template("check-cryptopro-license", "Лицензия КриптоПро", CheckCryptoProLicense),
+        Template("check-vetis-open-documents", "Непогашенные документы Ветис", CheckVetisOpenDocuments)
     ];
 
     private static AlertTemplateEntity Template(string id, string name, string script) => new()
@@ -280,5 +281,22 @@ public static class AlertTemplateDefaults
 
         const daysLeft = Math.round((until - today) / (24 * 60 * 60 * 1000));
         return { items: ["🚨<b>Лицензия КриптоПро</b> истекает через " + daysLeft + " дней!%0A дата: <u>" + dateText + "</u>!"] };
+        """;
+
+    private const string CheckVetisOpenDocuments =
+        """
+        const items = [];
+
+        (organizations || []).forEach(function (org) {
+            var notAccepted = org.vetisNotAccepted || 0;
+            var partial = org.vetisPartial || 0;
+            var open = notAccepted + partial;
+            if (open === 0)
+                return;
+
+            items.push("🚨<b>" + org.name + "</b>%0A Не погашено документов Ветис: <u>" + open + "</u> (не принят: " + notAccepted + ", частично: " + partial + ")");
+        });
+
+        return { items: items };
         """;
 }

@@ -199,6 +199,16 @@ internal sealed class MemoryVetisIncoming : IVetisIncomingRepository
                 .ToList())
             : Result.Failure<List<VetisIncomingKey>>(NotAcceptedError));
 
+    public string? OpenError { get; set; }
+
+    public Task<Result<List<VetisOpenKey>>> OpenKeys() =>
+        Task.FromResult(OpenError == null
+            ? Result.Success(Store.Values
+                .Where(item => item.Status is VetisIncomingStatus.NotAccepted or VetisIncomingStatus.Partial)
+                .Select(item => new VetisOpenKey(item.OrganizationId, item.Status))
+                .ToList())
+            : Result.Failure<List<VetisOpenKey>>(OpenError));
+
     private static VetisIncomingDocumentEntity Clone(VetisIncomingDocumentEntity entity) =>
         JsonSerializer.Deserialize<VetisIncomingDocumentEntity>(JsonSerializer.Serialize(entity))!;
 }
