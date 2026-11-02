@@ -29,7 +29,11 @@ class InstanceGroupElementView {
             test: "Тест",
             botNotConnected: "Бот не подключен",
             chatIdZero: "ID чата не может быть 0",
-            testSuccess: "Тест выполнен"
+            testSuccess: "Тест выполнен",
+            uploadSettings: "Загрузить настройки",
+            replaceSettings: "Заменить",
+            removeSettings: "Убрать",
+            settingsLoaded: "Настройки загружены"
         };
 
         this.NAMES = {
@@ -44,11 +48,17 @@ class InstanceGroupElementView {
             channelFields: "instanceGroupChannelFields",
             provider: "instanceGroupProvider",
             chatId: "instanceGroupChatId",
-            botToken: "instanceGroupBotToken"
+            botToken: "instanceGroupBotToken",
+            checkerSettings: "instanceGroupCheckerSettings",
+            checkerSettingsStatus: "instanceGroupCheckerSettingsStatus",
+            uploadSettings: "instanceGroupUploadSettings",
+            replaceSettings: "instanceGroupReplaceSettings",
+            removeSettings: "instanceGroupRemoveSettings"
         };
     }
 
     async showDialog(editedData = {}, onSuccess, onClose) {
+        this._saved = !!editedData.id;
         this.elementId = editedData.id || newUuid();
         const schemaOptions = await this._loadSchemaOptions();
         const currentSchemaId = editedData.settingsSchema?.id || "";
@@ -95,7 +105,8 @@ class InstanceGroupElementView {
                                             name: this.NAMES.settingsSchema,
                                             value: currentSchemaId,
                                             options: schemaOptions
-                                        }
+                                        },
+                                        ...(this._saved ? [this._checkerSettingsBlock(!!editedData.hasCheckerSettings)] : [])
                                     ]
                                 }
                             },
@@ -168,6 +179,94 @@ class InstanceGroupElementView {
                 nameField.focus();
             }
         }, 100);
+    }
+
+    _checkerSettingsBlock(hasFile) {
+        return {
+            id: this.NAMES.checkerSettings,
+            rows: [
+                {
+                    id: this.NAMES.checkerSettingsStatus,
+                    hidden: !hasFile,
+                    template: this.LABELS.settingsLoaded,
+                    autoheight: true,
+                    borderless: true
+                },
+                {
+                    cols: [
+                        {
+                            view: "button",
+                            id: this.NAMES.uploadSettings,
+                            hidden: hasFile,
+                            value: this.LABELS.uploadSettings,
+                            click: () => this._pickCheckerSettings()
+                        },
+                        {
+                            view: "button",
+                            id: this.NAMES.replaceSettings,
+                            hidden: !hasFile,
+                            value: this.LABELS.replaceSettings,
+                            click: () => this._pickCheckerSettings()
+                        },
+                        {
+                            view: "button",
+                            id: this.NAMES.removeSettings,
+                            hidden: !hasFile,
+                            value: this.LABELS.removeSettings,
+                            click: () => this._removeCheckerSettings()
+                        },
+                        {}
+                    ]
+                }
+            ]
+        };
+    }
+
+    _showCheckerSettings(hasFile) {
+        const status = $$(this.NAMES.checkerSettingsStatus);
+        const upload = $$(this.NAMES.uploadSettings);
+        const replace = $$(this.NAMES.replaceSettings);
+        const remove = $$(this.NAMES.removeSettings);
+        if (hasFile) {
+            status?.show();
+            upload?.hide();
+            replace?.show();
+            remove?.show();
+            return;
+        }
+
+        status?.hide();
+        upload?.show();
+        replace?.hide();
+        remove?.hide();
+    }
+
+    _pickCheckerSettings() {
+        const input = document.createElement("input");
+        input.type = "file";
+        input.accept = ".json,application/json";
+        input.onchange = async () => {
+            const file = input.files && input.files[0];
+            if (!file)
+                return;
+
+            try {
+                await instanceGroupService.uploadCheckerSettings(this.elementId, file);
+                this._showCheckerSettings(true);
+            } catch (error) {
+                webix.message({ text: error.message, type: "error" });
+            }
+        };
+        input.click();
+    }
+
+    async _removeCheckerSettings() {
+        try {
+            await instanceGroupService.deleteCheckerSettings(this.elementId);
+            this._showCheckerSettings(false);
+        } catch (error) {
+            webix.message({ text: error.message, type: "error" });
+        }
     }
 
     _setChannelFieldsEnabled(enabled) {
