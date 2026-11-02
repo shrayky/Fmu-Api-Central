@@ -1,6 +1,7 @@
 import { Text, Number as NumberField, CheckBox } from '../../utils/ui.js';
 import { newUuid } from '../../utils/uuid.js';
 import settingsSchemaService from '../../services/settingsSchemaService.js';
+import { hasGroupSetting } from './hasGroupSetting.js';
 
 class SettingsSchemaElementView {
     constructor() {
@@ -30,6 +31,7 @@ class SettingsSchemaElementView {
             addMapping: "Добавить",
             removeMapping: "Удалить",
             fillDefaults: "Заполнить по умолчанию",
+            onlyWithSettings: "Только с настройкой",
             hosts: "Хосты пинга",
             host: "Хост",
             addHost: "Добавить",
@@ -47,6 +49,7 @@ class SettingsSchemaElementView {
             checkInternetConnectionTimeout: "settingsSchemaInternetTimeout",
             syncWithTsPiot: "settingsSchemaSyncWithTsPiot",
             mappingTable: "settingsSchemaMappingTable",
+            onlyWithSettings: "settingsSchemaOnlyWithSettings",
             hostsTable: "settingsSchemaHostsTable",
             helpWindow: "settingsSchemaMappingHelp"
         };
@@ -169,6 +172,17 @@ class SettingsSchemaElementView {
                     click: () => this._fillDefaults()
                 },
                 {
+                    view: "toggle",
+                    id: this.NAMES.onlyWithSettings,
+                    label: this.LABELS.onlyWithSettings,
+                    offLabel: this.LABELS.onlyWithSettings,
+                    onLabel: this.LABELS.onlyWithSettings,
+                    width: 190,
+                    on: {
+                        onChange: () => this._applyMappingFilter()
+                    }
+                },
+                {
                     view: "button",
                     value: this.LABELS.help,
                     width: 40,
@@ -239,7 +253,8 @@ class SettingsSchemaElementView {
             checkboxRefresh: true,
             data: mappings.map((row) => this._toRow(row)),
             on: {
-                onAfterEditStop: (state, editor) => this._onMappingEdited(state, editor)
+                onAfterEditStop: (state, editor) => this._onMappingEdited(state, editor),
+                onCheck: () => this._applyMappingFilter()
             }
         };
     }
@@ -265,6 +280,10 @@ class SettingsSchemaElementView {
     }
 
     _addMapping() {
+        const toggle = $$(this.NAMES.onlyWithSettings);
+        if (toggle && toggle.getValue())
+            toggle.setValue(0);
+
         const table = $$(this.NAMES.mappingTable);
         const id = webix.uid();
         table.add({
@@ -355,6 +374,19 @@ class SettingsSchemaElementView {
         const table = $$(this.NAMES.mappingTable);
         table.clearAll();
         table.parse(mappings.map((row) => this._toRow(row)));
+        this._applyMappingFilter();
+    }
+
+    _applyMappingFilter() {
+        const table = $$(this.NAMES.mappingTable);
+        if (!table)
+            return;
+
+        const onlyWithSettings = !!$$(this.NAMES.onlyWithSettings)?.getValue();
+        if (onlyWithSettings)
+            table.filter((row) => hasGroupSetting(row));
+        else
+            table.filter();
     }
 
     _onMappingEdited(state, editor) {
@@ -383,6 +415,7 @@ class SettingsSchemaElementView {
             haveExpireDate: !!preset.haveExpireDate,
             forbidSaleByExpireDate: !!preset.forbidSaleByExpireDate
         });
+        this._applyMappingFilter();
     }
 
     _createButtons(onSuccess, onClose) {
@@ -453,6 +486,7 @@ class SettingsSchemaElementView {
         const table = $$(this.NAMES.mappingTable);
         const rows = [];
 
+        // true — все строки, скрытые фильтром тоже уходят в схему
         table.data.each((item) => {
             const atolCode = this._toInt(item.atolCode);
             if (!atolCode) {
@@ -469,7 +503,7 @@ class SettingsSchemaElementView {
                 haveExpireDate: !!item.haveExpireDate,
                 forbidSaleByExpireDate: !!item.forbidSaleByExpireDate
             });
-        });
+        }, null, true);
 
         return rows;
     }
