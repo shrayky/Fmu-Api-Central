@@ -109,6 +109,26 @@ class InstanceGroupService {
 
         return true;
     }
+
+    async uploadCheckerSettings(groupId, file) {
+        const formData = new FormData();
+        formData.append("file", file);
+        const data = await this.authService.makeAuthenticatedRequest(
+            `${this.apiEndpoint}/${encodeURIComponent(groupId)}/checker-settings`,
+            { method: "POST", body: formData }
+        );
+        if (!data.result)
+            throw new Error(data.error);
+    }
+
+    async deleteCheckerSettings(groupId) {
+        const data = await this.authService.makeAuthenticatedRequest(
+            `${this.apiEndpoint}/${encodeURIComponent(groupId)}/checker-settings`,
+            { method: "DELETE" }
+        );
+        if (!data.result)
+            throw new Error(data.error);
+    }
 }
 
 export default new InstanceGroupService();
