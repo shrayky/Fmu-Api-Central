@@ -225,6 +225,33 @@ public class InstanceGroupManagerService : IInstanceGroupManagerService
             "Халло, мир!%0AСЧАСТЬЕ ДЛЯ ВСЕХ, ДАРОМ, И ПУСТЬ НИКТО НЕ УЙДЁТ ОБИЖЕННЫМ!");
     }
 
+    public async Task<Result> SaveCheckerSettings(string groupId, byte[] content)
+    {
+        if (string.IsNullOrWhiteSpace(groupId))
+            return Result.Failure(CheckerSettingsAttachment.GroupNotFoundMessage);
+
+        var exist = await _repository.GetById(groupId);
+        if (exist.IsFailure)
+            return Result.Failure(CheckerSettingsAttachment.GroupNotFoundMessage);
+
+        if (!CheckerSettingsFile.IsJsonObject(content))
+            return Result.Failure(CheckerSettingsAttachment.InvalidJsonMessage);
+
+        return await _repository.SaveCheckerSettings(groupId, content);
+    }
+
+    public async Task<Result> DeleteCheckerSettings(string groupId)
+    {
+        if (string.IsNullOrWhiteSpace(groupId))
+            return Result.Failure(CheckerSettingsAttachment.GroupNotFoundMessage);
+
+        var exist = await _repository.GetById(groupId);
+        if (exist.IsFailure)
+            return Result.Failure(CheckerSettingsAttachment.GroupNotFoundMessage);
+
+        return await _repository.DeleteCheckerSettings(groupId);
+    }
+
     private static void Apply(InstanceGroupEntity entity, InstanceGroupView data)
     {
         entity.Name = data.Name;
@@ -253,7 +280,8 @@ public class InstanceGroupManagerService : IInstanceGroupManagerService
             Name = schemaName
         },
         OrganizationIds = entity.OrganizationIds ?? [],
-        AlertChannel = entity.AlertChannel ?? AlertChannel.Disabled()
+        AlertChannel = entity.AlertChannel ?? AlertChannel.Disabled(),
+        HasCheckerSettings = entity.HasCheckerSettings
     };
 
     private async Task<Dictionary<string, string>> ResolveSchemaNames(IEnumerable<string> schemaIds)

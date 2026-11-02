@@ -439,6 +439,15 @@ public class InstanceManagerServiceTests
 
         public Task<Result> ClearOrganizationLink(string organizationId)
             => throw new NotImplementedException();
+
+        public Task<Result> SaveCheckerSettings(string groupId, byte[] content)
+            => throw new NotImplementedException();
+
+        public Task<Result> DeleteCheckerSettings(string groupId)
+            => throw new NotImplementedException();
+
+        public Task<Result<CheckerSettingsRead>> ReadCheckerSettings(string groupId)
+            => throw new NotImplementedException();
     }
 
     private sealed class UnusedSettingsSchemaRepository : ISettingsSchemaRepository
