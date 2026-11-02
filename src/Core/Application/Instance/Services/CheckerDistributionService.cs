@@ -6,6 +6,7 @@ using Domain.Configuration.Interfaces;
 using Domain.Dto.Checker;
 using Domain.Entitys.Instance.Dto;
 using Domain.Entitys.Instance.Interfaces;
+using Domain.Entitys.InstanceGroup;
 using Domain.Entitys.Interfaces;
 using Domain.Entitys.SoftwareUpdateFiles;
 using Microsoft.Extensions.Logging;
@@ -23,6 +24,7 @@ public class CheckerDistributionService : ICheckerDistributionService
     private readonly ICheckerTemplateLocator _templateLocator;
     private readonly ISoftwareUpdatesManagerService _softwareUpdates;
     private readonly IInstanceRepository _instances;
+    private readonly IInstanceGroupRepository _groups;
     private readonly ILogger<CheckerDistributionService> _logger;
 
     /// <summary>
@@ -35,12 +37,14 @@ public class CheckerDistributionService : ICheckerDistributionService
         ICheckerTemplateLocator templateLocator,
         ISoftwareUpdatesManagerService softwareUpdates,
         IInstanceRepository instances,
+        IInstanceGroupRepository groups,
         ILogger<CheckerDistributionService> logger)
     {
         _parametersService = parametersService;
         _templateLocator = templateLocator;
         _softwareUpdates = softwareUpdates;
         _instances = instances;
+        _groups = groups;
         _logger = logger;
     }
 
@@ -57,6 +61,16 @@ public class CheckerDistributionService : ICheckerDistributionService
         var address = parameters.ServerSettings.PublicAddress?.Trim() ?? string.Empty;
         if (address.Length == 0)
             return Result.Failure<CheckerDistributionDownload>("Не задан публичный адрес сервера");
+
+        CheckerSettingsRead bundled = new(false, []);
+        if (!string.IsNullOrEmpty(instance.Value.GroupId))
+        {
+            var read = await _groups.ReadCheckerSettings(instance.Value.GroupId);
+            if (read.IsFailure)
+                return Result.Failure<CheckerDistributionDownload>(CheckerSettingsAttachment.ReadFailedMessage);
+
+            bundled = read.Value;
+        }
 
         if (!await BuildGate.WaitAsync(0))
             return Result.Failure<CheckerDistributionDownload>(CheckerDistributionLimits.Busy);
@@ -94,6 +108,20 @@ public class CheckerDistributionService : ICheckerDistributionService
                     ServerAddress = address,
                     Token = token.Trim()
                 }, JsonSerializeOptionsProvider.Default());
+
+                if (bundled.Exists)
+                {
+                    var settingsName = ZipDirectoryPrefix(exeEntry.FullName) + CheckerSettingsAttachment.Name;
+                    foreach (var existing in zip.Entries.Where(item =>
+                                 item.FullName.Replace('\\', '/').Equals(settingsName, StringComparison.OrdinalIgnoreCase)).ToList())
+                    {
+                        existing.Delete();
+                    }
+
+                    var settingsEntry = zip.CreateEntry(settingsName);
+                    await using var settingsStream = settingsEntry.Open();
+                    await settingsStream.WriteAsync(bundled.Content);
+                }
             }
 
             stream.Position = 0;
