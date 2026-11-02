@@ -1,9 +1,12 @@
+using CouchDb.DatabaseScheme;
 using CouchDB.Driver.Extensions;
 using CSharpFunctionalExtensions;
 using Domain.Dto.Responces;
 using Domain.Entitys.InstanceGroup;
 using Domain.Entitys.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
+using System.Net.Http.Headers;
+using System.Text;
 
 namespace CouchDb.Repositories;
 
@@ -11,9 +14,12 @@ public class InstanceGroupsRepository : BaseCouchDbRepository<InstanceGroupEntit
 {
     private const string LogRepository = "группы инстансов";
 
+    private readonly IHttpClientFactory _httpClientFactory;
+
     public InstanceGroupsRepository(IServiceProvider services) : base(
         services.GetRequiredService<Context>().InstanceGroups, services)
     {
+        _httpClientFactory = services.GetRequiredService<IHttpClientFactory>();
     }
 
     public async Task<Result> Create(InstanceGroupEntity entity)
@@ -118,9 +124,16 @@ public class InstanceGroupsRepository : BaseCouchDbRepository<InstanceGroupEntit
                 .Take(pageSize)
                 .ToListAsync();
 
+            var content = new List<InstanceGroupEntity>();
+            foreach (var record in entities)
+            {
+                record.Data.HasCheckerSettings = await HasSettingsAttachment(record.Data.Id);
+                content.Add(record.Data);
+            }
+
             return new PaginatedResponse<InstanceGroupEntity>
             {
-                Content = entities.Select(record => record.Data),
+                Content = content,
                 CurrentPage = pageNumber,
                 PageSize = pageSize,
                 TotalCount = await RecordCount(),
@@ -222,5 +235,76 @@ public class InstanceGroupsRepository : BaseCouchDbRepository<InstanceGroupEntit
         {
             return Result.Failure(ex.Message);
         }
+    }
+
+    public async Task<Result> SaveCheckerSettings(string groupId, byte[] content)
+    {
+        if (!_appState.DbState())
+            return Result.Failure(DatabaseUnavailable);
+
+        var directory = Directory.CreateTempSubdirectory("checker-settings");
+        var path = Path.Combine(directory.FullName, CheckerSettingsAttachment.Name);
+        try
+        {
+            await File.WriteAllBytesAsync(path, content);
+            var response = await _database.ReadItemAsync(groupId);
+            if (response == null)
+                return Result.Failure(CheckerSettingsAttachment.GroupNotFoundMessage);
+
+            await _database.UpsertAttachmentAsync(groupId, response.Rev, path, "application/json");
+            return Result.Success();
+        }
+        finally
+        {
+            directory.Delete(true);
+        }
+    }
+
+    public async Task<Result> DeleteCheckerSettings(string groupId)
+    {
+        if (!_appState.DbState())
+            return Result.Failure(DatabaseUnavailable);
+
+        var response = await _database.ReadItemAsync(groupId);
+        if (response == null)
+            return Result.Failure(CheckerSettingsAttachment.GroupNotFoundMessage);
+
+        if (response.Attachments?.Any(item =>
+                string.Equals(item.Name, CheckerSettingsAttachment.Name, StringComparison.OrdinalIgnoreCase)) != true)
+            return Result.Success();
+
+        await _database.DeleteAttachmentAsync(groupId, response.Rev, CheckerSettingsAttachment.Name);
+        return Result.Success();
+    }
+
+    public async Task<Result<CheckerSettingsRead>> ReadCheckerSettings(string groupId)
+    {
+        if (!_appState.DbState())
+            return Result.Failure<CheckerSettingsRead>(DatabaseUnavailable);
+
+        var response = await _database.ReadItemAsync(groupId);
+        if (response == null || response.Attachments?.Any(item =>
+                string.Equals(item.Name, CheckerSettingsAttachment.Name, StringComparison.OrdinalIgnoreCase)) != true)
+            return Result.Success(new CheckerSettingsRead(false, []));
+
+        var settings = await _parameters.Current();
+        var uri = $"{settings.DatabaseConnection.NetAddress.TrimEnd('/')}/{DatabaseNames.InstanceGroup}/{Uri.EscapeDataString(groupId)}/{Uri.EscapeDataString(CheckerSettingsAttachment.Name)}";
+        var client = _httpClientFactory.CreateClient(SoftwareUpdateFilesRepository.AttachmentHttpClientName);
+        using var request = new HttpRequestMessage(HttpMethod.Get, uri);
+        var token = Convert.ToBase64String(Encoding.ASCII.GetBytes(
+            $"{settings.DatabaseConnection.UserName}:{settings.DatabaseConnection.Password}"));
+        request.Headers.Authorization = new AuthenticationHeaderValue("Basic", token);
+        using var http = await client.SendAsync(request);
+        if (!http.IsSuccessStatusCode)
+            return Result.Failure<CheckerSettingsRead>(CheckerSettingsAttachment.ReadFailedMessage);
+
+        return Result.Success(new CheckerSettingsRead(true, await http.Content.ReadAsByteArrayAsync()));
+    }
+
+    private async Task<bool> HasSettingsAttachment(string groupId)
+    {
+        var response = await _database.ReadItemAsync(groupId);
+        return response?.Attachments?.Any(item =>
+            string.Equals(item.Name, CheckerSettingsAttachment.Name, StringComparison.OrdinalIgnoreCase)) == true;
     }
 }
