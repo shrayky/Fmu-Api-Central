@@ -5,6 +5,7 @@ import {
     detectPreset,
     getDefaultFilters,
     getPresetDates,
+    refreshPresetDates,
     PERIOD_PRESETS,
     PRESET_LABELS,
 } from './markCheckStatisticsPeriodPresets.js';
@@ -21,6 +22,7 @@ class MarkCheckStatisticsListView {
         this.filters = this._loadFilters();
         this.groups = [];
         this.activePreset = this.filters.periodPreset || PERIOD_PRESETS.today;
+        this._syncPresetDates();
 
         this.LABELS = {
             formTitle: "Fmu-Api-Central: Статистика проверок марок",
@@ -100,6 +102,16 @@ class MarkCheckStatisticsListView {
 
     _saveFilters() {
         localStorage.setItem('markCheckStatistics_filters', JSON.stringify(this.filters));
+    }
+
+    _syncPresetDates() {
+        const filters = refreshPresetDates(this.filters);
+        if (filters === this.filters) {
+            return;
+        }
+
+        this.filters = filters;
+        this._saveFilters();
     }
 
     _saveSettings() {
@@ -374,6 +386,7 @@ class MarkCheckStatisticsListView {
     }
 
     async _loadData() {
+        this._syncPresetDates();
         this._disableHotkeys();
 
         try {

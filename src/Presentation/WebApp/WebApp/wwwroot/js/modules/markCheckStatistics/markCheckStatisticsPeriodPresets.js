@@ -19,8 +19,8 @@ function startOfDay(date) {
 }
 
 /// Возвращает диапазон дат для быстрого выбора периода.
-export function getPresetDates(preset) {
-    const today = startOfDay(new Date());
+export function getPresetDates(preset, now = new Date()) {
+    const today = startOfDay(now);
 
     switch (preset) {
         case PERIOD_PRESETS.yesterday: {
@@ -84,6 +84,32 @@ export function getDefaultFilters() {
         successRateMin: "",
         offlineRateMin: "",
         periodPreset: PERIOD_PRESETS.today,
+        ...dates,
+    };
+}
+
+const DATED_PRESETS = new Set([
+    PERIOD_PRESETS.today,
+    PERIOD_PRESETS.yesterday,
+    PERIOD_PRESETS.week,
+    PERIOD_PRESETS.month,
+]);
+
+/**
+ * Даты пресета в localStorage не сдвигаются сами: «Сегодня» остаётся вчерашним днём.
+ */
+export function refreshPresetDates(filters, now = new Date()) {
+    if (!filters || !DATED_PRESETS.has(filters.periodPreset)) {
+        return filters;
+    }
+
+    const dates = getPresetDates(filters.periodPreset, now);
+    if (filters.dateFrom === dates.dateFrom && filters.dateTo === dates.dateTo) {
+        return filters;
+    }
+
+    return {
+        ...filters,
         ...dates,
     };
 }
