@@ -15,4 +15,7 @@ public interface IInstanceGroupRepository
     Task<List<InstanceGroupEntity>> ByListId(List<string> ids);
     Task<Result> ClearSettingsSchemaLink(string settingsSchemaId);
     Task<Result> ClearOrganizationLink(string organizationId);
+    Task<Result> SaveCheckerSettings(string groupId, byte[] content);
+    Task<Result> DeleteCheckerSettings(string groupId);
+    Task<Result<CheckerSettingsRead>> ReadCheckerSettings(string groupId);
 }

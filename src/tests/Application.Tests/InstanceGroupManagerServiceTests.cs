@@ -204,20 +204,126 @@ public class InstanceGroupManagerServiceTests
         Assert.Null(sender.LastMessage);
     }
 
+    [Fact]
+    public async Task SaveCheckerSettings_пишет_объект()
+    {
+        var repo = new FakeGroupRepository();
+        repo.Store["g1"] = new InstanceGroupEntity { Id = "g1", Name = "Группа" };
+        var sut = CreateSut(repo);
+        var body = """{"serverConfig":{"apiIpPort":2599}}"""u8.ToArray();
+
+        var result = await sut.SaveCheckerSettings("g1", body);
+
+        Assert.True(result.IsSuccess);
+        var read = await repo.ReadCheckerSettings("g1");
+        Assert.True(read.Value.Exists);
+        Assert.Equal(body, read.Value.Content);
+    }
+
+    [Fact]
+    public async Task SaveCheckerSettings_битый_файл_не_пишет()
+    {
+        var repo = new FakeGroupRepository();
+        repo.Store["g1"] = new InstanceGroupEntity { Id = "g1", Name = "Группа" };
+        var sut = CreateSut(repo);
+
+        var result = await sut.SaveCheckerSettings("g1", "{"u8.ToArray());
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("Файл настроек должен быть JSON-объектом", result.Error);
+        Assert.False((await repo.ReadCheckerSettings("g1")).Value.Exists);
+    }
+
+    [Fact]
+    public async Task SaveCheckerSettings_нет_группы()
+    {
+        var sut = CreateSut(new FakeGroupRepository());
+
+        var result = await sut.SaveCheckerSettings("missing", """{"a":1}"""u8.ToArray());
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("Группа не найдена", result.Error);
+    }
+
+    [Fact]
+    public async Task SaveCheckerSettings_замена_перезаписывает_байты()
+    {
+        var repo = new FakeGroupRepository();
+        repo.Store["g1"] = new InstanceGroupEntity { Id = "g1", Name = "Группа" };
+        var sut = CreateSut(repo);
+        await sut.SaveCheckerSettings("g1", """{"a":1}"""u8.ToArray());
+        var next = """{"a":2}"""u8.ToArray();
+
+        Assert.True((await sut.SaveCheckerSettings("g1", next)).IsSuccess);
+        Assert.Equal(next, (await repo.ReadCheckerSettings("g1")).Value.Content);
+    }
+
+    [Fact]
+    public async Task Create_не_стирает_файл_настроек()
+    {
+        var repo = new FakeGroupRepository();
+        repo.Store["g1"] = new InstanceGroupEntity { Id = "g1", Name = "Группа" };
+        var sut = CreateSut(repo);
+        var body = """{"a":1}"""u8.ToArray();
+        Assert.True((await sut.SaveCheckerSettings("g1", body)).IsSuccess);
+
+        var saved = await sut.Create(new InstanceGroupView { Id = "g1", Name = "Новое имя" });
+
+        Assert.True(saved.IsSuccess);
+        Assert.Equal("Новое имя", repo.Store["g1"].Name);
+        Assert.Equal(body, (await repo.ReadCheckerSettings("g1")).Value.Content);
+    }
+
+    [Fact]
+    public async Task DeleteCheckerSettings_снимает_и_повтор_не_ошибка()
+    {
+        var repo = new FakeGroupRepository();
+        repo.Store["g1"] = new InstanceGroupEntity { Id = "g1", Name = "Группа" };
+        var sut = CreateSut(repo);
+        await sut.SaveCheckerSettings("g1", """{"a":1}"""u8.ToArray());
+
+        Assert.True((await sut.DeleteCheckerSettings("g1")).IsSuccess);
+        Assert.False((await repo.ReadCheckerSettings("g1")).Value.Exists);
+        Assert.True((await sut.DeleteCheckerSettings("g1")).IsSuccess);
+    }
+
+    [Fact]
+    public async Task DeleteCheckerSettings_нет_группы()
+    {
+        var result = await CreateSut(new FakeGroupRepository()).DeleteCheckerSettings("missing");
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("Группа не найдена", result.Error);
+    }
+
+    [Fact]
+    public async Task List_отдаёт_признак_файла()
+    {
+        var repo = new FakeGroupRepository();
+        repo.Store["g1"] = new InstanceGroupEntity { Id = "g1", Name = "Группа", HasCheckerSettings = true };
+        var sut = CreateSut(repo, parameters: new ListParameters());
+
+        var page = await sut.List(1, 10);
+
+        Assert.True(page.Content.Single().HasCheckerSettings);
+    }
+
     private static InstanceGroupManagerService CreateSut(
         FakeGroupRepository repository,
-        IMessageServiceFactory? messageServiceFactory = null)
+        IMessageServiceFactory? messageServiceFactory = null,
+        IParametersService? parameters = null)
         => new(
             repository,
             new UnusedInstanceRepository(),
             new UnusedInstanceManagerService(),
             new UnusedSettingsSchemaRepository(),
-            new UnusedParametersService(),
+            parameters ?? new UnusedParametersService(),
             messageServiceFactory ?? new FakeMessageServiceFactory());
 
     private sealed class FakeGroupRepository : IInstanceGroupRepository
     {
         public Dictionary<string, InstanceGroupEntity> Store { get; } = new();
+        public Dictionary<string, byte[]> Files { get; } = new();
 
         public Task<Result> Create(InstanceGroupEntity entity)
         {
@@ -239,7 +345,34 @@ public class InstanceGroupManagerServiceTests
         public Task<Result> Delete(string id) => throw new NotImplementedException();
 
         public Task<PaginatedResponse<InstanceGroupEntity>> List(int pageNumber, int pageSize)
-            => throw new NotImplementedException();
+            => Task.FromResult(new PaginatedResponse<InstanceGroupEntity>
+            {
+                Content = Store.Values.ToList(),
+                TotalCount = Store.Count,
+                CurrentPage = pageNumber,
+                PageSize = pageSize,
+                ListEnabled = true
+            });
+
+        public Task<Result> SaveCheckerSettings(string groupId, byte[] content)
+        {
+            Files[groupId] = content.ToArray();
+            return Task.FromResult(Result.Success());
+        }
+
+        public Task<Result> DeleteCheckerSettings(string groupId)
+        {
+            Files.Remove(groupId);
+            return Task.FromResult(Result.Success());
+        }
+
+        public Task<Result<CheckerSettingsRead>> ReadCheckerSettings(string groupId)
+        {
+            if (!Files.TryGetValue(groupId, out var content))
+                return Task.FromResult(Result.Success(new CheckerSettingsRead(false, [])));
+
+            return Task.FromResult(Result.Success(new CheckerSettingsRead(true, content)));
+        }
 
         public Task<List<InstanceGroupEntity>> All() => throw new NotImplementedException();
 
@@ -268,7 +401,8 @@ public class InstanceGroupManagerServiceTests
         public Task<Result<List<InstanceEntity>>> OfflineInstances(DateTime toDate)
             => throw new NotImplementedException();
 
-        public Task<Result<List<InstanceEntity>>> All() => throw new NotImplementedException();
+        public Task<Result<List<InstanceEntity>>> All()
+            => Task.FromResult(Result.Success(new List<InstanceEntity>()));
 
         public Task<Result<List<InstanceEntity>>> ByGroupIds(IReadOnlyList<string> groupIds)
             => throw new NotImplementedException();
@@ -335,5 +469,11 @@ public class InstanceGroupManagerServiceTests
         public Task<Parameters> Current() => throw new NotImplementedException();
 
         public Task<bool> Update(Parameters parameters) => throw new NotImplementedException();
+    }
+
+    private sealed class ListParameters : IParametersService
+    {
+        public Task<Parameters> Current() => Task.FromResult(new Parameters());
+        public Task<bool> Update(Parameters parameters) => Task.FromResult(true);
     }
 }

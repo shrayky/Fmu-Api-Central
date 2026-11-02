@@ -16,4 +16,6 @@ public interface IInstanceGroupManagerService
     Task<Result<ForceUpdateResult>> AssignForcedUpdate(IReadOnlyList<string> groupIds, string updateId);
     Task<Result<ForceUpdateResult>> ExportSettings(IReadOnlyList<string> groupIds);
     Task<Result> TestChannel(AlertChannel channel);
+    Task<Result> SaveCheckerSettings(string groupId, byte[] content);
+    Task<Result> DeleteCheckerSettings(string groupId);
 }

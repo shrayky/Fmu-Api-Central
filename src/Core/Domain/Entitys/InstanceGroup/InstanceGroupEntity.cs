@@ -11,4 +11,7 @@ public class InstanceGroupEntity : IHaveStringId
     public string SettingsSchemaId { get; set; } = string.Empty;
     public List<string> OrganizationIds { get; set; } = [];
     public AlertChannel AlertChannel { get; set; } = AlertChannel.Disabled();
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool HasCheckerSettings { get; set; }
 }

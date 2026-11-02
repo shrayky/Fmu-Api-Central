@@ -29,4 +29,7 @@ public record InstanceGroupView
 
     [JsonPropertyName("alertChannel")]
     public AlertChannel AlertChannel { get; set; } = new();
+
+    [JsonPropertyName("hasCheckerSettings")]
+    public bool HasCheckerSettings { get; set; }
 }
