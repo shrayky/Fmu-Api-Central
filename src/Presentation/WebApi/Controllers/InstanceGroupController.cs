@@ -1,4 +1,5 @@
 using Domain.Bot;
+using Domain.Entitys.InstanceGroup;
 using Domain.Entitys.InstanceGroup.Dto;
 using Domain.Entitys.InstanceGroup.Interfaces;
 using Domain.Entitys.SettingsSchema.Dto;
@@ -60,6 +61,25 @@ public class InstanceGroupController : ControllerBase
     {
         var result = await _manager.ExportSettings(request.GroupIds);
         return result.IsSuccess ? Ok(result.Value) : BadRequest(result.Error);
+    }
+
+    [HttpPost("{id}/checker-settings")]
+    public async Task<IActionResult> UploadCheckerSettings(string id, IFormFile? file)
+    {
+        if (file == null || file.Length == 0)
+            return BadRequest(CheckerSettingsAttachment.InvalidJsonMessage);
+
+        using var memory = new MemoryStream();
+        await file.CopyToAsync(memory);
+        var result = await _manager.SaveCheckerSettings(id, memory.ToArray());
+        return result.IsSuccess ? Ok() : BadRequest(result.Error);
+    }
+
+    [HttpDelete("{id}/checker-settings")]
+    public async Task<IActionResult> DeleteCheckerSettings(string id)
+    {
+        var result = await _manager.DeleteCheckerSettings(id);
+        return result.IsSuccess ? Ok() : BadRequest(result.Error);
     }
 
     [HttpPost("test-channel")]
