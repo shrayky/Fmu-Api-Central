@@ -21,6 +21,12 @@ namespace Domain.AppState.Interfaces
 
         IReadOnlyList<TrueApiToken> XApiKeys();
 
+        void PostponeXApiKey(string inn, DateTime nextAttempt);
+
+        DateTime? XApiKeyPostponedUntil(string inn);
+
+        void ClearXApiKeyPostpone(string inn);
+
         void MarkGisMtPushPending();
         bool GisMtPushPending();
         void ClearGisMtPushPending();

@@ -32,4 +32,33 @@ public class AppStateServiceXApiKeyTests
         Assert.Equal(until, key.LiveUntil);
         Assert.Equal("7701234567", Assert.Single(state.XApiKeys()).Inn);
     }
+
+    /// <summary>
+    /// Пауза x-api-key живёт в памяти процесса и не смешивается между ИНН.
+    /// </summary>
+    [Fact]
+    public void PostponeXApiKey_помнит_срок_только_своего_инн()
+    {
+        var state = new AppStateService();
+        var until = new DateTime(2026, 11, 5, 4, 0, 0, DateTimeKind.Local);
+
+        Assert.Null(state.XApiKeyPostponedUntil("7701234567"));
+
+        state.PostponeXApiKey("7701234567", until);
+
+        Assert.Equal(until, state.XApiKeyPostponedUntil("7701234567"));
+        Assert.Null(state.XApiKeyPostponedUntil("7707654321"));
+    }
+
+    [Fact]
+    public void ClearXApiKeyPostpone_снимает_паузу()
+    {
+        var state = new AppStateService();
+        var until = new DateTime(2026, 11, 5, 4, 0, 0, DateTimeKind.Local);
+        state.PostponeXApiKey("7701234567", until);
+
+        state.ClearXApiKeyPostpone("7701234567");
+
+        Assert.Null(state.XApiKeyPostponedUntil("7701234567"));
+    }
 }

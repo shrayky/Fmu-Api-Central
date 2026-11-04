@@ -514,6 +514,9 @@ public class OrganizationManagerServiceTests
         public void UpdateXApiKey(string inn, string key, DateTime lifeUntil) { }
         public TrueApiToken XApiKey(string inn) => new();
         public IReadOnlyList<TrueApiToken> XApiKeys() => [];
+        public void PostponeXApiKey(string inn, DateTime nextAttempt) { }
+        public DateTime? XApiKeyPostponedUntil(string inn) => null;
+        public void ClearXApiKeyPostpone(string inn) { }
         public void MarkGisMtPushPending() { }
         public bool GisMtPushPending() => false;
         public void ClearGisMtPushPending() { }
@@ -531,6 +534,9 @@ public class OrganizationManagerServiceTests
         public void UpdateXApiKey(string inn, string key, DateTime lifeUntil) { }
         public TrueApiToken XApiKey(string inn) => new();
         public IReadOnlyList<TrueApiToken> XApiKeys() => [];
+        public void PostponeXApiKey(string inn, DateTime nextAttempt) { }
+        public DateTime? XApiKeyPostponedUntil(string inn) => null;
+        public void ClearXApiKeyPostpone(string inn) { }
         public void MarkGisMtPushPending() { }
         public bool GisMtPushPending() => false;
         public void ClearGisMtPushPending() { }

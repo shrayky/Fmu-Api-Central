@@ -14,6 +14,7 @@ namespace Application.AppState
         private bool _gisMtPushPending;
         private readonly ConcurrentDictionary<string, TrueApiToken> _trueApiTokens = new();
         private readonly ConcurrentDictionary<string, TrueApiToken> _xApiKeys = new();
+        private readonly ConcurrentDictionary<string, DateTime> _xApiKeyPostpone = new();
 
         public bool DbState() => _dbState;
 
@@ -80,6 +81,13 @@ namespace Application.AppState
                 .Where(item => !string.IsNullOrEmpty(item.Token) && item.LiveUntil >= now)
                 .ToList();
         }
+
+        public void PostponeXApiKey(string inn, DateTime nextAttempt) => _xApiKeyPostpone[inn] = nextAttempt;
+
+        public DateTime? XApiKeyPostponedUntil(string inn)
+            => _xApiKeyPostpone.TryGetValue(inn, out var until) ? until : null;
+
+        public void ClearXApiKeyPostpone(string inn) => _xApiKeyPostpone.TryRemove(inn, out _);
 
         public void MarkGisMtPushPending() => _gisMtPushPending = true;
 

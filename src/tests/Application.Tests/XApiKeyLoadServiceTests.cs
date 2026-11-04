@@ -101,6 +101,143 @@ public class XApiKeyLoadServiceTests
         Assert.Null(repository.Store["o1"].XApiKeyExpiresAt);
     }
 
+    /// <summary>
+    /// Просроченный ответ CDN не дергаем снова, пока пауза в AppState не выйдет.
+    /// </summary>
+    [Fact]
+    public async Task Refresh_некорректный_срок_не_повторяет_запрос()
+    {
+        var auth = new RecordingAuthService(null) { Error = XApiKeyRetry.ExpiredLifetimeError };
+        var repository = new MemoryOrganizationRepository();
+        repository.Store["o1"] = Org("o1", "7700000000", "serial");
+        var state = new MemoryApplicationState();
+        var sut = new XApiKeyLoadService(auth, state, repository, NullLogger<XApiKeyLoadService>.Instance);
+
+        await sut.Refresh(repository.Store.Values, CancellationToken.None);
+        await sut.Refresh(repository.Store.Values, CancellationToken.None);
+
+        Assert.Equal(1, auth.Calls);
+        var until = state.XApiKeyPostponedUntil("7700000000");
+        Assert.NotNull(until);
+        Assert.True(until.Value > DateTime.Now.AddHours(9));
+    }
+
+    /// <summary>
+    /// Отказ по сроку помечает организацию истёкшей, не затирая имя из свежего документа.
+    /// </summary>
+    [Fact]
+    public async Task Refresh_некорректный_срок_пишет_прошедшую_дату()
+    {
+        var auth = new RecordingAuthService(null) { Error = XApiKeyRetry.ExpiredLifetimeError };
+        var repository = new MemoryOrganizationRepository();
+        repository.Store["o1"] = Org("o1", "7700000000", "serial");
+        repository.Store["o1"].Name = "Старое";
+        repository.OnGet = () =>
+        {
+            var fresh = Org("o1", "7700000000", "serial");
+            fresh.Name = "Новое";
+            return fresh;
+        };
+        var state = new MemoryApplicationState();
+        var sut = new XApiKeyLoadService(auth, state, repository, NullLogger<XApiKeyLoadService>.Instance);
+
+        await sut.Refresh([Org("o1", "7700000000", "serial")], CancellationToken.None);
+
+        Assert.True(repository.Store["o1"].XApiKeyExpiresAt < DateTime.Now);
+        Assert.Equal("Новое", repository.Store["o1"].Name);
+    }
+
+    /// <summary>
+    /// Прошедшая дата уже в документе — повторный отказ её не переписывает.
+    /// </summary>
+    [Fact]
+    public async Task Refresh_прошедшая_дата_уже_есть_документ_не_переписывает()
+    {
+        var past = new DateTime(2026, 10, 13, 0, 0, 0, DateTimeKind.Local);
+        var auth = new RecordingAuthService(null) { Error = XApiKeyRetry.ExpiredLifetimeError };
+        var repository = new MemoryOrganizationRepository();
+        repository.Store["o1"] = Org("o1", "7700000000", "serial");
+        repository.Store["o1"].Name = "Старое";
+        repository.Store["o1"].XApiKeyExpiresAt = past;
+        repository.OnGet = () =>
+        {
+            var fresh = Org("o1", "7700000000", "serial");
+            fresh.Name = "Новое";
+            fresh.XApiKeyExpiresAt = past;
+            return fresh;
+        };
+        var state = new MemoryApplicationState();
+        var sut = new XApiKeyLoadService(auth, state, repository, NullLogger<XApiKeyLoadService>.Instance);
+
+        await sut.Refresh(repository.Store.Values, CancellationToken.None);
+
+        Assert.Equal(past, repository.Store["o1"].XApiKeyExpiresAt);
+        Assert.Equal("Старое", repository.Store["o1"].Name);
+    }
+
+    /// <summary>
+    /// Будущий срок в документе при просроченном ответе CDN заменяется: иначе узел оставит старый ключ.
+    /// </summary>
+    [Fact]
+    public async Task Refresh_будущая_дата_при_некорректном_сроке_становится_прошедшей()
+    {
+        var auth = new RecordingAuthService(null) { Error = XApiKeyRetry.ExpiredLifetimeError };
+        var repository = new MemoryOrganizationRepository();
+        repository.Store["o1"] = Org("o1", "7700000000", "serial");
+        repository.OnGet = () =>
+        {
+            var fresh = Org("o1", "7700000000", "serial");
+            fresh.XApiKeyExpiresAt = DateTime.Now.AddHours(2);
+            return fresh;
+        };
+        var state = new MemoryApplicationState();
+        var sut = new XApiKeyLoadService(auth, state, repository, NullLogger<XApiKeyLoadService>.Instance);
+
+        await sut.Refresh([Org("o1", "7700000000", "serial")], CancellationToken.None);
+
+        Assert.True(repository.Store["o1"].XApiKeyExpiresAt < DateTime.Now);
+    }
+
+    /// <summary>
+    /// Сбой сети паузу не ставит: следующий цикл запрашивает ключ снова.
+    /// </summary>
+    [Fact]
+    public async Task Refresh_другая_ошибка_повторяет_запрос()
+    {
+        var auth = new RecordingAuthService(null);
+        var repository = new MemoryOrganizationRepository();
+        repository.Store["o1"] = Org("o1", "7700000000", "serial");
+        var state = new MemoryApplicationState();
+        var sut = new XApiKeyLoadService(auth, state, repository, NullLogger<XApiKeyLoadService>.Instance);
+
+        await sut.Refresh(repository.Store.Values, CancellationToken.None);
+        await sut.Refresh(repository.Store.Values, CancellationToken.None);
+
+        Assert.Equal(2, auth.Calls);
+        Assert.Null(state.XApiKeyPostponedUntil("7700000000"));
+        Assert.Null(repository.Store["o1"].XApiKeyExpiresAt);
+    }
+
+    /// <summary>
+    /// Успешный ключ снимает паузу, поставленную прошлым просроченным ответом.
+    /// </summary>
+    [Fact]
+    public async Task Refresh_успех_снимает_паузу()
+    {
+        var until = new DateTime(2027, 1, 1, 0, 0, 0, DateTimeKind.Local);
+        var auth = new RecordingAuthService(new TrueApiSession("cdn-key", until));
+        var repository = new MemoryOrganizationRepository();
+        repository.Store["o1"] = Org("o1", "7700000000", "serial");
+        var state = new MemoryApplicationState();
+        state.PostponeXApiKey("7700000000", DateTime.Now.AddHours(-1));
+        var sut = new XApiKeyLoadService(auth, state, repository, NullLogger<XApiKeyLoadService>.Instance);
+
+        await sut.Refresh(repository.Store.Values, CancellationToken.None);
+
+        Assert.Null(state.XApiKeyPostponedUntil("7700000000"));
+        Assert.Equal("cdn-key", state.XApiKey("7700000000").Token);
+    }
+
     private static OrganizationEntity Org(string id, string inn, string signature)
         => new()
         {
@@ -121,6 +258,7 @@ public class XApiKeyLoadServiceTests
         public RecordingAuthService(TrueApiSession? session) => _session = session;
 
         public int Calls { get; private set; }
+        public string Error { get; init; } = "cdn отказал";
         public string Inn { get; private set; } = string.Empty;
         public string Password { get; private set; } = string.Empty;
         public string Signature { get; private set; } = string.Empty;
@@ -135,7 +273,7 @@ public class XApiKeyLoadServiceTests
             Password = password;
             Signature = signatureNumber;
             return Task.FromResult(_session == null
-                ? Result.Failure<TrueApiSession>("cdn отказал")
+                ? Result.Failure<TrueApiSession>(Error)
                 : Result.Success(_session));
         }
     }
@@ -190,6 +328,16 @@ public class XApiKeyLoadServiceTests
             => _keys.TryGetValue(inn, out var key) && key.LiveUntil >= DateTime.Now ? key : new TrueApiToken();
 
         public IReadOnlyList<TrueApiToken> XApiKeys() => _keys.Values.ToList();
+
+        private readonly Dictionary<string, DateTime> _postpone = new();
+
+        public void PostponeXApiKey(string inn, DateTime nextAttempt) => _postpone[inn] = nextAttempt;
+
+        public DateTime? XApiKeyPostponedUntil(string inn)
+            => _postpone.TryGetValue(inn, out var until) ? until : null;
+
+        public void ClearXApiKeyPostpone(string inn) => _postpone.Remove(inn);
+
         public void MarkGisMtPushPending() { }
         public bool GisMtPushPending() => false;
         public void ClearGisMtPushPending() { }

@@ -19,7 +19,7 @@ public static class TrueApiPermissiveAccess
             return Result.Failure<TrueApiSession>("True API не вернул x-api-key");
 
         if (expiresIn < 0)
-            return Result.Failure<TrueApiSession>("True API вернул некорректный срок действия x-api-key");
+            return Result.Failure<TrueApiSession>(XApiKeyRetry.ExpiredLifetimeError);
 
         return Result.Success(new TrueApiSession(token, now.AddSeconds(expiresIn)));
     }
