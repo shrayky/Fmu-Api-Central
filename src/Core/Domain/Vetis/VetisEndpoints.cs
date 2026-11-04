@@ -3,14 +3,18 @@ namespace Domain.Vetis;
 public static class VetisEndpoints
 {
     public const string ProductionApplicationManagement =
-        "https://api.vetrf.ru/platform/services/3.0/ApplicationManagementService";
+        "https://api.vetrf.ru/platform/services/2.1/ApplicationManagementService";
 
-    public const string ServiceId = "mercury-g2b.service:3.0";
+    public const string ServiceId = "mercury-g2b.service:2.1";
 
     public static string Resolve(string? configured)
     {
         var endpoint = (configured ?? "").Trim();
-        return endpoint.Length == 0 ? ProductionApplicationManagement : endpoint;
+        if (endpoint.Length == 0)
+            return ProductionApplicationManagement;
+
+        // Сохранённый адрес опытной 3.0 не должен оставлять вызовы на ней.
+        return endpoint.Replace("/services/3.0/", "/services/2.1/", StringComparison.OrdinalIgnoreCase);
     }
 
     public static bool Accept(string? configured)

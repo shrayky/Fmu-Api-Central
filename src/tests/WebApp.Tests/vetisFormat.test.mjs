@@ -19,6 +19,7 @@ import {
     incomingStatusCss,
     operationLabel,
     vsdStatusLabel,
+    vsdErrorIcon,
     vsdCountText,
     vsdXmlFileName,
     requestStateText,
@@ -200,4 +201,18 @@ test("не-ISO значение даты возвращается как ест�
     assert.equal(formatIsoMoment("вчера"), "вчера");
     assert.equal(formatIsoMoment(""), "");
     assert.equal(formatIsoMoment(null), "");
+});
+
+test("ошибка приёма показывается иконкой с текстом в подсказке", () => {
+    assert.equal(vsdErrorIcon(""), "");
+    assert.equal(vsdErrorIcon(null), "");
+    assert.equal(vsdErrorIcon("   "), "");
+
+    const icon = vsdErrorIcon("MERC14261: перевозчик не совпадает");
+    assert.match(icon, /class="webix_icon vetis-vsd-error"/);
+    assert.match(icon, /title="MERC14261: перевозчик не совпадает"/);
+});
+
+test("текст ошибки в подсказке экранируется", () => {
+    assert.match(vsdErrorIcon('a "b" <c>'), /title="a &quot;b&quot; &lt;c&gt;"/);
 });

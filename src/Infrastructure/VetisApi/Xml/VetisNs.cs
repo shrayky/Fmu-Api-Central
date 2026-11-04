@@ -11,7 +11,7 @@ public static class VetisNs
     public static readonly XNamespace Base = "http://api.vetrf.ru/schema/cdm/base";
     public static readonly XNamespace Dictionary = "http://api.vetrf.ru/schema/cdm/dictionary/v2";
     public static readonly XNamespace VetDocument = "http://api.vetrf.ru/schema/cdm/mercury/vet-document/v2";
-    public static readonly XNamespace Mercury = "http://api.vetrf.ru/schema/cdm/mercury/g2b/applications/v3";
+    public static readonly XNamespace Mercury = "http://api.vetrf.ru/schema/cdm/mercury/g2b/applications/v2";
     public static readonly XNamespace Registry = "http://api.vetrf.ru/schema/cdm/registry/ws-definitions/v2";
 
     public static string ToUtf8Xml(XElement element)

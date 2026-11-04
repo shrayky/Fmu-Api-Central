@@ -4,14 +4,16 @@ const ALL = "__all__";
 const STATUSES = ["accepted", "partial", "notAccepted", "rejected"];
 
 export class VetisFilterBar {
-    constructor({ prefix, organizations, withStatus, onChange }) {
+    constructor({ prefix, organizations, withStatus, withVsd, onChange }) {
         this.organizations = organizations;
         this.withStatus = withStatus;
+        this.withVsd = withVsd;
         this.onChange = onChange;
         this.ids = {
             organization: `${prefix}OrganizationFilter`,
             enterprise: `${prefix}EnterpriseFilter`,
             status: `${prefix}StatusFilter`,
+            vsd: `${prefix}VsdFilter`,
         };
     }
 
@@ -48,6 +50,20 @@ export class VetisFilterBar {
             });
         }
 
+        if (this.withVsd) {
+            elements.push({
+                view: "text",
+                id: this.ids.vsd,
+                width: 320,
+                placeholder: "GUID ВСД",
+                clear: true,
+                on: {
+                    onTimedKeyPress: () => this.onChange(),
+                    onChange: () => this.onChange(),
+                },
+            });
+        }
+
         elements.push({});
 
         return { view: "toolbar", elements };
@@ -68,7 +84,24 @@ export class VetisFilterBar {
             values.status = pick(this.ids.status);
         }
 
+        const vsdUuid = this._vsdUuid();
+        if (vsdUuid)
+            values.vsdUuid = vsdUuid;
+
         return values;
+    }
+
+    _vsdUuid() {
+        if (!this.withVsd)
+            return "";
+
+        const value = ($$(this.ids.vsd)?.getValue() || "").trim();
+        if (/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(value))
+            return value;
+        if (/^[0-9a-fA-F]{32}$/.test(value))
+            return value;
+
+        return "";
     }
 
     _organizationChanged(organizationId) {

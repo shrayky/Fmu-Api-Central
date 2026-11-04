@@ -151,6 +151,36 @@ public class VetisIncomingQuenchServiceTests
     }
 
     [Fact]
+    public async Task Quench_запоминает_причину_отказа_в_ВСД()
+    {
+        var world = new World();
+        world.Incoming.Store["d1"] = Document(Vsd("v1", "CONFIRMED", "10"), Vsd("v2", "CONFIRMED", "10"));
+        world.Gateway.EnqueueQuench(new VetisExchange { Completed = false, Error = "MERC14261", Status = "REJECTED" });
+        world.Gateway.EnqueueQuench(Done("v2"));
+
+        var report = (await world.Sut.QuenchAsync("d1", [], CancellationToken.None)).Value;
+
+        var saved = world.Incoming.Store["d1"];
+        Assert.Equal("MERC14261", saved.Vsds.Single(item => item.Uuid == "v1").LastError);
+        Assert.Equal("", saved.Vsds.Single(item => item.Uuid == "v2").LastError);
+        Assert.Equal("MERC14261", report.Document!.Vsds.Single(item => item.Uuid == "v1").LastError);
+    }
+
+    [Fact]
+    public async Task Quench_успешный_повтор_стирает_прежнюю_ошибку()
+    {
+        var world = new World();
+        var stale = Vsd("v1", "CONFIRMED", "10");
+        stale.LastError = "MERC14261";
+        world.Incoming.Store["d1"] = Document(stale);
+        world.Gateway.EnqueueQuench(Done("v1"));
+
+        await world.Sut.QuenchAsync("d1", [], CancellationToken.None);
+
+        Assert.Equal("", world.Incoming.Store["d1"].Vsds.Single().LastError);
+    }
+
+    [Fact]
     public async Task Quench_уже_погашенный_в_Меркурии_пишет_статус_без_повтора_ошибки()
     {
         var world = new World();

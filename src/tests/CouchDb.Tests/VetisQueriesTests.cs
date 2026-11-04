@@ -70,6 +70,33 @@ public class VetisQueriesTests
     }
 
     /// <summary>
+    /// GUID лежит в элементе массива data.vsds. Равенство data.vsds.uuid CouchDB в индекс не кладёт и возвращает пустую страницу.
+    /// </summary>
+    [Fact]
+    public void Incoming_по_uuid_ВСД_ищет_элемент_массива_и_не_смешивает_статус()
+    {
+        var query = VetisIncomingQuery.List(
+            new VetisIncomingFilter
+            {
+                OrganizationId = "o1",
+                Status = "notAccepted",
+                VsdUuid = "426307f6-395a-4f0f-a806-baa505bedd6d"
+            },
+            0,
+            10);
+
+        var selector = Assert.IsType<Dictionary<string, object>>(query["selector"]);
+        var vsds = Assert.IsType<Dictionary<string, object>>(selector["data.vsds"]);
+        var match = Assert.IsType<Dictionary<string, object>>(vsds["$elemMatch"]);
+        Assert.Equal("426307f6-395a-4f0f-a806-baa505bedd6d", match["uuid"]);
+        Assert.DoesNotContain("data.organizationId", selector.Keys);
+        Assert.DoesNotContain("data.status", selector.Keys);
+        Assert.DoesNotContain("data.vsds.uuid", selector.Keys);
+        Assert.Equal("_all_docs", query["use_index"]);
+        Assert.DoesNotContain("sort", query.Keys);
+    }
+
+    /// <summary>
     /// Индекс только по моменту CouchDB не использует, если в отборе есть другое поле: _find отвечает no_usable_index.
     /// </summary>
     [Fact]

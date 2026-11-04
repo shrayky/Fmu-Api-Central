@@ -1,4 +1,4 @@
-export const VETIS_DEFAULT_ENDPOINT = "https://api.vetrf.ru/platform/services/3.0/ApplicationManagementService";
+export const VETIS_DEFAULT_ENDPOINT = "https://api.vetrf.ru/platform/services/2.1/ApplicationManagementService";
 
 export function vetisEndpoint(value) {
     return String(value || "").trim() || VETIS_DEFAULT_ENDPOINT;

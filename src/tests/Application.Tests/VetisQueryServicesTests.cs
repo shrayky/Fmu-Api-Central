@@ -61,6 +61,25 @@ public class VetisIncomingQueryServiceTests
     }
 
     [Fact]
+    public async Task List_находит_документ_по_uuid_ВСД_независимо_от_статуса()
+    {
+        var world = new World();
+        world.AddDocument("d1", "o1", "e1", sortAt: 2, status: VetisIncomingStatus.Accepted);
+        world.AddDocument("d2", "o1", "e1", sortAt: 1, status: VetisIncomingStatus.NotAccepted);
+        world.Incoming.Store["d1"].Vsds[0].Uuid = "426307f6-395a-4f0f-a806-baa505bedd6d";
+
+        var page = (await world.Sut.ListAsync(
+            "o2",
+            "e9",
+            VetisIncomingStatus.NotAccepted,
+            0,
+            10,
+            "426307F6-395A-4F0F-A806-BAA505BEDD6D")).Value;
+
+        Assert.Equal("d1", Assert.Single(page.Rows).Id);
+    }
+
+    [Fact]
     public async Task List_игнорирует_неизвестный_статус()
     {
         var world = new World();

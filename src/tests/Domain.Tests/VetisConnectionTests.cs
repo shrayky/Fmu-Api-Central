@@ -7,6 +7,18 @@ namespace Domain.Tests;
 public class VetisConnectionTests
 {
     /// <summary>
+    /// На странице компонента действующий шлюз — 2.1. 3.0 там опытная версия.
+    /// </summary>
+    [Fact]
+    public void Боевой_контур_это_сервис_2_1()
+    {
+        Assert.Equal(
+            "https://api.vetrf.ru/platform/services/2.1/ApplicationManagementService",
+            VetisEndpoints.ProductionApplicationManagement);
+        Assert.Equal("mercury-g2b.service:2.1", VetisEndpoints.ServiceId);
+    }
+
+    /// <summary>
     /// Пустой адрес в настройках означает боевой ApplicationManagementService.
     /// </summary>
     [Fact]
@@ -27,6 +39,20 @@ public class VetisConnectionTests
         Assert.Equal(
             "https://api.vetrf.ru/platform/services/2.1/ApplicationManagementService",
             VetisEndpoints.Resolve(endpoint));
+    }
+
+    /// <summary>
+    /// Уже сохранённый адрес 3.0 не должен оставлять вызовы на опытной версии.
+    /// </summary>
+    [Fact]
+    public void Resolve_сохранённый_адрес_3_0_ведёт_на_2_1()
+    {
+        Assert.Equal(
+            "https://api.vetrf.ru/platform/services/2.1/ApplicationManagementService",
+            VetisEndpoints.Resolve("https://api.vetrf.ru/platform/services/3.0/ApplicationManagementService"));
+        Assert.Equal(
+            "https://api2.vetrf.ru:8002/platform/services/2.1/ApplicationManagementService",
+            VetisEndpoints.Resolve(" https://api2.vetrf.ru:8002/platform/services/3.0/ApplicationManagementService "));
     }
 
     /// <summary>

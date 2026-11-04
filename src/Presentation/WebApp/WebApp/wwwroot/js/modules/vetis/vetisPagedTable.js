@@ -42,6 +42,7 @@ export class VetisPagedTable {
         this._hasMore = false;
         this._loading = false;
         table.clearAll();
+        this._showProgress(table);
 
         await this._loadNext();
     }
@@ -68,6 +69,7 @@ export class VetisPagedTable {
         } finally {
             if (generation === this._generation) {
                 this._loading = false;
+                this._hideProgress(this._table());
             }
         }
 
@@ -93,6 +95,18 @@ export class VetisPagedTable {
         if (needed) {
             this._loadNext();
         }
+    }
+
+    _showProgress(table) {
+        if (!table.showProgress)
+            webix.extend(table, webix.ProgressBar);
+
+        table.showProgress({ type: "icon" });
+    }
+
+    _hideProgress(table) {
+        if (table?.hideProgress)
+            table.hideProgress();
     }
 
     _showEmptyState() {

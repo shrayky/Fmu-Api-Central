@@ -9,6 +9,8 @@ public sealed class VetisIncomingFilter
     public string EnterpriseGuid { get; init; } = "";
 
     public string Status { get; init; } = "";
+
+    public string VsdUuid { get; init; } = "";
 }
 
 /// <summary>

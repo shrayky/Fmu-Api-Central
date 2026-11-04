@@ -177,6 +177,8 @@ internal sealed class MemoryVetisIncoming : IVetisIncomingRepository
             .Where(item => filter.OrganizationId.Length == 0 || item.OrganizationId == filter.OrganizationId)
             .Where(item => filter.EnterpriseGuid.Length == 0 || item.EnterpriseGuid == filter.EnterpriseGuid)
             .Where(item => filter.Status.Length == 0 || item.Status == filter.Status)
+            .Where(item => filter.VsdUuid.Length == 0
+                || item.Vsds.Any(vsd => string.Equals(vsd.Uuid, filter.VsdUuid, StringComparison.OrdinalIgnoreCase)))
             .OrderByDescending(item => item.SortAt)
             .Skip(skip)
             .Take(limit)

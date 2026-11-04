@@ -57,6 +57,14 @@ class OrganizationElementView {
             cancelButton: "Отмена"
         };
 
+        this.SIZES = {
+            maxWidth: 1040,
+            maxHeight: 1080,
+            viewportMargin: 24,
+            minTabview: 360,
+            tabviewChrome: 268
+        };
+
         this.NAMES = {
             windowId: "organizationWindow",
             formId: "organizationElement",
@@ -97,6 +105,7 @@ class OrganizationElementView {
     async showDialog(editedData = {}, onSuccess, onClose) {
         this.elementId = editedData.id || newUuid();
         const isNew = !editedData.id;
+        const windowHeight = this._windowHeight();
         const trueApi = editedData.trueApiIntegrationSettings || {};
         const groups = editedData.gisMtProductGroups || [];
         const vetis = editedData.vetisSettings || {};
@@ -113,8 +122,8 @@ class OrganizationElementView {
             modal: true,
             move: false,
             resize: false,
-            width: Math.min(window.innerWidth * 0.9, 1040),
-            height: Math.min(window.innerHeight * 0.9, 820),
+            width: Math.min(window.innerWidth * 0.9, this.SIZES.maxWidth),
+            height: windowHeight,
             position: "center",
             on: {
                 onDestruct: () => {
@@ -149,7 +158,7 @@ class OrganizationElementView {
                         required: true,
                         invalidMessage: this.LABELS.invalidInnMessage
                     }),
-                    vetisOn ? this._tabs(trueApi, groups, vetis) : this._markingBody(trueApi, groups),
+                    vetisOn ? this._tabs(trueApi, groups, vetis, windowHeight) : this._markingBody(trueApi, groups),
                     this._createButtons(onSuccess, onClose)
                 ]
             }
@@ -244,11 +253,26 @@ class OrganizationElementView {
         fields.disable();
     }
 
-    _tabs(trueApi, groups, vetis) {
+    /**
+     * Окно берёт всю высоту экрана: на вкладке «Ветис» настройки должны влезать без прокрутки.
+     * Предел 1080 — выше панель настроек уже нечего заполнять.
+     */
+    _windowHeight() {
+        return Math.min(window.innerHeight - this.SIZES.viewportMargin, this.SIZES.maxHeight);
+    }
+
+    /**
+     * Высота вкладок — это остаток окна после шапки, полей «Наименование» и «ИНН», кнопок и отступов формы.
+     */
+    _tabviewHeight(windowHeight) {
+        return Math.max(this.SIZES.minTabview, windowHeight - this.SIZES.tabviewChrome);
+    }
+
+    _tabs(trueApi, groups, vetis, windowHeight) {
         return {
             view: "tabview",
             id: this.NAMES.tabs,
-            height: 560,
+            height: this._tabviewHeight(windowHeight),
             cells: [
                 { header: this.LABELS.markingTab, body: this._markingBody(trueApi, groups) },
                 { header: this.LABELS.vetisTab, body: this._vetisBody(vetis) }

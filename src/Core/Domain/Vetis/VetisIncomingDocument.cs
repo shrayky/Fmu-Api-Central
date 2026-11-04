@@ -50,6 +50,12 @@ public sealed class VetisIncomingVsd
     [JsonPropertyName("updatedAt")]
     public string UpdatedAt { get; set; } = "";
 
+    /// <summary>
+    /// Причина последнего отказа приёма. Хранится в документе: иначе после перезагрузки журнала её снова искать в заявках.
+    /// </summary>
+    [JsonPropertyName("lastError")]
+    public string LastError { get; set; } = "";
+
     [JsonPropertyName("rawXml")]
     public string RawXml { get; set; } = "";
 }

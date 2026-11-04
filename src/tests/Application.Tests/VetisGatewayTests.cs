@@ -140,6 +140,64 @@ public class VetisGatewayTests
         Assert.Equal(1, handler.Calls);
     }
 
+    /// <summary>
+    /// Гашение, загрузка ВСД и проверка связи идут одним вызовом 2.1: адрес .../2.1/ и serviceId mercury-g2b.service:2.1.
+    /// </summary>
+    [Fact]
+    public void Загрузка_и_проверка_связи_в_пространстве_applications_v2()
+    {
+        var changes = GetVetDocumentChangesListXml.Create(Call(), new VetisIncomingRequest
+        {
+            EnterpriseGuid = "dddddddd-dddd-dddd-dddd-dddddddddddd",
+            Begin = DateTimeOffset.Parse("2026-10-01T00:00:00+00:00"),
+            End = DateTimeOffset.Parse("2026-10-02T00:00:00+00:00"),
+            Count = 10
+        });
+        var user = GetBusinessEntityUserXml.Create(Call());
+
+        Assert.Equal("http://api.vetrf.ru/schema/cdm/mercury/g2b/applications/v2", changes.Name.NamespaceName);
+        Assert.Equal("http://api.vetrf.ru/schema/cdm/mercury/g2b/applications/v2", user.Name.NamespaceName);
+    }
+
+    /// <summary>
+    /// Гашение уходит на ApplicationManagementService 2.1 заявкой v2 и тем же serviceId, что загрузка.
+    /// </summary>
+    [Fact]
+    public async Task Quench_отправляет_заявку_v2_на_сервис_2_1()
+    {
+        var handler = new CaptureHandler("""
+            <root><applicationId>app-q</applicationId><status>COMPLETED</status></root>
+            """);
+        var gateway = new VetisGateway(new StubFactory(handler), Microsoft.Extensions.Logging.Abstractions.NullLogger<VetisGateway>.Instance);
+        var order = VetisQuench.Decide("10", "10").Value;
+
+        var call = Call();
+        var result = await gateway.QuenchAsync(
+            new VetisCall
+            {
+                Endpoint = VetisEndpoints.ProductionApplicationManagement,
+                ApiKey = call.ApiKey,
+                BasicLogin = call.BasicLogin,
+                BasicPassword = call.BasicPassword,
+                IssuerId = call.IssuerId,
+                InitiatorLogin = call.InitiatorLogin,
+                ServiceId = call.ServiceId,
+                ResultPollAttempts = call.ResultPollAttempts,
+                TimeoutSeconds = call.TimeoutSeconds
+            },
+            QuenchVsd,
+            order,
+            "11111111-1111-1111-1111-111111111111",
+            CancellationToken.None);
+
+        Assert.Equal("COMPLETED", result.Exchange.Status);
+        Assert.Contains("/services/2.1/ApplicationManagementService", handler.Url);
+        Assert.Contains("mercury-g2b.service:2.1", handler.Body);
+        Assert.DoesNotContain("mercury-g2b.service:3.0", handler.Body);
+        Assert.Contains("http://api.vetrf.ru/schema/cdm/mercury/g2b/applications/v2", handler.Body);
+        Assert.Contains("http://api.vetrf.ru/schema/cdm/dictionary/v2", handler.Body);
+    }
+
     private const string IncomingResponse = """
         <root>
           <applicationId>app-2</applicationId>
@@ -359,6 +417,45 @@ public class VetisGatewayTests
         TimeoutSeconds = 5
     };
 
+    private const string QuenchVsd =
+        """
+        <vd:vetDocument xmlns:vd="http://api.vetrf.ru/schema/cdm/mercury/vet-document/v2" xmlns:bs="http://api.vetrf.ru/schema/cdm/base" xmlns:dt="http://api.vetrf.ru/schema/cdm/dictionary/v2">
+          <bs:uuid>11111111-1111-1111-1111-111111111111</bs:uuid>
+          <vd:certifiedConsignment>
+            <vd:consignor>
+              <dt:businessEntity><bs:guid>aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa</bs:guid></dt:businessEntity>
+              <dt:enterprise><bs:guid>bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb</bs:guid></dt:enterprise>
+            </vd:consignor>
+            <vd:consignee>
+              <dt:businessEntity><bs:guid>cccccccc-cccc-cccc-cccc-cccccccccccc</bs:guid></dt:businessEntity>
+              <dt:enterprise><bs:guid>dddddddd-dddd-dddd-dddd-dddddddddddd</bs:guid></dt:enterprise>
+            </vd:consignee>
+            <vd:transportInfo>
+              <vd:transportType>1</vd:transportType>
+              <vd:transportNumber><vd:vehicleNumber>А000АА77</vd:vehicleNumber></vd:transportNumber>
+            </vd:transportInfo>
+            <vd:batch>
+              <vd:productType>1</vd:productType>
+              <vd:product><bs:guid>eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee</bs:guid></vd:product>
+              <vd:subProduct><bs:guid>ffffffff-ffff-ffff-ffff-ffffffffffff</bs:guid></vd:subProduct>
+              <vd:productItem><bs:guid>99999999-9999-9999-9999-999999999999</bs:guid></vd:productItem>
+              <vd:volume>10</vd:volume>
+              <vd:unit><bs:guid>12121212-1212-1212-1212-121212121212</bs:guid></vd:unit>
+              <vd:dateOfProduction><vd:firstDate><bs:year>2026</bs:year><bs:month>10</bs:month><bs:day>1</bs:day></vd:firstDate></vd:dateOfProduction>
+              <vd:perishable>true</vd:perishable>
+              <vd:origin><vd:country><bs:guid>87878787-8787-8787-8787-878787878787</bs:guid></vd:country></vd:origin>
+              <vd:lowGradeCargo>false</vd:lowGradeCargo>
+            </vd:batch>
+          </vd:certifiedConsignment>
+          <vd:referencedDocument>
+            <vd:issueNumber>ТТН-9</vd:issueNumber>
+            <vd:issueDate>2026-10-01</vd:issueDate>
+            <vd:type>1</vd:type>
+            <vd:relationshipType>1</vd:relationshipType>
+          </vd:referencedDocument>
+        </vd:vetDocument>
+        """;
+
     private sealed class FailingHandler : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
@@ -386,11 +483,14 @@ public class VetisGatewayTests
 
         public string Body { get; private set; } = "";
 
+        public string Url { get; private set; } = "";
+
         public int Calls { get; private set; }
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             Calls++;
+            Url = request.RequestUri?.ToString() ?? "";
             Authorization = request.Headers.Authorization?.ToString() ?? "";
             SoapAction = request.Headers.TryGetValues("SOAPAction", out var values) ? values.First() : "";
             Body = request.Content == null ? "" : await request.Content.ReadAsStringAsync(cancellationToken);

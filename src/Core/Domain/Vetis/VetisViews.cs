@@ -91,6 +91,9 @@ public sealed class VetisVsdView
     [JsonPropertyName("receivedAt")]
     public string ReceivedAt { get; set; } = "";
 
+    [JsonPropertyName("lastError")]
+    public string LastError { get; set; } = "";
+
     [JsonPropertyName("rawXml")]
     public string RawXml { get; set; } = "";
 }

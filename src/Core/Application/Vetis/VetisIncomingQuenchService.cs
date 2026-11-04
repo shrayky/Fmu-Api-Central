@@ -81,6 +81,14 @@ public sealed class VetisIncomingQuenchService
                 .ToDictionary(group => group.Key, group => group.Last().ActualVolume ?? "", StringComparer.OrdinalIgnoreCase);
 
             var report = new VetisQuenchReport();
+            var failed = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+            void Fail(string uuid, string message)
+            {
+                report.Errors.Add(new VetisQuenchError { Uuid = uuid, Message = message });
+                failed[uuid] = message;
+            }
+
             var quenchedAt = VetisDateTime.Format(_clock.GetLocalNow());
             var total = document.Vsds.Count(vsd => Chosen(vsd, only));
             var index = 0;
@@ -96,11 +104,7 @@ public sealed class VetisIncomingQuenchService
 
                 if (requireVehicle && !VetisTransport.HasVehicleNumber(vsd.RawXml))
                 {
-                    report.Errors.Add(new VetisQuenchError
-                    {
-                        Uuid = vsd.Uuid,
-                        Message = "В ВСД нет номера автомобиля, гашение не отправлено."
-                    });
+                    Fail(vsd.Uuid, "В ВСД нет номера автомобиля, гашение не отправлено.");
                     continue;
                 }
 
@@ -108,7 +112,7 @@ public sealed class VetisIncomingQuenchService
                 var order = VetisQuench.Decide(vsd.Volume, actual);
                 if (order.IsFailure)
                 {
-                    report.Errors.Add(new VetisQuenchError { Uuid = vsd.Uuid, Message = order.Error });
+                    Fail(vsd.Uuid, order.Error);
                     continue;
                 }
 
@@ -127,15 +131,17 @@ public sealed class VetisIncomingQuenchService
                 await _recorder.RecordAsync(result.Exchange, document.OrganizationId, document.EnterpriseGuid);
                 if (!result.Exchange.Completed && !AlreadyQuenched(result.Exchange.Error))
                 {
-                    report.Errors.Add(new VetisQuenchError
-                    {
-                        Uuid = vsd.Uuid,
-                        Message = string.IsNullOrWhiteSpace(result.Exchange.Error) ? "Ветис не погасил ВСД." : result.Exchange.Error
-                    });
+                    Fail(
+                        vsd.Uuid,
+                        string.IsNullOrWhiteSpace(result.Exchange.Error) ? "Ветис не погасил ВСД." : result.Exchange.Error);
                     continue;
                 }
 
-                Action<VetisIncomingVsd> apply = target => target.Status = "UTILIZED";
+                Action<VetisIncomingVsd> apply = target =>
+                {
+                    target.Status = "UTILIZED";
+                    target.LastError = "";
+                };
                 if (result.Exchange.Completed)
                 {
                     apply = target =>
@@ -145,6 +151,7 @@ public sealed class VetisIncomingQuenchService
                             target.ReceivedAt = result.ReceivedAt;
 
                         target.ActualVolume = order.Value.ActualVolume;
+                        target.LastError = "";
                     };
                 }
 
@@ -154,16 +161,14 @@ public sealed class VetisIncomingQuenchService
                     return Result.Failure<VetisQuenchReport>("ВСД погашены, но документ не сохранён: " + stored.Error);
                 if (stored.Outcome == QuenchStore.Missing)
                 {
-                    report.Errors.Add(new VetisQuenchError
-                    {
-                        Uuid = vsd.Uuid,
-                        Message = "ВСД погашен в Меркурии, но в документе его уже нет."
-                    });
+                    Fail(vsd.Uuid, "ВСД погашен в Меркурии, но в документе его уже нет.");
                     continue;
                 }
 
                 report.Quenched++;
             }
+
+            await RememberErrors(document.Id, failed);
 
             var view = await _query.GetAsync(document.Id);
             report.Document = view.IsSuccess ? view.Value : null;
@@ -241,5 +246,31 @@ public sealed class VetisIncomingQuenchService
         return saved.IsFailure
             ? new QuenchStored(QuenchStore.Failed, saved.Error)
             : new QuenchStored(QuenchStore.Saved, "");
+    }
+
+    /// <summary>
+    /// Причины отказа пишутся в документ одной записью. Сбой записи отчёт не отменяет: тексты уже в нём.
+    /// </summary>
+    private async Task RememberErrors(string documentId, IReadOnlyDictionary<string, string> failed)
+    {
+        if (failed.Count == 0)
+            return;
+
+        var fresh = await _incoming.Find(documentId);
+        if (fresh.IsFailure || fresh.Value == null)
+            return;
+
+        var changed = false;
+        foreach (var vsd in fresh.Value.Vsds)
+        {
+            if (!failed.TryGetValue(vsd.Uuid, out var message) || string.Equals(vsd.LastError, message, StringComparison.Ordinal))
+                continue;
+
+            vsd.LastError = message;
+            changed = true;
+        }
+
+        if (changed)
+            await _incoming.Save(fresh.Value);
     }
 }

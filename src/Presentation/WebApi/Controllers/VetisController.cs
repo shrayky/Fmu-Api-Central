@@ -49,10 +49,11 @@ public class VetisController : ControllerBase
         [FromQuery] string? organizationId,
         [FromQuery] string? enterpriseGuid,
         [FromQuery] string? status,
+        [FromQuery] string? vsdUuid,
         [FromQuery] int skip = 0,
         [FromQuery] int limit = 0)
     {
-        var result = await _incoming.ListAsync(organizationId ?? "", enterpriseGuid ?? "", status ?? "", skip, limit);
+        var result = await _incoming.ListAsync(organizationId ?? "", enterpriseGuid ?? "", status ?? "", skip, limit, vsdUuid ?? "");
         return result.IsSuccess ? Ok(result.Value) : BadRequest(result.Error);
     }
 

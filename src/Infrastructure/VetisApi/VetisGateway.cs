@@ -171,7 +171,7 @@ public sealed class VetisGateway : IVetisGateway
         var envelope = VetisEnvelope.Submit(call, applicationData);
         var sent = new SentRequest(
             operation,
-            applicationData.Element(VetisNs.Mercury + "localTransactionId")?.Value ?? "",
+            applicationData.Elements().FirstOrDefault(element => element.Name.LocalName == "localTransactionId")?.Value ?? "",
             parameters,
             VetisRequestLog.Masked(envelope));
 

@@ -10,6 +10,7 @@ export class VetisIncomingTab {
             prefix: "vetisIncoming",
             organizations,
             withStatus: true,
+            withVsd: true,
             onChange: () => this.refresh(),
         });
         this.table = new VetisPagedTable({

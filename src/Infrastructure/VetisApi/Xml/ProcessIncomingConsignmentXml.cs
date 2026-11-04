@@ -9,11 +9,12 @@ public static class ProcessIncomingConsignmentXml
 {
     public const string Operation = "ProcessIncomingConsignment";
 
+    // В принятой заявке нет собственника, классификаций и номенклатуры внутри origin.
     private static readonly string[] ConsignmentFields =
     [
         "productType", "product", "subProduct", "productItem", "volume", "unit",
         "dateOfProduction", "expiryDate", "batchID", "perishable", "origin",
-        "lowGradeCargo", "packageList", "applicableClassifications"
+        "lowGradeCargo", "packageList"
     ];
 
     private static readonly string[] RequiredBatchFields =
@@ -77,8 +78,8 @@ public static class ProcessIncomingConsignmentXml
         var broker = DirectElement(consignment, "broker");
         if (broker != null)
         {
-            var copy = new XElement(broker);
-            KeepIdentifiers(copy);
+            var copy = new XElement(VetisNs.VetDocument + "broker");
+            KeepGuid(broker, copy);
             delivery.Add(copy);
         }
 
@@ -130,7 +131,14 @@ public static class ProcessIncomingConsignmentXml
             foreach (var field in batch.Elements().Where(element => element.Name.LocalName == name))
             {
                 var copy = new XElement(field);
-                KeepIdentifiers(copy);
+                if (name == "origin")
+                    copy.Elements().Where(element => element.Name.LocalName == "productItem").Remove();
+
+                if (name is "dateOfProduction" or "expiryDate")
+                    RewriteDateParts(copy);
+                else if (name != "packageList")
+                    KeepGuid(copy);
+
                 consignment.Add(copy);
             }
         }
@@ -152,7 +160,7 @@ public static class ProcessIncomingConsignmentXml
                 return Result.Failure<XElement>($"В ВСД у {name} нет {partName}, гашение не отправлено.");
 
             var identifiers = new XElement(part.Name);
-            KeepIdentifiers(new XElement(part), identifiers);
+            KeepGuid(new XElement(part), identifiers);
             if (!identifiers.Elements().Any(element => element.Name.LocalName is "uuid" or "guid"))
                 return Result.Failure<XElement>($"В ВСД у {name}/{partName} нет uuid или guid, гашение не отправлено.");
 
@@ -202,28 +210,37 @@ public static class ProcessIncomingConsignmentXml
                 new XElement(VetisNs.VetDocument + "login", login)),
             new XElement(VetisNs.VetDocument + "result", "CORRESPONDS"));
 
-    private static void KeepIdentifiers(XElement element)
+    private static void KeepGuid(XElement element)
     {
         if (element.Elements().Any(child => child.Name.LocalName is "uuid" or "guid"))
         {
-            var identifiers = element.Elements()
-                .Where(child => child.Name.LocalName is "uuid" or "guid")
-                .Select(child => new XElement(child))
-                .ToList();
+            var chosen = element.Elements().FirstOrDefault(child => child.Name.LocalName == "guid")
+                ?? element.Elements().FirstOrDefault(child => child.Name.LocalName == "uuid");
             element.RemoveNodes();
-            foreach (var identifier in identifiers)
-                element.Add(identifier);
+            if (chosen != null)
+                element.Add(new XElement(chosen));
             return;
         }
 
         foreach (var child in element.Elements().ToList())
-            KeepIdentifiers(child);
+            KeepGuid(child);
     }
 
-    private static void KeepIdentifiers(XElement source, XElement target)
+    /// <summary>
+    /// Схема 2.1 принимает год, месяц и день в dictionary. Сервис 3.0 такие даты отклоняет.
+    /// </summary>
+    private static void RewriteDateParts(XElement date)
     {
-        foreach (var child in source.Elements().Where(element => element.Name.LocalName is "uuid" or "guid"))
-            target.Add(new XElement(child));
+        foreach (var part in date.Descendants().Where(element => element.Name.LocalName is "year" or "month" or "day" or "hour" or "minute").ToList())
+            part.ReplaceWith(new XElement(VetisNs.Dictionary + part.Name.LocalName, part.Value));
+    }
+
+    private static void KeepGuid(XElement source, XElement target)
+    {
+        var chosen = source.Elements().FirstOrDefault(element => element.Name.LocalName == "guid")
+            ?? source.Elements().FirstOrDefault(element => element.Name.LocalName == "uuid");
+        if (chosen != null)
+            target.Add(new XElement(chosen));
     }
 
     private static bool TryParse(string rawXml, out XElement document)

@@ -27,6 +27,176 @@ public class VetisQuenchXmlTests
     }
 
     [Fact]
+    public void Собственник_и_классификации_не_уходят_в_заявку()
+    {
+        var vsd = SampleVsd.Replace(
+            "<vd:lowGradeCargo>false</vd:lowGradeCargo>",
+            """
+            <vd:lowGradeCargo>false</vd:lowGradeCargo>
+            <vd:owner><bs:guid>abababab-2222-2222-2222-abababababab</bs:guid></vd:owner>
+            <vd:applicableClassifications>
+              <vd:attribute><dt:attrCode>MILK_FAT_MASS_FRACTION</dt:attrCode></vd:attribute>
+            </vd:applicableClassifications>
+            """);
+        var order = VetisQuench.Decide("10", "10").Value;
+
+        var built = ProcessIncomingConsignmentXml.Create(Call(), vsd, order, new DateOnly(2026, 10, 30));
+
+        Assert.True(built.IsSuccess, built.IsFailure ? built.Error : "");
+        var xml = built.Value.ToString();
+        Assert.DoesNotContain("owner", xml);
+        Assert.DoesNotContain("applicableClassifications", xml);
+        Assert.DoesNotContain("abababab-2222-2222-2222-abababababab", xml);
+    }
+
+    [Fact]
+    public void Ссылки_партии_уходят_одним_guid()
+    {
+        var vsd = SampleVsd.Replace(
+            "<vd:product><bs:guid>eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee</bs:guid></vd:product>",
+            "<vd:product><bs:uuid>11111111-2222-2222-2222-111111111111</bs:uuid><bs:guid>eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee</bs:guid><dt:name>Молоко и молочная продукция</dt:name></vd:product>");
+        var order = VetisQuench.Decide("10", "10").Value;
+
+        var built = ProcessIncomingConsignmentXml.Create(Call(), vsd, order, new DateOnly(2026, 10, 30));
+
+        Assert.True(built.IsSuccess, built.IsFailure ? built.Error : "");
+        var product = XElement.Parse(built.Value.ToString())
+            .Descendants()
+            .Single(element => element.Name.LocalName == "product");
+        Assert.Equal("guid", product.Elements().Single().Name.LocalName);
+        Assert.Equal("eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee", product.Elements().Single().Value);
+    }
+
+    [Fact]
+    public void Происхождение_без_номенклатуры()
+    {
+        var vsd = SampleVsd.Replace(
+            "<vd:origin><vd:country>",
+            "<vd:origin><vd:productItem><bs:guid>34343434-3434-3434-3434-343434343434</bs:guid></vd:productItem><vd:country>");
+        var order = VetisQuench.Decide("10", "10").Value;
+
+        var built = ProcessIncomingConsignmentXml.Create(Call(), vsd, order, new DateOnly(2026, 10, 30));
+
+        Assert.True(built.IsSuccess, built.IsFailure ? built.Error : "");
+        var origin = XElement.Parse(built.Value.ToString())
+            .Descendants()
+            .Single(element => element.Name.LocalName == "origin");
+        Assert.DoesNotContain(origin.Elements(), element => element.Name.LocalName == "productItem");
+        Assert.DoesNotContain("34343434-3434-3434-3434-343434343434", built.Value.ToString());
+    }
+
+    /// <summary>
+    /// Принятая заявка гашения идёт схемой applications/v2: сервис 3.0 с тем же составом партии отвечает MERC14261.
+    /// </summary>
+    [Fact]
+    public void Заявка_гашения_в_пространстве_applications_v2()
+    {
+        var order = VetisQuench.Decide("10", "10").Value;
+        var built = ProcessIncomingConsignmentXml.Create(Call(), SampleVsd, order, new DateOnly(2026, 10, 30));
+
+        Assert.True(built.IsSuccess, built.IsFailure ? built.Error : "");
+        Assert.Equal("http://api.vetrf.ru/schema/cdm/mercury/g2b/applications/v2", built.Value.Name.NamespaceName);
+        Assert.Equal(
+            "http://api.vetrf.ru/schema/cdm/mercury/g2b/applications/v2",
+            built.Value.Elements().Single(element => element.Name.LocalName == "localTransactionId").Name.NamespaceName);
+    }
+
+    /// <summary>
+    /// Схема 2.1 принимает год, месяц и день в dictionary. На 3.0 такие даты отклоняются, поэтому гашение туда не отправляется.
+    /// </summary>
+    [Fact]
+    public void Даты_партии_пишутся_в_пространстве_имён_dictionary()
+    {
+        var vsd = SampleVsd.Replace(
+            "<bs:year>2026</bs:year><bs:month>10</bs:month><bs:day>1</bs:day>",
+            "<dt:year>2026</dt:year><dt:month>10</dt:month><dt:day>1</dt:day>");
+        var order = VetisQuench.Decide("10", "10").Value;
+        var built = ProcessIncomingConsignmentXml.Create(Call(), vsd, order, new DateOnly(2026, 10, 30));
+
+        Assert.True(built.IsSuccess, built.IsFailure ? built.Error : "");
+        var year = XElement.Parse(built.Value.ToString())
+            .Descendants()
+            .Single(element => element.Name.LocalName == "year");
+        Assert.Equal("http://api.vetrf.ru/schema/cdm/dictionary/v2", year.Name.NamespaceName);
+        Assert.Equal("2026", year.Value);
+    }
+
+    [Fact]
+    public void Упаковка_сохраняет_код_и_название()
+    {
+        var vsd = SampleVsd.Replace(
+            "<vd:lowGradeCargo>false</vd:lowGradeCargo>",
+            """
+            <vd:lowGradeCargo>false</vd:lowGradeCargo>
+            <vd:packageList>
+              <dt:package>
+                <dt:level>2</dt:level>
+                <dt:packingType>
+                  <bs:uuid>483400f6-eef8-4d94-bebe-9a6bbc5585e8</bs:uuid>
+                  <bs:guid>fedf4328-053c-11e1-99b4-d8d385fbc9e8</bs:guid>
+                  <dt:globalID>CT</dt:globalID>
+                  <dt:name>Коробка, картонная</dt:name>
+                </dt:packingType>
+                <dt:quantity>1</dt:quantity>
+              </dt:package>
+            </vd:packageList>
+            """);
+        var order = VetisQuench.Decide("10", "10").Value;
+
+        var built = ProcessIncomingConsignmentXml.Create(Call(), vsd, order, new DateOnly(2026, 10, 30));
+
+        Assert.True(built.IsSuccess, built.IsFailure ? built.Error : "");
+        var packing = XElement.Parse(built.Value.ToString())
+            .Descendants()
+            .Single(element => element.Name.LocalName == "packingType");
+        Assert.Equal(
+            ["uuid", "guid", "globalID", "name"],
+            packing.Elements().Select(element => element.Name.LocalName).ToArray());
+        Assert.Contains("Коробка, картонная", packing.ToString());
+    }
+
+    [Fact]
+    public void Стороны_уходят_по_guid_без_версии_uuid()
+    {
+        var vsd = SampleVsd.Replace(
+            "<dt:businessEntity><bs:guid>aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa</bs:guid>",
+            "<dt:businessEntity><bs:uuid>dddddddd-1111-1111-1111-dddddddddddd</bs:uuid><bs:guid>aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa</bs:guid>");
+        var order = VetisQuench.Decide("10", "10").Value;
+
+        var built = ProcessIncomingConsignmentXml.Create(Call(), vsd, order, new DateOnly(2026, 10, 30));
+
+        Assert.True(built.IsSuccess, built.IsFailure ? built.Error : "");
+        var xml = built.Value.ToString();
+        Assert.Contains("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", xml);
+        Assert.DoesNotContain("dddddddd-1111-1111-1111-dddddddddddd", xml);
+    }
+
+    [Fact]
+    public void Перевозчик_уходит_одним_guid()
+    {
+        var vsd = SampleVsd.Replace(
+            "<vd:transportInfo>",
+            """
+            <vd:broker>
+              <bs:uuid>9956cbfb-b65b-4ba0-b0d6-0584789bd125</bs:uuid>
+              <bs:guid>532c7495-f361-4028-9b40-666b339abb1e</bs:guid>
+              <dt:fio>ИЗВЕКОВ</dt:fio>
+            </vd:broker>
+            <vd:transportInfo>
+            """);
+        var order = VetisQuench.Decide("10", "10").Value;
+
+        var built = ProcessIncomingConsignmentXml.Create(Call(), vsd, order, new DateOnly(2026, 10, 30));
+
+        Assert.True(built.IsSuccess, built.IsFailure ? built.Error : "");
+        var broker = XElement.Parse(built.Value.ToString())
+            .Descendants()
+            .Single(element => element.Name.LocalName == "broker");
+        Assert.Equal("guid", broker.Elements().Single().Name.LocalName);
+        Assert.Equal("532c7495-f361-4028-9b40-666b339abb1e", broker.Elements().Single().Value);
+    }
+
+    [Fact]
     public void Разница_подставляет_факт_и_акт_расхождения()
     {
         var order = VetisQuench.Decide("10", "4").Value;

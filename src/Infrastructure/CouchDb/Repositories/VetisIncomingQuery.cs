@@ -30,6 +30,9 @@ public static class VetisIncomingQuery
 
     public static Dictionary<string, object> List(VetisIncomingFilter filter, int skip, int limit)
     {
+        if (filter.VsdUuid.Length > 0)
+            return ByVsdUuid(filter.VsdUuid, skip, limit);
+
         // Без условия на поле сортировки CouchDB не берёт индекс по нему.
         var selector = new Dictionary<string, object>
         {
@@ -56,6 +59,26 @@ public static class VetisIncomingQuery
 
         return query;
     }
+
+    /// <summary>
+    /// JSON-индекс не видит uuid внутри массива объектов, равенство data.vsds.uuid даёт пустую страницу.
+    /// $elemMatch читает сами документы. Статус сюда не входит: погашенный документ иначе скрыт фильтром «Не принят».
+    /// </summary>
+    private static Dictionary<string, object> ByVsdUuid(string uuid, int skip, int limit) =>
+        new()
+        {
+            ["selector"] = new Dictionary<string, object>
+            {
+                ["data.vsds"] = new Dictionary<string, object>
+                {
+                    ["$elemMatch"] = new Dictionary<string, object> { ["uuid"] = uuid }
+                }
+            },
+            ["fields"] = ListFields,
+            ["use_index"] = "_all_docs",
+            ["skip"] = skip,
+            ["limit"] = limit
+        };
 
     /// <summary>
     /// Только id: XML площадки на этом проходе не нужен, а sortAt до конца чтения не меняется.

@@ -120,6 +120,7 @@ public class ConfigurationApplicationServiceTests
 
     /// <summary>
     /// Флажок и адрес Ветис сохраняются отдельной секцией и попадают в переносимый файл.
+    /// Адрес 3.0 при сохранении заменяется на 2.1: это опытная версия шлюза.
     /// </summary>
     [Fact]
     public async Task Update_сохраняет_настройки_Ветис_и_кладёт_их_в_экспорт()
@@ -134,7 +135,7 @@ public class ConfigurationApplicationServiceTests
         Assert.True(ok.IsSuccess);
         Assert.True(parameters.CurrentValue.VetisSettings.Enable);
         Assert.Equal(
-            "https://api.vetrf.ru/platform/services/3.0/ApplicationManagementService",
+            "https://api.vetrf.ru/platform/services/2.1/ApplicationManagementService",
             parameters.CurrentValue.VetisSettings.Endpoint);
         Assert.True(exported.IsSuccess);
         Assert.Contains("\"enable\": true", exported.Value.Json);

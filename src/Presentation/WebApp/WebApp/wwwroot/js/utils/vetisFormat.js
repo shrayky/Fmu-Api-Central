@@ -73,6 +73,15 @@ export function vsdStatusLabel(status) {
     return VSD_STATUSES[status] ?? status ?? "";
 }
 
+/** Ошибка приёма ВСД: текст уходит в title, поэтому экранируется. */
+export function vsdErrorIcon(error) {
+    const text = String(error ?? "").trim();
+    if (!text)
+        return "";
+
+    return `<span class="webix_icon vetis-vsd-error" title="${escapeHtml(text)}"></span>`;
+}
+
 const INVALID_FILE_CHAR = /[\\/:*?"<>|]/g;
 
 export function vsdXmlFileName(vsd) {

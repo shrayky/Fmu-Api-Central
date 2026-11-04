@@ -1,6 +1,6 @@
 import vetisService from '../../services/vetisService.js';
 import { copyText } from '../../utils/copyText.js';
-import { canQuenchRows, editedActualVolume, formatIsoMoment, incomingStatusLine, incomingWindowClosable, quenchLockedByProgress, quenchStageText, quenchSummary, sameIncomingDocument, vsdStatusLabel, vsdXmlFileName } from '../../utils/vetisFormat.js';
+import { canQuenchRows, editedActualVolume, formatIsoMoment, incomingStatusLine, incomingWindowClosable, quenchLockedByProgress, quenchStageText, quenchSummary, sameIncomingDocument, vsdErrorIcon, vsdStatusLabel, vsdXmlFileName } from '../../utils/vetisFormat.js';
 import { openVetisWindow } from './vetisWindow.js';
 
 const WINDOW_ID = "vetisIncomingWindow";
@@ -57,6 +57,7 @@ export async function openIncomingWindow(row, { onQuenched } = {}) {
                     columns: [
                         { id: "issueNumber", header: "Номер ВСД", width: 150 },
                         { id: "issueDate", header: "Дата оформления", width: 140, template: (vsd) => formatIsoMoment(vsd.issueDate) },
+                        { id: "lastError", header: "", width: 32, template: (vsd) => vsdErrorIcon(vsd.lastError) },
                         { id: "productName", header: "Продукция", fillspace: true },
                         { id: "volume", header: "Объём", width: 100 },
                         { id: "actualVolume", header: "Факт", width: 110, editor: "text" },
@@ -67,6 +68,7 @@ export async function openIncomingWindow(row, { onQuenched } = {}) {
                             id: "copy",
                             header: "",
                             width: 40,
+                            css: "vetis-icon-cell",
                             template: (vsd) => vsd.uuid
                                 ? "<span class='webix_icon vetis-copy' title='Скопировать идентификатор'></span>"
                                 : "",
@@ -75,8 +77,9 @@ export async function openIncomingWindow(row, { onQuenched } = {}) {
                             id: "xml",
                             header: "",
                             width: 40,
+                            css: "vetis-icon-cell",
                             template: (vsd) => vsd.rawXml
-                                ? "<span class='webix_icon wxi-download' title='Выгрузить XML'></span>"
+                                ? "<span class='webix_icon vetis-download' title='Выгрузить XML'></span>"
                                 : "",
                         },
                     ],

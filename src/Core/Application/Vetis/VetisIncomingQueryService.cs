@@ -31,16 +31,21 @@ public sealed class VetisIncomingQueryService
         string enterpriseGuid,
         string status,
         int skip,
-        int limit)
+        int limit,
+        string vsdUuid = "")
     {
         var offset = VetisPaging.Skip(skip);
         var size = VetisPaging.Limit(limit);
-        var filter = new VetisIncomingFilter
-        {
-            OrganizationId = organizationId ?? "",
-            EnterpriseGuid = enterpriseGuid ?? "",
-            Status = KnownStatuses.Contains(status) ? status : ""
-        };
+        var uuid = NormalizeVsdUuid(vsdUuid);
+        // GUID ищется по всем статусам: документ уже может быть погашен, а журнал открыт на «Не принят».
+        var filter = uuid.Length > 0
+            ? new VetisIncomingFilter { VsdUuid = uuid }
+            : new VetisIncomingFilter
+            {
+                OrganizationId = organizationId ?? "",
+                EnterpriseGuid = enterpriseGuid ?? "",
+                Status = KnownStatuses.Contains(status) ? status : ""
+            };
 
         var fetched = await _incoming.List(filter, offset, size + 1);
         if (fetched.IsFailure)
@@ -77,6 +82,7 @@ public sealed class VetisIncomingQueryService
                     Transport = VetisTransport.Describe(vsd.RawXml),
                     ConsignorName = vsd.ConsignorName,
                     ReceivedAt = vsd.ReceivedAt,
+                    LastError = vsd.LastError,
                     RawXml = vsd.RawXml
                 })
                 .ToList()
@@ -143,6 +149,15 @@ public sealed class VetisIncomingQueryService
             HashCode.Combine(
                 StringComparer.OrdinalIgnoreCase.GetHashCode(value.OrganizationId ?? ""),
                 StringComparer.OrdinalIgnoreCase.GetHashCode(value.Guid ?? ""));
+    }
+
+    private static string NormalizeVsdUuid(string value)
+    {
+        var text = (value ?? "").Trim().Trim('{', '}').ToLowerInvariant();
+        if (text.Length == 32 && text.All(static c => c is >= '0' and <= '9' or >= 'a' and <= 'f'))
+            text = $"{text[..8]}-{text[8..12]}-{text[12..16]}-{text[16..20]}-{text[20..]}";
+
+        return text;
     }
 
     private static VetisIncomingRow ToRow(VetisIncomingDocumentEntity document, VetisDirectory directory)
