@@ -235,6 +235,35 @@ public class InstanceGroupManagerServiceTests
     }
 
     [Fact]
+    public async Task SaveCheckerSettings_файл_больше_2_мегабайт_не_пишет()
+    {
+        var repo = new FakeGroupRepository();
+        repo.Store["g1"] = new InstanceGroupEntity { Id = "g1", Name = "Группа" };
+        var sut = CreateSut(repo);
+        var body = new byte[2 * 1024 * 1024 + 1];
+
+        var result = await sut.SaveCheckerSettings("g1", body);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("Файл настроек больше 2 МБ", result.Error);
+        Assert.False((await repo.ReadCheckerSettings("g1")).Value.Exists);
+    }
+
+    [Fact]
+    public async Task SaveCheckerSettings_недоступность_базы_не_называет_группу_пропавшей()
+    {
+        var repo = new FakeGroupRepository { GetByIdError = "БД недоступна сейчас" };
+        repo.Store["g1"] = new InstanceGroupEntity { Id = "g1", Name = "Группа" };
+        var sut = CreateSut(repo);
+
+        var result = await sut.SaveCheckerSettings("g1", """{"a":1}"""u8.ToArray());
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("БД недоступна сейчас", result.Error);
+        Assert.False((await repo.ReadCheckerSettings("g1")).Value.Exists);
+    }
+
+    [Fact]
     public async Task SaveCheckerSettings_нет_группы()
     {
         var sut = CreateSut(new FakeGroupRepository());
@@ -308,6 +337,42 @@ public class InstanceGroupManagerServiceTests
         Assert.True(page.Content.Single().HasCheckerSettings);
     }
 
+    [Fact]
+    public async Task HasCheckerSettings_true_когда_файл_есть()
+    {
+        var repo = new FakeGroupRepository();
+        repo.Store["g1"] = new InstanceGroupEntity { Id = "g1", Name = "Группа" };
+        var sut = CreateSut(repo);
+        Assert.True((await sut.SaveCheckerSettings("g1", """{"a":1}"""u8.ToArray())).IsSuccess);
+
+        var result = await sut.HasCheckerSettings("g1");
+
+        Assert.True(result.IsSuccess);
+        Assert.True(result.Value);
+    }
+
+    [Fact]
+    public async Task HasCheckerSettings_false_когда_файла_нет()
+    {
+        var repo = new FakeGroupRepository();
+        repo.Store["g1"] = new InstanceGroupEntity { Id = "g1", Name = "Группа" };
+        var sut = CreateSut(repo);
+
+        var result = await sut.HasCheckerSettings("g1");
+
+        Assert.True(result.IsSuccess);
+        Assert.False(result.Value);
+    }
+
+    [Fact]
+    public async Task HasCheckerSettings_нет_группы()
+    {
+        var result = await CreateSut(new FakeGroupRepository()).HasCheckerSettings("missing");
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("Группа не найдена", result.Error);
+    }
+
     private static InstanceGroupManagerService CreateSut(
         FakeGroupRepository repository,
         IMessageServiceFactory? messageServiceFactory = null,
@@ -337,10 +402,17 @@ public class InstanceGroupManagerServiceTests
             return Task.FromResult(Result.Success());
         }
 
+        public string? GetByIdError { get; init; }
+
         public Task<Result<InstanceGroupEntity>> GetById(string id)
-            => Task.FromResult(Store.TryGetValue(id, out var entity)
+        {
+            if (GetByIdError != null)
+                return Task.FromResult(Result.Failure<InstanceGroupEntity>(GetByIdError));
+
+            return Task.FromResult(Store.TryGetValue(id, out var entity)
                 ? Result.Success(entity)
                 : Result.Failure<InstanceGroupEntity>($"Группа {id} не найдена"));
+        }
 
         public Task<Result> Delete(string id) => throw new NotImplementedException();
 
@@ -373,6 +445,9 @@ public class InstanceGroupManagerServiceTests
 
             return Task.FromResult(Result.Success(new CheckerSettingsRead(true, content)));
         }
+
+        public Task<Result<bool>> HasCheckerSettings(string groupId)
+            => Task.FromResult(Result.Success(Files.ContainsKey(groupId)));
 
         public Task<List<InstanceGroupEntity>> All() => throw new NotImplementedException();
 

@@ -230,9 +230,12 @@ public class InstanceGroupManagerService : IInstanceGroupManagerService
         if (string.IsNullOrWhiteSpace(groupId))
             return Result.Failure(CheckerSettingsAttachment.GroupNotFoundMessage);
 
+        if (content.LongLength > CheckerSettingsAttachment.MaxBytes)
+            return Result.Failure(CheckerSettingsAttachment.TooLargeMessage);
+
         var exist = await _repository.GetById(groupId);
         if (exist.IsFailure)
-            return Result.Failure(CheckerSettingsAttachment.GroupNotFoundMessage);
+            return Result.Failure(GroupAccessError(exist.Error));
 
         if (!CheckerSettingsFile.IsJsonObject(content))
             return Result.Failure(CheckerSettingsAttachment.InvalidJsonMessage);
@@ -247,10 +250,29 @@ public class InstanceGroupManagerService : IInstanceGroupManagerService
 
         var exist = await _repository.GetById(groupId);
         if (exist.IsFailure)
-            return Result.Failure(CheckerSettingsAttachment.GroupNotFoundMessage);
+            return Result.Failure(GroupAccessError(exist.Error));
 
         return await _repository.DeleteCheckerSettings(groupId);
     }
+
+    public async Task<Result<bool>> HasCheckerSettings(string groupId)
+    {
+        if (string.IsNullOrWhiteSpace(groupId))
+            return Result.Failure<bool>(CheckerSettingsAttachment.GroupNotFoundMessage);
+
+        var exist = await _repository.GetById(groupId);
+        if (exist.IsFailure)
+            return Result.Failure<bool>(GroupAccessError(exist.Error));
+
+        return await _repository.HasCheckerSettings(groupId);
+    }
+
+    // Couch и фейк помечают отсутствие документа словами «не найдена».
+    // Остальные ошибки чтения — сбой базы, их нельзя подменять.
+    private static string GroupAccessError(string error)
+        => error.Contains("не найдена", StringComparison.OrdinalIgnoreCase)
+            ? CheckerSettingsAttachment.GroupNotFoundMessage
+            : error;
 
     private static void Apply(InstanceGroupEntity entity, InstanceGroupView data)
     {

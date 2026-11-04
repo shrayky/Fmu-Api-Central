@@ -18,4 +18,5 @@ public interface IInstanceGroupRepository
     Task<Result> SaveCheckerSettings(string groupId, byte[] content);
     Task<Result> DeleteCheckerSettings(string groupId);
     Task<Result<CheckerSettingsRead>> ReadCheckerSettings(string groupId);
+    Task<Result<bool>> HasCheckerSettings(string groupId);
 }

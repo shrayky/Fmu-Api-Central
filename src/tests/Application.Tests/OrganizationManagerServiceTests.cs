@@ -466,6 +466,9 @@ public class OrganizationManagerServiceTests
 
         public Task<Result<CheckerSettingsRead>> ReadCheckerSettings(string groupId)
             => throw new NotImplementedException();
+
+        public Task<Result<bool>> HasCheckerSettings(string groupId)
+            => throw new NotImplementedException();
     }
 
     private sealed class FakeTrueApiAuthService : ITrueApiAuthService

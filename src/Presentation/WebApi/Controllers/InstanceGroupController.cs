@@ -63,11 +63,22 @@ public class InstanceGroupController : ControllerBase
         return result.IsSuccess ? Ok(result.Value) : BadRequest(result.Error);
     }
 
+    [HttpGet("{id}/checker-settings")]
+    public async Task<IActionResult> CheckerSettings(string id)
+    {
+        var result = await _manager.HasCheckerSettings(id);
+        return result.IsSuccess ? Ok(new { hasSettings = result.Value }) : BadRequest(result.Error);
+    }
+
     [HttpPost("{id}/checker-settings")]
+    [RequestSizeLimit(CheckerSettingsAttachment.RequestBytes)]
     public async Task<IActionResult> UploadCheckerSettings(string id, IFormFile? file)
     {
         if (file == null || file.Length == 0)
             return BadRequest(CheckerSettingsAttachment.InvalidJsonMessage);
+
+        if (file.Length > CheckerSettingsAttachment.MaxBytes)
+            return BadRequest(CheckerSettingsAttachment.TooLargeMessage);
 
         using var memory = new MemoryStream();
         await file.CopyToAsync(memory);

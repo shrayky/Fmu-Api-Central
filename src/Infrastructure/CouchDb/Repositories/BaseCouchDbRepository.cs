@@ -184,6 +184,8 @@ namespace CouchDb.Repositories
 
         /// <summary>
         /// Сохраняет уже прочитанные документы с текущим Rev.
+        /// Вложения не переносит: для документов с файлами используйте Update,
+        /// он читает заглушки вложений и сохраняет их.
         /// </summary>
         protected async Task SaveExistingDocumentsAsync(IEnumerable<UniversalDocument<T>> documents)
         {
@@ -216,11 +218,38 @@ namespace CouchDb.Repositories
             var doc = UniversalDocument<T>.FromDomain(entity, entity.Id);
 
             if (existingResponse != null)
+            {
+                // CouchDB удаляет вложения, если в PUT нет _attachments:
+                // возвращаем заглушки, чтобы сохранение полей не стирало файлы.
+                doc.Attachments = AttachmentStubs(existingResponse.Attachments);
                 await _database.UpdateItemAsync(doc, entity.Id, existingResponse.Rev);
+            }
             else
                 await _database.CreateItemAsync(doc);
 
             return true;
+        }
+
+        private static Dictionary<string, DocumentAttachmentStub>? AttachmentStubs(
+            IEnumerable<ReadItemAttachment>? attachments)
+        {
+            if (attachments == null)
+                return null;
+
+            var stubs = new Dictionary<string, DocumentAttachmentStub>(StringComparer.OrdinalIgnoreCase);
+            foreach (var attachment in attachments)
+            {
+                if (string.IsNullOrEmpty(attachment.Name))
+                    continue;
+
+                stubs[attachment.Name] = new DocumentAttachmentStub(
+                    attachment.ContentType,
+                    attachment.RevPos,
+                    attachment.Digest,
+                    attachment.Length);
+            }
+
+            return stubs.Count == 0 ? null : stubs;
         }
     }
 }

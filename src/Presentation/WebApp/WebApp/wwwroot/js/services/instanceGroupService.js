@@ -121,6 +121,17 @@ class InstanceGroupService {
             throw new Error(data.error);
     }
 
+    // Свежий статус шаблона: список групп мог быть загружен до загрузки файла.
+    async checkerSettingsStatus(groupId) {
+        const data = await this.authService.makeAuthenticatedRequest(
+            `${this.apiEndpoint}/${encodeURIComponent(groupId)}/checker-settings`
+        );
+        if (!data.result)
+            throw new Error(data.error);
+
+        return !!data.value?.hasSettings;
+    }
+
     async deleteCheckerSettings(groupId) {
         const data = await this.authService.makeAuthenticatedRequest(
             `${this.apiEndpoint}/${encodeURIComponent(groupId)}/checker-settings`,

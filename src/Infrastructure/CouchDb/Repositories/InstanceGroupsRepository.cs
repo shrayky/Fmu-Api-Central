@@ -1,12 +1,10 @@
-using CouchDb.DatabaseScheme;
 using CouchDB.Driver.Extensions;
+using CouchDB.Driver.Types;
 using CSharpFunctionalExtensions;
 using Domain.Dto.Responces;
 using Domain.Entitys.InstanceGroup;
 using Domain.Entitys.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
-using System.Net.Http.Headers;
-using System.Text;
 
 namespace CouchDb.Repositories;
 
@@ -14,12 +12,9 @@ public class InstanceGroupsRepository : BaseCouchDbRepository<InstanceGroupEntit
 {
     private const string LogRepository = "группы инстансов";
 
-    private readonly IHttpClientFactory _httpClientFactory;
-
     public InstanceGroupsRepository(IServiceProvider services) : base(
         services.GetRequiredService<Context>().InstanceGroups, services)
     {
-        _httpClientFactory = services.GetRequiredService<IHttpClientFactory>();
     }
 
     public async Task<Result> Create(InstanceGroupEntity entity)
@@ -194,10 +189,16 @@ public class InstanceGroupsRepository : BaseCouchDbRepository<InstanceGroupEntit
             if (groups.Count == 0)
                 return Result.Success();
 
+            // По одной группе, а не bulk: Update читает документ с заглушками вложений
+            // и не стирает загруженный шаблон настроек.
             foreach (var document in groups)
+            {
                 document.Data.SettingsSchemaId = string.Empty;
+                var update = await Update(document.Data);
+                if (update.IsFailure)
+                    return update;
+            }
 
-            await SaveExistingDocumentsAsync(groups);
             return Result.Success();
         }
         catch (Exception ex)
@@ -254,6 +255,10 @@ public class InstanceGroupsRepository : BaseCouchDbRepository<InstanceGroupEntit
             await _database.UpsertAttachmentAsync(groupId, response.Rev, path, "application/json");
             return Result.Success();
         }
+        catch (Exception ex)
+        {
+            return Result.Failure($"Не удалось сохранить настройки группы: {ex.Message}");
+        }
         finally
         {
             directory.Delete(true);
@@ -265,16 +270,22 @@ public class InstanceGroupsRepository : BaseCouchDbRepository<InstanceGroupEntit
         if (!_appState.DbState())
             return Result.Failure(DatabaseUnavailable);
 
-        var response = await _database.ReadItemAsync(groupId);
-        if (response == null)
-            return Result.Failure(CheckerSettingsAttachment.GroupNotFoundMessage);
+        try
+        {
+            var response = await _database.ReadItemAsync(groupId);
+            if (response == null)
+                return Result.Failure(CheckerSettingsAttachment.GroupNotFoundMessage);
 
-        if (response.Attachments?.Any(item =>
-                string.Equals(item.Name, CheckerSettingsAttachment.Name, StringComparison.OrdinalIgnoreCase)) != true)
+            if (!HasSettings(response.Attachments))
+                return Result.Success();
+
+            await _database.DeleteAttachmentAsync(CheckerSettingsAttachment.Name, groupId, response.Rev);
             return Result.Success();
-
-        await _database.DeleteAttachmentAsync(groupId, response.Rev, CheckerSettingsAttachment.Name);
-        return Result.Success();
+        }
+        catch (Exception ex)
+        {
+            return Result.Failure($"Не удалось удалить настройки группы: {ex.Message}");
+        }
     }
 
     public async Task<Result<CheckerSettingsRead>> ReadCheckerSettings(string groupId)
@@ -282,29 +293,48 @@ public class InstanceGroupsRepository : BaseCouchDbRepository<InstanceGroupEntit
         if (!_appState.DbState())
             return Result.Failure<CheckerSettingsRead>(DatabaseUnavailable);
 
-        var response = await _database.ReadItemAsync(groupId);
-        if (response == null || response.Attachments?.Any(item =>
-                string.Equals(item.Name, CheckerSettingsAttachment.Name, StringComparison.OrdinalIgnoreCase)) != true)
-            return Result.Success(new CheckerSettingsRead(false, []));
+        try
+        {
+            var response = await _database.ReadItemAsync(groupId);
+            if (response == null || !HasSettings(response.Attachments))
+                return Result.Success(new CheckerSettingsRead(false, []));
 
-        var settings = await _parameters.Current();
-        var uri = $"{settings.DatabaseConnection.NetAddress.TrimEnd('/')}/{DatabaseNames.InstanceGroup}/{Uri.EscapeDataString(groupId)}/{Uri.EscapeDataString(CheckerSettingsAttachment.Name)}";
-        var client = _httpClientFactory.CreateClient(SoftwareUpdateFilesRepository.AttachmentHttpClientName);
-        using var request = new HttpRequestMessage(HttpMethod.Get, uri);
-        var token = Convert.ToBase64String(Encoding.ASCII.GetBytes(
-            $"{settings.DatabaseConnection.UserName}:{settings.DatabaseConnection.Password}"));
-        request.Headers.Authorization = new AuthenticationHeaderValue("Basic", token);
-        using var http = await client.SendAsync(request);
-        if (!http.IsSuccessStatusCode)
+            // Клиент CouchDB ограничен QueryTimeout. Клиент файла обновления ждёт бесконечно.
+            await using var stream = await _database.DownloadAttachmentAsStreamAsync(
+                CheckerSettingsAttachment.Name, groupId, response.Rev);
+            using var memory = new MemoryStream();
+            await stream.CopyToAsync(memory);
+            return Result.Success(new CheckerSettingsRead(true, memory.ToArray()));
+        }
+        catch (Exception)
+        {
             return Result.Failure<CheckerSettingsRead>(CheckerSettingsAttachment.ReadFailedMessage);
+        }
+    }
 
-        return Result.Success(new CheckerSettingsRead(true, await http.Content.ReadAsByteArrayAsync()));
+    public async Task<Result<bool>> HasCheckerSettings(string groupId)
+    {
+        if (!_appState.DbState())
+            return Result.Failure<bool>(DatabaseUnavailable);
+
+        try
+        {
+            var response = await _database.ReadItemAsync(groupId);
+            return Result.Success(HasSettings(response?.Attachments));
+        }
+        catch (Exception ex)
+        {
+            return Result.Failure<bool>($"Не удалось прочитать настройки группы: {ex.Message}");
+        }
     }
 
     private async Task<bool> HasSettingsAttachment(string groupId)
     {
         var response = await _database.ReadItemAsync(groupId);
-        return response?.Attachments?.Any(item =>
-            string.Equals(item.Name, CheckerSettingsAttachment.Name, StringComparison.OrdinalIgnoreCase)) == true;
+        return HasSettings(response?.Attachments);
     }
+
+    private static bool HasSettings(IEnumerable<ReadItemAttachment>? attachments) =>
+        attachments?.Any(item =>
+            string.Equals(item.Name, CheckerSettingsAttachment.Name, StringComparison.OrdinalIgnoreCase)) == true;
 }

@@ -533,6 +533,7 @@ public class CheckerDistributionServiceTests
         public Task<Result> ClearOrganizationLink(string organizationId) => throw new NotSupportedException();
         public Task<Result> SaveCheckerSettings(string groupId, byte[] content) => throw new NotSupportedException();
         public Task<Result> DeleteCheckerSettings(string groupId) => throw new NotSupportedException();
+        public Task<Result<bool>> HasCheckerSettings(string groupId) => throw new NotSupportedException();
     }
 
     private sealed class FakeLocator : ICheckerTemplateLocator

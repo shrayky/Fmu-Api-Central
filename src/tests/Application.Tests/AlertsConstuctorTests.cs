@@ -224,5 +224,8 @@ public class AlertsConstuctorTests
 
         public Task<Result<CheckerSettingsRead>> ReadCheckerSettings(string groupId)
             => throw new NotImplementedException();
+
+        public Task<Result<bool>> HasCheckerSettings(string groupId)
+            => throw new NotImplementedException();
     }
 }

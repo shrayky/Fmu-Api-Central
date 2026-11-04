@@ -18,4 +18,5 @@ public interface IInstanceGroupManagerService
     Task<Result> TestChannel(AlertChannel channel);
     Task<Result> SaveCheckerSettings(string groupId, byte[] content);
     Task<Result> DeleteCheckerSettings(string groupId);
+    Task<Result<bool>> HasCheckerSettings(string groupId);
 }

@@ -30,10 +30,17 @@ class InstanceGroupElementView {
             botNotConnected: "Бот не подключен",
             chatIdZero: "ID чата не может быть 0",
             testSuccess: "Тест выполнен",
-            uploadSettings: "Загрузить настройки",
-            replaceSettings: "Заменить",
-            removeSettings: "Убрать",
-            settingsLoaded: "Настройки загружены"
+            checkerSettingsTitle: "Шаблон настроек FMU-API",
+            settingsMissing: "Шаблон настроек не загружен",
+            settingsLoaded: "Шаблон настроек загружен",
+            replaceSettings: "Заменить шаблон настроек",
+            removeSettings: "Удалить шаблон настроек",
+            uploadError: "Не удалось загрузить шаблон настроек",
+            removeError: "Не удалось удалить шаблон настроек",
+            confirmRemoveTitle: "Удаление шаблона настроек",
+            confirmRemoveText: "Удалить загруженный шаблон настроек?",
+            confirmYes: "Да",
+            confirmNo: "Нет"
         };
 
         this.NAMES = {
@@ -50,15 +57,27 @@ class InstanceGroupElementView {
             chatId: "instanceGroupChatId",
             botToken: "instanceGroupBotToken",
             checkerSettings: "instanceGroupCheckerSettings",
-            checkerSettingsStatus: "instanceGroupCheckerSettingsStatus",
-            uploadSettings: "instanceGroupUploadSettings",
-            replaceSettings: "instanceGroupReplaceSettings",
-            removeSettings: "instanceGroupRemoveSettings"
+            checkerSettingsStatus: "instanceGroupCheckerSettingsStatus"
         };
+
+        webix.html.addStyle(
+            ".instance-group-checker-settings legend{color:#d7dce5;font-weight:600;}" +
+            ".instance-group-checker-settings .webix_template{padding:6px 0 2px 0;}" +
+            ".instance-group-checker-settings__upload{color:#ff6b6b;text-decoration:underline;cursor:pointer;}" +
+            ".instance-group-checker-settings__upload:hover{color:#ff9a9a;}" +
+            ".instance-group-checker-settings__loaded{color:#4dabf7;text-decoration:underline;cursor:pointer;}" +
+            ".instance-group-checker-settings__loaded:hover{color:#8cc8ff;}" +
+            ".instance-group-checker-settings__remove{cursor:pointer;margin-left:10px;color:#8a93a3;}" +
+            ".instance-group-checker-settings__remove:hover{color:#ff6b6b;}",
+            "instance-group-checker-settings-styles"
+        );
     }
 
     async showDialog(editedData = {}, onSuccess, onClose) {
+        const checkerSettingsRequest = this._nextCheckerSettingsRequest();
         this._saved = !!editedData.id;
+        this._hasCheckerSettings = !!editedData.hasCheckerSettings;
+        this._checkerSettingsTouched = false;
         this.elementId = editedData.id || newUuid();
         const schemaOptions = await this._loadSchemaOptions();
         const currentSchemaId = editedData.settingsSchema?.id || "";
@@ -77,6 +96,12 @@ class InstanceGroupElementView {
             width: 720,
             position: "center",
             head: this.LABELS.formTitle,
+            on: {
+                onDestruct: () => {
+                    if (this._checkerSettingsRequest === checkerSettingsRequest)
+                        this._nextCheckerSettingsRequest();
+                }
+            },
             body: {
                 rows: [
                     {
@@ -106,7 +131,7 @@ class InstanceGroupElementView {
                                             value: currentSchemaId,
                                             options: schemaOptions
                                         },
-                                        ...(this._saved ? [this._checkerSettingsBlock(!!editedData.hasCheckerSettings)] : [])
+                                        ...(this._saved ? [this._checkerSettingsBlock()] : [])
                                     ]
                                 }
                             },
@@ -173,6 +198,11 @@ class InstanceGroupElementView {
             }
         }).show();
 
+        if (this._saved) {
+            this._bindCheckerSettingsEvents();
+            void this._refreshCheckerSettingsState(checkerSettingsRequest);
+        }
+
         setTimeout(() => {
             const nameField = $$(this.NAMES.name);
             if (nameField) {
@@ -181,80 +211,115 @@ class InstanceGroupElementView {
         }, 100);
     }
 
-    _checkerSettingsBlock(hasFile) {
+    _checkerSettingsBlock() {
         return {
+            view: "fieldset",
             id: this.NAMES.checkerSettings,
-            rows: [
-                {
-                    id: this.NAMES.checkerSettingsStatus,
-                    hidden: !hasFile,
-                    template: this.LABELS.settingsLoaded,
-                    autoheight: true,
-                    borderless: true
-                },
-                {
-                    cols: [
-                        {
-                            view: "button",
-                            id: this.NAMES.uploadSettings,
-                            hidden: hasFile,
-                            value: this.LABELS.uploadSettings,
-                            click: () => this._pickCheckerSettings()
-                        },
-                        {
-                            view: "button",
-                            id: this.NAMES.replaceSettings,
-                            hidden: !hasFile,
-                            value: this.LABELS.replaceSettings,
-                            click: () => this._pickCheckerSettings()
-                        },
-                        {
-                            view: "button",
-                            id: this.NAMES.removeSettings,
-                            hidden: !hasFile,
-                            value: this.LABELS.removeSettings,
-                            click: () => this._removeCheckerSettings()
-                        },
-                        {}
-                    ]
-                }
-            ]
+            label: this.LABELS.checkerSettingsTitle,
+            css: "instance-group-checker-settings",
+            body: {
+                rows: [
+                    {
+                        view: "template",
+                        id: this.NAMES.checkerSettingsStatus,
+                        borderless: true,
+                        autoheight: true,
+                        template: () => this._checkerSettingsMarkup(),
+                        on: {
+                            onAfterRender: () => this._bindCheckerSettingsEvents()
+                        }
+                    }
+                ]
+            }
         };
     }
 
-    _showCheckerSettings(hasFile) {
+    _checkerSettingsMarkup() {
+        if (this._hasCheckerSettings) {
+            return `<a href="javascript:void(0)" class="instance-group-checker-settings__loaded"` +
+                ` title="${this.LABELS.replaceSettings}">${this.LABELS.settingsLoaded}</a>` +
+                `<span class="webix_icon wxi-trash instance-group-checker-settings__remove"` +
+                ` title="${this.LABELS.removeSettings}"></span>`;
+        }
+
+        return `<a href="javascript:void(0)" class="instance-group-checker-settings__upload">` +
+            `${this.LABELS.settingsMissing}</a>`;
+    }
+
+    _bindCheckerSettingsEvents() {
         const status = $$(this.NAMES.checkerSettingsStatus);
-        const upload = $$(this.NAMES.uploadSettings);
-        const replace = $$(this.NAMES.replaceSettings);
-        const remove = $$(this.NAMES.removeSettings);
-        if (hasFile) {
-            status?.show();
-            upload?.hide();
-            replace?.show();
-            remove?.show();
+        const node = status?.getNode();
+        if (!node) {
             return;
         }
 
-        status?.hide();
-        upload?.show();
-        replace?.hide();
-        remove?.hide();
+        // Корневой узел шаблона переживает refresh(), поэтому обработчик не теряется.
+        node.onclick = (event) => {
+            if (event.target.closest(".instance-group-checker-settings__upload") ||
+                event.target.closest(".instance-group-checker-settings__loaded")) {
+                this._pickCheckerSettings();
+                return;
+            }
+
+            if (event.target.closest(".instance-group-checker-settings__remove")) {
+                this._removeCheckerSettings();
+            }
+        };
+    }
+
+    _applyCheckerSettingsState(hasFile) {
+        this._hasCheckerSettings = !!hasFile;
+        $$(this.NAMES.checkerSettingsStatus)?.refresh();
+        this._bindCheckerSettingsEvents();
+    }
+
+    _nextCheckerSettingsRequest() {
+        this._checkerSettingsRequest = (this._checkerSettingsRequest || 0) + 1;
+        return this._checkerSettingsRequest;
+    }
+
+    async _refreshCheckerSettingsState(request) {
+        const elementId = this.elementId;
+        try {
+            const hasFile = await instanceGroupService.checkerSettingsStatus(elementId);
+            if (request !== this._checkerSettingsRequest ||
+                this.elementId !== elementId ||
+                this._checkerSettingsTouched) {
+                return;
+            }
+
+            this._applyCheckerSettingsState(hasFile);
+        } catch (error) {
+            // Список групп уже отдал статус; если он устарел, карточка просто покажет его.
+            console.warn("Не удалось получить состояние шаблона настроек", error);
+        }
     }
 
     _pickCheckerSettings() {
         const input = document.createElement("input");
         input.type = "file";
         input.accept = ".json,application/json";
+        input.style.display = "none";
+        document.body.appendChild(input);
+        input.addEventListener("cancel", () => input.remove(), { once: true });
         input.onchange = async () => {
             const file = input.files && input.files[0];
-            if (!file)
+            if (!file) {
+                input.remove();
                 return;
+            }
 
             try {
                 await instanceGroupService.uploadCheckerSettings(this.elementId, file);
-                this._showCheckerSettings(true);
+                this._checkerSettingsTouched = true;
+                this._applyCheckerSettingsState(true);
             } catch (error) {
-                webix.message({ text: error.message, type: "error" });
+                webix.message({
+                    text: error.message || this.LABELS.uploadError,
+                    type: "error"
+                });
+            } finally {
+                input.remove();
             }
         };
         input.click();
@@ -262,10 +327,25 @@ class InstanceGroupElementView {
 
     async _removeCheckerSettings() {
         try {
+            await webix.confirm({
+                title: this.LABELS.confirmRemoveTitle,
+                text: this.LABELS.confirmRemoveText,
+                ok: this.LABELS.confirmYes,
+                cancel: this.LABELS.confirmNo
+            });
+        } catch {
+            return;
+        }
+
+        try {
             await instanceGroupService.deleteCheckerSettings(this.elementId);
-            this._showCheckerSettings(false);
+            this._checkerSettingsTouched = true;
+            this._applyCheckerSettingsState(false);
         } catch (error) {
-            webix.message({ text: error.message, type: "error" });
+            webix.message({
+                text: error.message || this.LABELS.removeError,
+                type: "error"
+            });
         }
     }
 

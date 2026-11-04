@@ -659,6 +659,9 @@ public class AlertTemplateRunServiceTests
 
         public Task<Result<CheckerSettingsRead>> ReadCheckerSettings(string groupId)
             => throw new NotImplementedException();
+
+        public Task<Result<bool>> HasCheckerSettings(string groupId)
+            => throw new NotImplementedException();
     }
 
     private sealed class FakeStatisticsRepository : IMarksCheckStatisticRepository
