@@ -77,7 +77,7 @@ public class ConfigurationApplicationService : IConfigurationApplicationService
             if (numbers.IsFailure)
                 return numbers;
 
-            parameters.VetisSettings.Endpoint = VetisEndpoints.Resolve(parameters.VetisSettings.Endpoint);
+            parameters.VetisSettings.Endpoint = VetisEndpoints.Origin(parameters.VetisSettings.Endpoint);
             RestoreMaskedSecrets(parameters, current);
 
             return await _parametersService.Update(parameters)

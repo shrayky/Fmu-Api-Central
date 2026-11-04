@@ -29,16 +29,33 @@ public class VetisConnectionTests
     }
 
     /// <summary>
-    /// Заданный адрес сохраняется, пробелы по краям снимаются.
+    /// В настройке лежит площадка. Путь сервиса 2.1 к ней добавляет код.
     /// </summary>
     [Fact]
-    public void Resolve_оставляет_заданный_адрес()
+    public void Resolve_к_площадке_добавляет_сервис_заявок_2_1()
     {
-        var endpoint = " https://api.vetrf.ru/platform/services/2.1/ApplicationManagementService ";
-
         Assert.Equal(
-            "https://api.vetrf.ru/platform/services/2.1/ApplicationManagementService",
-            VetisEndpoints.Resolve(endpoint));
+            "https://api2.vetrf.ru:8002/platform/services/2.1/ApplicationManagementService",
+            VetisEndpoints.Resolve(" https://api2.vetrf.ru:8002 "));
+        Assert.Equal(
+            "https://api2.vetrf.ru:8002/platform/services/2.1/EnterpriseService",
+            VetisEndpoints.EnterpriseService("https://api2.vetrf.ru:8002"));
+    }
+
+    /// <summary>
+    /// Уже сохранённый полный адрес сворачивается до схемы, хоста и порта.
+    /// </summary>
+    [Fact]
+    public void Origin_полный_адрес_сворачивается_до_площадки()
+    {
+        Assert.Equal("https://api.vetrf.ru", VetisEndpoints.Origin(null));
+        Assert.Equal("https://api.vetrf.ru", VetisEndpoints.Origin("  "));
+        Assert.Equal(
+            "https://api.vetrf.ru",
+            VetisEndpoints.Origin("https://api.vetrf.ru/platform/services/3.0/ApplicationManagementService"));
+        Assert.Equal(
+            "https://api2.vetrf.ru:8002",
+            VetisEndpoints.Origin(" https://api2.vetrf.ru:8002/platform/services/2.1/ApplicationManagementService "));
     }
 
     /// <summary>

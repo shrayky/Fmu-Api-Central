@@ -322,7 +322,7 @@ test("сохранение раскладывает значения по сек
         ...values,
         vetisEndpoint: " https://api.vetrf.ru/custom ",
     }).vetisSettings({});
-    assert.equal(kept.endpoint, "https://api.vetrf.ru/custom");
+    assert.equal(kept.endpoint, "https://api.vetrf.ru");
 });
 
 test("загрузка подставляет адрес Ветис и разрешает старый API, если их нет в конфигурации", async () => {
@@ -362,7 +362,7 @@ test("загрузка подставляет адрес Ветис и разр�
         security: { allowLegacyAgentApi: false },
         vetisSettings: {
             enable: true,
-            endpoint: " https://api.vetrf.ru/custom ",
+            endpoint: " https://api.vetrf.ru/platform/services/3.0/ApplicationManagementService ",
             incomingFetchIntervalMinutes: 0,
             incomingFetchPageSize: 10,
             applicationRetentionDays: 2,
@@ -370,7 +370,7 @@ test("загрузка подставляет адрес Ветис и разр�
         },
     });
     assert.equal(explicit.server.allowLegacyAgentApi, false);
-    assert.equal(explicit.vetis.endpoint, "https://api.vetrf.ru/custom");
+    assert.equal(explicit.vetis.endpoint, "https://api.vetrf.ru");
     assert.equal(explicit.vetis.incomingFetchIntervalMinutes, 0);
 });
 
