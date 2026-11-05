@@ -1,4 +1,5 @@
 using Domain.Entitys.Interfaces;
+using Domain.Etrn;
 using Domain.GisMt.Models;
 using System.Runtime.Serialization;
 
@@ -21,6 +22,8 @@ public class OrganizationEntity : IHaveStringId
     public GisMtLastStatus GisMtLastStatus { get; set; } = new();
 
     public List<GisMtConnectedProductGroup> GisMtProductGroups { get; set; } = [];
+
+    public List<EtrnConnection> EtrnConnections { get; set; } = [];
 
     public int? GisMtLastStatusCode { get; set; }
 
@@ -47,6 +50,7 @@ public class OrganizationEntity : IHaveStringId
     {
         GisMtLastStatus ??= new();
         GisMtProductGroups ??= [];
+        EtrnConnections ??= [];
         if (GisMtLastStatus.Code != null)
             return;
 

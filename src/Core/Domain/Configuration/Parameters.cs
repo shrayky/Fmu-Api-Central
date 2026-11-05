@@ -1,4 +1,5 @@
-﻿using Domain.Configuration.Options;
+using Domain.Configuration.Options;
+using Domain.Etrn;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -29,6 +30,9 @@ public class Parameters
 
     [JsonPropertyName("vetisSettings")]
     public VetisSettings VetisSettings { get; set; } = new();
+
+    [JsonPropertyName("etrnSettings")]
+    public EtrnSettings EtrnSettings { get; set; } = new();
 
     [JsonPropertyName("security")]
     public SecuritySettings Security { get; set; } = new();
