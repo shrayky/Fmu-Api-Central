@@ -106,7 +106,7 @@ public sealed class EtrnIncomingLoadService : IEtrnIncomingLoader
         var batch = fetched.Value;
         await _recorder.RecordAsync(batch.Exchanges, organization.Id, context.Operator);
 
-        foreach (var document in batch.Documents)
+        foreach (var document in batch.Documents ?? [])
         {
             var entity = document.ToEntity(context);
             if (string.IsNullOrWhiteSpace(entity.LastError) && !entity.HasQuantity)
@@ -139,7 +139,7 @@ public sealed class EtrnIncomingLoadService : IEtrnIncomingLoader
             saved.Add(entity.Id);
         }
 
-        foreach (var operatorDocumentId in batch.ClosedDocumentIds.Distinct(StringComparer.Ordinal))
+        foreach (var operatorDocumentId in (batch.ClosedDocumentIds ?? []).Distinct(StringComparer.Ordinal))
         {
             var closedId = EtrnIncomingDocumentEntity.BuildId(
                 organization.Id,
