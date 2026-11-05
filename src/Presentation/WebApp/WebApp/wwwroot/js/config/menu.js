@@ -20,6 +20,11 @@ export const MENU_ITEMS = {
         icon: "mdi mdi-vetis",
         requiresVetis: true
     },
+    ETRN: {
+        id: "etrn",
+        value: "ЭТрН",
+        icon: "mdi mdi-truck"
+    },
     INSTANCE_GROUPS: {
         id: "instanceGroups",
         value: "Группы инстансов",

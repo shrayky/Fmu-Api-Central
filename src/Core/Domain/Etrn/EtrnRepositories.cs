@@ -38,6 +38,7 @@ public sealed class EtrnSyncState : IHaveStringId
 
     public static string BuildId(string connectionId) => $"sync:{connectionId}";
 
+    [JsonIgnore]
     public EtrnPollPosition Position => new(EventId, DocumentId);
 }
 
@@ -124,6 +125,8 @@ public sealed class EtrnFilterConnection
     public string Type { get; set; } = "";
 
     public bool Enable { get; set; }
+
+    public string LastError { get; set; } = "";
 }
 
 public sealed class EtrnFilterOrganization
@@ -146,7 +149,7 @@ public interface IEtrnIncomingRepository
     /// <summary>
     /// Документы, зависшие в Sending настолько, что опрос должен сверить этап.
     /// </summary>
-    Task<Result<List<EtrnIncomingDocumentEntity>>> StaleSending(DateTimeOffset before, int limit);
+    Task<Result<List<EtrnIncomingDocumentEntity>>> StaleSending(long beforeUnix, int limit);
 }
 
 public interface IEtrnSyncStateRepository

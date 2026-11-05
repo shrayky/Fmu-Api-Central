@@ -23,6 +23,7 @@ public static class EtrnDocumentState
 
         document.Status = EtrnDocumentStatus.Sending;
         document.SendingAt = now;
+        document.SendingAtUnix = now.ToUnixTimeSeconds();
         document.LastError = "";
         return Result.Success();
     }
@@ -37,6 +38,7 @@ public static class EtrnDocumentState
         document.GeneralComment = decision.GeneralComment;
         document.SignedAt = Moment(now);
         document.SendingAt = null;
+        document.SendingAtUnix = 0;
         document.LastError = "";
 
         var byIndex = decision.Lines.ToDictionary(line => line.Index);
@@ -57,6 +59,7 @@ public static class EtrnDocumentState
     {
         document.Status = EtrnDocumentStatus.Waiting;
         document.SendingAt = null;
+        document.SendingAtUnix = 0;
         document.LastError = Truncate(error);
     }
 
@@ -64,6 +67,8 @@ public static class EtrnDocumentState
     {
         document.Status = EtrnDocumentStatus.Closed;
         document.SendingAt = null;
+        document.SendingAtUnix = 0;
+        document.LastError = "";
     }
 
     /// <summary>
@@ -79,6 +84,7 @@ public static class EtrnDocumentState
 
         document.Status = stillAcceptanceStage ? EtrnDocumentStatus.Waiting : EtrnDocumentStatus.Closed;
         document.SendingAt = null;
+        document.SendingAtUnix = 0;
         return Result.Success();
     }
 

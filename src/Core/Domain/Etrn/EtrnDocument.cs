@@ -96,6 +96,9 @@ public sealed class EtrnIncomingDocumentEntity : IHaveStringId
     [JsonPropertyName("organizationId")]
     public string OrganizationId { get; set; } = "";
 
+    [JsonPropertyName("operatorDocumentId")]
+    public string OperatorDocumentId { get; set; } = "";
+
     [JsonPropertyName("operator")]
     public EtrnOperator Operator { get; set; } = new();
 
@@ -134,6 +137,12 @@ public sealed class EtrnIncomingDocumentEntity : IHaveStringId
 
     [JsonPropertyName("sendingAt")]
     public DateTimeOffset? SendingAt { get; set; }
+
+    /// <summary>
+    /// Для отбора зависших отправок: сравнение строк ISO в CouchDB зависит от долей секунды.
+    /// </summary>
+    [JsonPropertyName("sendingAtUnix")]
+    public long SendingAtUnix { get; set; }
 
     [JsonPropertyName("lastError")]
     public string LastError { get; set; } = "";

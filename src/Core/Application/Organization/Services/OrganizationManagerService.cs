@@ -7,6 +7,7 @@ using Domain.Entitys.Interfaces;
 using Domain.Entitys.Organization;
 using Domain.Entitys.Organization.Dto;
 using Domain.Entitys.Organization.Interfaces;
+using Domain.Etrn;
 using Domain.GisMt.Models;
 using Domain.Vetis;
 using Domain.TrueApiIntegration;
@@ -194,6 +195,15 @@ public class OrganizationManagerService : IOrganizationManagerService
         entity.TrueApiIntegrationSettings = incoming;
         if (data.VetisSettings != null)
             OrganizationVetisScope.Apply(entity.VetisSettings ??= new(), data.VetisSettings);
+        entity.EtrnConnections = (data.EtrnConnections ?? [])
+            .Select(connection => new EtrnConnection
+            {
+                Id = string.IsNullOrWhiteSpace(connection.Id) ? Guid.NewGuid().ToString() : connection.Id,
+                Type = string.IsNullOrWhiteSpace(connection.Type) ? EtrnOperatorType.Saby : connection.Type,
+                Name = (connection.Name ?? "").Trim(),
+                Enable = connection.Enable
+            })
+            .ToList();
     }
 
     private OrganizationView ToView(OrganizationEntity entity)
@@ -214,7 +224,16 @@ public class OrganizationManagerService : IOrganizationManagerService
             GisMtLastStatus = CopyStatus(entity.GisMtLastStatus),
             GisMtProductGroups = CopyGroups(entity.GisMtProductGroups),
             TrueApiIntegrationSettings = ForClient(entity.TrueApiIntegrationSettings),
-            VetisSettings = ForClient(entity.VetisSettings)
+            VetisSettings = ForClient(entity.VetisSettings),
+            EtrnConnections = (entity.EtrnConnections ?? [])
+                .Select(connection => new EtrnConnection
+                {
+                    Id = connection.Id,
+                    Type = connection.Type,
+                    Name = connection.Name,
+                    Enable = connection.Enable
+                })
+                .ToList()
         };
     }
 

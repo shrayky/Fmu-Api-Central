@@ -24,6 +24,18 @@ public sealed class EtrnAcceptanceFact
     public string Comment { get; set; } = "";
 }
 
+public sealed class EtrnAcceptCommand
+{
+    [JsonPropertyName("intent")]
+    public string Intent { get; set; } = EtrnAcceptanceIntent.Sign;
+
+    [JsonPropertyName("comment")]
+    public string Comment { get; set; } = "";
+
+    [JsonPropertyName("lines")]
+    public List<EtrnAcceptanceFact> Lines { get; set; } = [];
+}
+
 public sealed class EtrnDecidedLine
 {
     [JsonPropertyName("index")]

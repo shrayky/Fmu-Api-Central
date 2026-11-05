@@ -1,4 +1,4 @@
-﻿using CouchDb.Repositories;
+using CouchDb.Repositories;
 using CouchDb.Workers;
 using CouchDB.Driver;
 using CouchDB.Driver.Options;
@@ -11,6 +11,7 @@ using Domain.Entitys.MarkCheckStatistics.Interfaces;
 using Domain.Entitys.Organization.Interfaces;
 using Domain.Entitys.SettingsSchema.Interfaces;
 using Domain.Entitys.Users.Interfaces;
+using Domain.Etrn;
 using Domain.GisMt.Interfaces;
 using Domain.Vetis;
 using Microsoft.Extensions.DependencyInjection;
@@ -79,6 +80,9 @@ public static class DatabaseRegistrationExtensions
         services.AddScoped<ICrptViolationsRepository, CrptViolationsRepository>();
         services.AddScoped<IVetisIncomingRepository, VetisIncomingRepository>();
         services.AddScoped<IVetisApplicationRepository, VetisApplicationRepository>();
+        services.AddScoped<IEtrnIncomingRepository, EtrnIncomingRepository>();
+        services.AddScoped<IEtrnSyncStateRepository, EtrnSyncStateRepository>();
+        services.AddScoped<IEtrnRequestRepository, EtrnRequestRepository>();
 
         services.AddHttpClient("CouchDbState", client =>
         {

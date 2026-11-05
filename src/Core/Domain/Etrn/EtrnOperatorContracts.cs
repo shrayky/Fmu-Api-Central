@@ -14,6 +14,8 @@ public sealed class EtrnOperatorContext
 
     public string CertificatePassword { get; init; } = "";
 
+    public EtrnPollPosition Position { get; init; } = EtrnPollPosition.Empty;
+
     public EtrnOperator Operator => EtrnOperator.For(Connection);
 }
 
@@ -48,7 +50,7 @@ public sealed class EtrnFetchedDocument
 
     public string RawXml { get; init; } = "";
 
-    public List<EtrnCargoLine> Lines { get; init; } = [];
+    public List<EtrnCargoLine> Lines { get; set; } = [];
 
     /// <summary>
     /// Титул прочитан, но в строке нет ни мест, ни массы.
@@ -59,6 +61,7 @@ public sealed class EtrnFetchedDocument
     {
         Id = EtrnIncomingDocumentEntity.BuildId(context.OrganizationId, context.Connection.Id, OperatorDocumentId),
         OrganizationId = context.OrganizationId,
+        OperatorDocumentId = OperatorDocumentId,
         Operator = EtrnOperator.For(context.Connection),
         Number = Number,
         Date = Date,
@@ -78,6 +81,11 @@ public sealed class EtrnFetchResult
     public EtrnPollPosition Position { get; init; } = EtrnPollPosition.Empty;
 
     public List<EtrnFetchedDocument> Documents { get; init; } = [];
+
+    /// <summary>
+    /// Документы, у которых событие уже не на этапе приёмки: этап закрыт не нами.
+    /// </summary>
+    public List<string> ClosedDocumentIds { get; init; } = [];
 
     public List<EtrnExchange> Exchanges { get; init; } = [];
 
@@ -118,11 +126,35 @@ public sealed class EtrnStageResult
     public List<EtrnExchange> Exchanges { get; init; } = [];
 }
 
+public sealed class EtrnSignatureRequest
+{
+    public string CertificateNumber { get; init; } = "";
+
+    public string CertificatePassword { get; init; } = "";
+
+    /// <summary>
+    /// Хеш из ответа Saby в том виде, в котором он пришёл: перекодировать нельзя.
+    /// </summary>
+    public string Hash { get; init; } = "";
+
+    /// <summary>
+    /// Ссылка на файл вместо хеша.
+    /// </summary>
+    public string FileUrl { get; init; } = "";
+}
+
+public interface IEtrnSignaturePort
+{
+    Task<Result<string>> SignAsync(EtrnSignatureRequest request, CancellationToken cancellationToken);
+}
+
 /// <summary>
 /// Имён методов Saby в Domain нет: Application работает только с этими двумя действиями и сверкой этапа.
 /// </summary>
 public interface IEtrnOperator
 {
+    string Type { get; }
+
     Task<Result<EtrnFetchResult>> FetchAsync(EtrnOperatorContext context, CancellationToken cancellationToken);
 
     Task<Result<EtrnExecuteResult>> ExecuteAsync(
@@ -134,4 +166,22 @@ public interface IEtrnOperator
         EtrnOperatorContext context,
         string operatorDocumentId,
         CancellationToken cancellationToken);
+}
+
+public interface IEtrnIncomingLoader
+{
+    /// <summary>
+    /// Последняя ошибка подключения за проход: строка фонового задания показывает её.
+    /// </summary>
+    string LastError { get; }
+
+    /// <summary>
+    /// Сколько разных входящих документов записано за проход.
+    /// </summary>
+    Task<int> LoadAsync(CancellationToken cancellationToken);
+}
+
+public interface IEtrnRequestCleaner
+{
+    Task<int> CleanAsync(CancellationToken cancellationToken);
 }

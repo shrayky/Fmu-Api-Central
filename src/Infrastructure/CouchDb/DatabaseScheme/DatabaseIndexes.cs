@@ -21,9 +21,28 @@ public class DatabaseIndexes
                 { DatabaseNames.AlertTemplates, AlertTemplatesIndexSchema() },
                 { DatabaseNames.CrptViolations, CrptViolationsIndexSchema() },
                 { DatabaseNames.VetisIncoming, VetisIncomingIndexSchema() },
-                { DatabaseNames.VetisApplications, VetisApplicationsIndexSchema() }
+                { DatabaseNames.VetisApplications, VetisApplicationsIndexSchema() },
+                { DatabaseNames.EtrnIncoming, EtrnIncomingIndexSchema() },
+                { DatabaseNames.EtrnRequests, EtrnRequestsIndexSchema() }
             };
     }
+
+    private static CouchDbIndexDefinition[] EtrnIncomingIndexSchema() =>
+        [
+            new("id-idx", new(["data.id"]), EtrnIncomingQuery.DesignDoc),
+            new("sort-at-idx", new(["data.sortAt"]), EtrnIncomingQuery.DesignDoc),
+            new(EtrnIncomingQuery.StaleIndex().Name, new(EtrnIncomingQuery.StaleIndex().Fields), EtrnIncomingQuery.DesignDoc),
+            ..EtrnIncomingQuery.FilterIndexes().Select(index =>
+                new CouchDbIndexDefinition(index.Name, new(index.Fields), EtrnIncomingQuery.DesignDoc))
+        ];
+
+    private static CouchDbIndexDefinition[] EtrnRequestsIndexSchema() =>
+        [
+            new("created-at-idx", new(["data.createdAt"]), EtrnRequestQuery.DesignDoc),
+            new("completed-created-at-idx", new(["data.completed", "data.createdAt"]), EtrnRequestQuery.DesignDoc),
+            ..EtrnRequestQuery.FilterIndexes().Select(index =>
+                new CouchDbIndexDefinition(index.Name, new(index.Fields), EtrnRequestQuery.DesignDoc))
+        ];
 
     private static CouchDbIndexDefinition[] VetisIncomingIndexSchema() =>
         [

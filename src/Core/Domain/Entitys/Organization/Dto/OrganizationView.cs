@@ -1,3 +1,4 @@
+using Domain.Etrn;
 using Domain.GisMt.Models;
 using System.Text.Json.Serialization;
 
@@ -37,4 +38,7 @@ public record OrganizationView
 
     [JsonPropertyName("vetisSettings")]
     public OrganizationVetisSettings? VetisSettings { get; set; }
+
+    [JsonPropertyName("etrnConnections")]
+    public List<EtrnConnection> EtrnConnections { get; set; } = [];
 }

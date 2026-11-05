@@ -4,6 +4,7 @@ export function mapServerSettings(configuration) {
     const server = configuration.serverSettings ?? {};
     const logger = configuration.loggerSettings ?? {};
     const vetis = configuration.vetisSettings ?? {};
+    const etrn = configuration.etrnSettings ?? {};
 
     return {
         server: {
@@ -26,6 +27,9 @@ export function mapServerSettings(configuration) {
             autoQuenchIntervalMinutes: vetis.autoQuenchIntervalMinutes ?? 15,
             autoQuenchBatchSize: vetis.autoQuenchBatchSize ?? 20,
             requireVehicleForQuench: !!vetis.requireVehicleForQuench,
+        },
+        etrn: {
+            incomingFetchIntervalMinutes: etrn.incomingFetchIntervalMinutes ?? 5,
         }
     };
 }

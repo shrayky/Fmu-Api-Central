@@ -2,6 +2,7 @@ import { loadConfiguration, saveConfigurationSections } from "../../services/Con
 import { setVetisMenuVisible } from "../../services/VetisMenuService.js";
 import { createServerTab, serverSettingsFormId } from "./serverTab.js";
 import { createVetisTab, vetisSettingsFormId } from "./vetisTab.js";
+import { createEtrnTab, etrnSettingsFormId } from "./etrnTab.js";
 import { mapServerSettings } from "./loadedSettings.js";
 import { buildConfigurationUpdaters, vetisEndpoint } from "./saveSettings.js";
 import { readFieldValues } from "./tabFields.js";
@@ -24,11 +25,12 @@ const fieldNames = [
     "vetisRequireVehicle",
     "vetisApplicationRetention",
     "vetisFailedApplicationRetention",
+    "etrnIncomingInterval",
 ];
 
-const formIds = [serverSettingsFormId, vetisSettingsFormId];
+const formIds = [serverSettingsFormId, vetisSettingsFormId, etrnSettingsFormId];
 
-export function createServerSettingsRows(serverTab, vetisTab, onSave) {
+export function createServerSettingsRows(serverTab, vetisTab, etrnTab, onSave) {
     return [
         {
             cols: [
@@ -45,7 +47,7 @@ export function createServerSettingsRows(serverTab, vetisTab, onSave) {
         {
             view: "tabview",
             id: "serverSettingsTabView",
-            cells: [serverTab, vetisTab]
+            cells: [serverTab, vetisTab, etrnTab]
         }
     ];
 }
@@ -96,6 +98,7 @@ class SettingsView {
         const mapped = mapServerSettings(requestResult.value.Content);
         this.server = mapped.server;
         this.vetis = mapped.vetis;
+        this.etrn = mapped.etrn;
         return this;
     }
 
@@ -107,6 +110,7 @@ class SettingsView {
             rows: createServerSettingsRows(
                 createServerTab(this.server),
                 createVetisTab(this.vetis),
+                createEtrnTab(this.etrn),
                 () => this.save()
             )
         };

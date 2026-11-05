@@ -4,6 +4,7 @@ import { newUuid } from '../../utils/uuid.js';
 import { copyText } from '../../utils/copyText.js';
 import { loadConfiguration } from '../../services/ConfigurationService.js';
 import organizationService from '../../services/organizationService.js';
+import etrnService from '../../services/etrnService.js';
 
 class OrganizationElementView {
     constructor() {
@@ -26,6 +27,14 @@ class OrganizationElementView {
             gisMtGroupTitle: "Название группы",
             markingTab: "Маркировка",
             vetisTab: "Ветис",
+            etrnTab: "ЭТрН",
+            etrnType: "Тип",
+            etrnName: "Название",
+            etrnEnable: "Включено",
+            etrnError: "Последняя ошибка",
+            etrnAdd: "Добавить",
+            etrnRemove: "Удалить",
+            etrnSaby: "Saby",
             vetisSettingsTab: "Настройка",
             vetisEnterprisesTab: "Предприятия",
             apiKey: "API-ключ",
@@ -98,7 +107,9 @@ class OrganizationElementView {
             issuerId: "vetisIssuerId",
             operatorLogin: "vetisOperatorLogin",
             autoQuench: "organizationVetisAutoQuench",
-            autoQuenchDelay: "organizationVetisAutoQuenchDelay"
+            autoQuenchDelay: "organizationVetisAutoQuenchDelay",
+            etrnTab: "organizationEtrnTab",
+            etrnConnections: "organizationEtrnConnections"
         };
     }
 
@@ -110,6 +121,7 @@ class OrganizationElementView {
         const groups = editedData.gisMtProductGroups || [];
         const vetis = editedData.vetisSettings || {};
         this._loadedVetis = editedData.vetisSettings || null;
+        this._loadedEtrn = editedData.etrnConnections || [];
         const vetisOn = await this._vetisEnabled();
 
         if ($$(this.NAMES.windowId)) {
@@ -158,8 +170,7 @@ class OrganizationElementView {
                         required: true,
                         invalidMessage: this.LABELS.invalidInnMessage
                     }),
-                    vetisOn ? this._tabs(trueApi, groups, vetis, windowHeight) : this._markingBody(trueApi, groups),
-                    this._createButtons(onSuccess, onClose)
+                    this._tabs(trueApi, groups, vetis, windowHeight, vetisOn),                    this._createButtons(onSuccess, onClose)
                 ]
             }
         }).show();
@@ -170,6 +181,9 @@ class OrganizationElementView {
             this._showEnterprises(vetis.enterprises || []);
             this._setVetisFieldsEnabled(!!vetis.enable);
         }
+
+        this._showEtrnConnections(this._loadedEtrn);
+        this._loadEtrnErrors();
 
         setTimeout(() => {
             const nameField = $$(this.NAMES.name);
@@ -268,14 +282,15 @@ class OrganizationElementView {
         return Math.max(this.SIZES.minTabview, windowHeight - this.SIZES.tabviewChrome);
     }
 
-    _tabs(trueApi, groups, vetis, windowHeight) {
+    _tabs(trueApi, groups, vetis, windowHeight, vetisOn = true) {
         return {
             view: "tabview",
             id: this.NAMES.tabs,
             height: this._tabviewHeight(windowHeight),
             cells: [
                 { header: this.LABELS.markingTab, body: this._markingBody(trueApi, groups) },
-                { header: this.LABELS.vetisTab, body: this._vetisBody(vetis) }
+                ...(vetisOn ? [{ header: this.LABELS.vetisTab, body: this._vetisBody(vetis) }] : []),
+                { header: this.LABELS.etrnTab, body: this._etrnBody() }
             ]
         };
     }
@@ -860,6 +875,183 @@ class OrganizationElementView {
         return `${date.getFullYear()}-${month}-${day}`;
     }
 
+    _etrnBody() {
+        const view = this;
+        return {
+            id: this.NAMES.etrnTab,
+            padding: 10,
+            rows: [
+                {
+                    cols: [
+                        { view: "button", value: this.LABELS.etrnAdd, width: 140, click: () => this._addEtrnConnection() },
+                        { view: "button", value: this.LABELS.etrnRemove, width: 140, click: () => this._removeSelectedEtrnConnection() },
+                        {}
+                    ]
+                },
+                {
+                    view: "datatable",
+                    id: this.NAMES.etrnConnections,
+                    gravity: 1,
+                    editable: true,
+                    editaction: "click",
+                    columns: [
+                        {
+                            id: "enable",
+                            header: "",
+                            template: "{common.checkbox()}",
+                            width: 40,
+                            checkValue: true,
+                            uncheckValue: false
+                        },
+                        { id: "name", header: this.LABELS.etrnName, fillspace: 1, editor: "text" },
+                        {
+                            id: "type",
+                            header: this.LABELS.etrnType,
+                            width: 100,
+                            template: (row) => this._escape(row.type === "saby" ? this.LABELS.etrnSaby : row.type)
+                        },
+                        {
+                            id: "lastError",
+                            header: this.LABELS.etrnError,
+                            fillspace: 1.6,
+                            template: (row) => row.lastError
+                                ? `<span title="${this._escape(row.lastError)}">${this._escape(row.lastError)}</span>`
+                                : ""
+                        },
+                        {
+                            id: "remove",
+                            header: "",
+                            width: 40,
+                            template: "<span class='webix_icon wxi-trash' title='Удалить'></span>"
+                        }
+                    ],
+                    data: (this._loadedEtrn || []).map(connection => ({
+                        id: connection.id || newUuid(),
+                        name: connection.name || "",
+                        type: connection.type || "saby",
+                        enable: !!connection.enable,
+                        lastError: ""
+                    })),
+                    on: {
+                        onItemClick(cell) {
+                            if (!cell || cell.column !== "remove")
+                                return;
+
+                            view._confirmRemoveEtrnConnection(cell.row);
+                        }
+                    }
+                },
+                {
+                    view: "template",
+                    autoheight: true,
+                    borderless: true,
+                    template: "Логин и пароль не хранятся: Saby принимает сертификат организации с вкладки «Маркировка»."
+                }
+            ]
+        };
+    }
+
+    _showEtrnConnections(connections) {
+        const table = $$(this.NAMES.etrnConnections);
+        if (!table)
+            return;
+
+        table.clearAll();
+        table.parse((connections || []).map(connection => ({
+            id: connection.id || newUuid(),
+            name: connection.name || "",
+            type: connection.type || "saby",
+            enable: !!connection.enable,
+            lastError: ""
+        })));
+    }
+
+    _addEtrnConnection() {
+        const table = $$(this.NAMES.etrnConnections);
+        if (!table)
+            return;
+
+        const id = newUuid();
+        table.add({
+            id,
+            name: "",
+            type: "saby",
+            enable: true,
+            lastError: ""
+        });
+        table.select(id);
+        table.editCell(id, "name");
+    }
+
+    _removeSelectedEtrnConnection() {
+        const table = $$(this.NAMES.etrnConnections);
+        const selected = table?.getSelectedId();
+        if (!selected) {
+            webix.message({ text: "Выберите подключение", type: "error" });
+            return;
+        }
+
+        this._confirmRemoveEtrnConnection(selected);
+    }
+
+    _confirmRemoveEtrnConnection(rowId) {
+        const table = $$(this.NAMES.etrnConnections);
+        if (!table || !table.exists(rowId))
+            return;
+
+        this._setOrganizationHotkeys(false);
+        webix.confirm({
+            title: "Вы уверены?",
+            text: "Удалить подключение ЭТрН?",
+            ok: "Да",
+            cancel: "Нет"
+        }).then(() => {
+            if (table.exists(rowId))
+                table.remove(rowId);
+        }).catch(() => {
+            // «Нет» отклоняет промис webix.confirm.
+        }).finally(() => {
+            this._setOrganizationHotkeys(true);
+        });
+    }
+
+    /**
+     * Ошибки опроса лежат отдельным документом и в карточку организации не приходят.
+     */
+    async _loadEtrnErrors() {
+        const table = $$(this.NAMES.etrnConnections);
+        if (!table)
+            return;
+
+        try {
+            const organizations = await etrnService.filters();
+            const organization = (organizations || []).find(item => item.id === this.elementId);
+            if (!organization)
+                return;
+
+            const errors = new Map((organization.connections || []).map(item => [item.id, item.lastError || ""]));
+            table.data.each(row => {
+                row.lastError = errors.get(row.id) || "";
+            });
+            table.refresh();
+        } catch {
+            // Подсказка не критична: карточка уже показывает таблицу подключений.
+        }
+    }
+
+    _etrnConnectionsFromTable() {
+        const table = $$(this.NAMES.etrnConnections);
+        if (!table)
+            return this._loadedEtrn || [];
+
+        return table.serialize().map(row => ({
+            id: row.id,
+            type: "saby",
+            name: String(row.name || "").trim(),
+            enable: !!row.enable
+        }));
+    }
+
     _groupsTable(groups) {
         return {
             view: "datatable",
@@ -913,7 +1105,8 @@ class OrganizationElementView {
                 enable: !!$$(this.NAMES.enable).getValue(),
                 password: $$(this.NAMES.password).getValue(),
                 digitalSignature: $$(this.NAMES.digitalSignature).getValue()
-            }
+            },
+            etrnConnections: this._etrnConnectionsFromTable()
         };
 
         if ($$(this.NAMES.apiKey))

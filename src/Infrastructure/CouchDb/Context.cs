@@ -1,4 +1,4 @@
-﻿using CouchDb.DatabaseScheme;
+using CouchDb.DatabaseScheme;
 using CouchDb.Dto;
 using CouchDB.Driver;
 using Domain.Entitys;
@@ -11,6 +11,7 @@ using Domain.Entitys.SettingsSchema;
 using Domain.Entitys.CrptViolations;
 using Domain.GisMt.Entity;
 using Domain.Entitys.SoftwareUpdateFiles;
+using Domain.Etrn;
 using Domain.Vetis;
 
 namespace CouchDb;
@@ -30,6 +31,9 @@ public class Context
     public ICouchDatabase<UniversalDocument<CrptViolationsDailyEntity>> CrptViolations { get; }
     public ICouchDatabase<UniversalDocument<VetisIncomingDocumentEntity>> VetisIncoming { get; }
     public ICouchDatabase<UniversalDocument<VetisApplicationEntity>> VetisApplications { get; }
+    public ICouchDatabase<UniversalDocument<EtrnIncomingDocumentEntity>> EtrnIncoming { get; }
+    public ICouchDatabase<UniversalDocument<EtrnSyncState>> EtrnSyncStates { get; }
+    public ICouchDatabase<UniversalDocument<EtrnRequestEntity>> EtrnRequests { get; }
 
     public Context(CouchClient client)
     {
@@ -46,5 +50,8 @@ public class Context
         CrptViolations = client.GetDatabase<UniversalDocument<CrptViolationsDailyEntity>>(DatabaseNames.CrptViolations);
         VetisIncoming = client.GetDatabase<UniversalDocument<VetisIncomingDocumentEntity>>(DatabaseNames.VetisIncoming);
         VetisApplications = client.GetDatabase<UniversalDocument<VetisApplicationEntity>>(DatabaseNames.VetisApplications);
+        EtrnIncoming = client.GetDatabase<UniversalDocument<EtrnIncomingDocumentEntity>>(DatabaseNames.EtrnIncoming);
+        EtrnSyncStates = client.GetDatabase<UniversalDocument<EtrnSyncState>>(DatabaseNames.EtrnIncoming);
+        EtrnRequests = client.GetDatabase<UniversalDocument<EtrnRequestEntity>>(DatabaseNames.EtrnRequests);
     }
 }

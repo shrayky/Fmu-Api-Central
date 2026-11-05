@@ -1,4 +1,4 @@
-﻿using Application.Configuration.DTO;
+using Application.Configuration.DTO;
 using Application.Configuration.Interfaces;
 using CSharpFunctionalExtensions;
 using Domain.Attributes;
@@ -76,6 +76,11 @@ public class ConfigurationApplicationService : IConfigurationApplicationService
             var numbers = parameters.VetisSettings.CheckAutoQuenchNumbers();
             if (numbers.IsFailure)
                 return numbers;
+
+            parameters.EtrnSettings ??= new();
+            var etrn = parameters.EtrnSettings.Check();
+            if (etrn.IsFailure)
+                return etrn;
 
             parameters.VetisSettings.Endpoint = VetisEndpoints.Origin(parameters.VetisSettings.Endpoint);
             RestoreMaskedSecrets(parameters, current);

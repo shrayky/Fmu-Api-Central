@@ -26,6 +26,7 @@ import createAlertSettingsView from '../modules/alertSettingsView.js';
 import createServiceView from '../modules/serviceView.js';
 import createUsersListView from '../modules/users/usersListView.js';
 import createVetisView from '../modules/vetis/vetisView.js';
+import createEtrnView from '../modules/etrn/etrnView.js';
 
 registerWebixEditors();
 
@@ -50,6 +51,7 @@ class App {
         this.router.register("markCheckStatistics", async (id) => await createMarkCheckStatisticsListView(id));
         this.router.register("crptViolations", async (id) => await createCrptViolationsListView(id));
         this.router.register("vetis", async (id) => await createVetisView(id));
+        this.router.register("etrn", async (id) => await createEtrnView(id));
         this.router.register("telegramBotSettings", async (id) => await createAlertSettingsView(id));
         this.router.register("service", async (id) => await createServiceView(id));
         this.router.register("usersList", async (id) => await createUsersListView(id));

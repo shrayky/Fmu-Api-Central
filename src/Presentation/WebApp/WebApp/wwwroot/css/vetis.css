@@ -81,6 +81,26 @@
     color: #d9534f;
 }
 
+.etrn-status-waiting {
+    color: #8a96a8;
+}
+
+.etrn-status-sending {
+    color: #d49a1a;
+}
+
+.etrn-status-accepted {
+    color: #2e9e5b;
+}
+
+.etrn-status-rejected {
+    color: #d9534f;
+}
+
+.etrn-status-closed {
+    color: #8a96a8;
+}
+
 .vetis-quench-stage {
     position: absolute;
     inset: 0;

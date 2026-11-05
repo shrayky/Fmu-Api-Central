@@ -53,6 +53,10 @@ export function buildConfigurationUpdaters(values) {
             requireVehicleForQuench: !!values.vetisRequireVehicle,
             applicationRetentionDays: parseInt(values.vetisApplicationRetention),
             failedApplicationRetentionDays: parseInt(values.vetisFailedApplicationRetention)
+        }),
+        etrnSettings: prev => ({
+            ...prev,
+            incomingFetchIntervalMinutes: parseInt(values.etrnIncomingInterval)
         })
     };
 }

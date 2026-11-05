@@ -1,4 +1,4 @@
-﻿namespace CouchDb.DatabaseScheme;
+namespace CouchDb.DatabaseScheme;
 
 public class DatabaseNames
 {
@@ -15,8 +15,10 @@ public class DatabaseNames
     public const string CrptViolations = "fmu-api-central-crpt-violations";
     public const string VetisIncoming = "fmu-api-central-vetis-incoming";
     public const string VetisApplications = "fmu-api-central-vetis-applications";
+    public const string EtrnIncoming = "fmu-api-central-etrn-incoming";
+    public const string EtrnRequests = "fmu-api-central-etrn-requests";
 
-    public static string[] All() => [Users, Instance, InstanceGroup, SettingsSchema, Organization, SoftwareUpdateFiles, MarkCheckingStatistic, GisMtDocuments, GisMtMarks, AlertTemplates, CrptViolations, VetisIncoming, VetisApplications];
+    public static string[] All() => [Users, Instance, InstanceGroup, SettingsSchema, Organization, SoftwareUpdateFiles, MarkCheckingStatistic, GisMtDocuments, GisMtMarks, AlertTemplates, CrptViolations, VetisIncoming, VetisApplications, EtrnIncoming, EtrnRequests];
 
-    public static string[] ExcludedFromExport() => [Users, SoftwareUpdateFiles, MarkCheckingStatistic, GisMtDocuments, GisMtMarks, CrptViolations, VetisIncoming, VetisApplications];
+    public static string[] ExcludedFromExport() => [Users, SoftwareUpdateFiles, MarkCheckingStatistic, GisMtDocuments, GisMtMarks, CrptViolations, VetisIncoming, VetisApplications, EtrnIncoming, EtrnRequests];
 }
