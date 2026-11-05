@@ -194,8 +194,8 @@ public static class SenderTitleReader
     {
         var lines = title.Descendants()
             .Where(element => LineNames.Contains(element.Name.LocalName, StringComparer.OrdinalIgnoreCase))
-            .Where(element => !element.Ancestors().Any(ancestor =>
-                LineNames.Contains(ancestor.Name.LocalName, StringComparer.OrdinalIgnoreCase)))
+            .Where(element => !element.Descendants().Any(child =>
+                LineNames.Contains(child.Name.LocalName, StringComparer.OrdinalIgnoreCase)))
             .ToList();
 
         var result = new List<EtrnCargoLine>(lines.Count);
