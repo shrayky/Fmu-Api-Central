@@ -195,15 +195,18 @@ public class OrganizationManagerService : IOrganizationManagerService
         entity.TrueApiIntegrationSettings = incoming;
         if (data.VetisSettings != null)
             OrganizationVetisScope.Apply(entity.VetisSettings ??= new(), data.VetisSettings);
-        entity.EtrnConnections = (data.EtrnConnections ?? [])
-            .Select(connection => new EtrnConnection
-            {
-                Id = string.IsNullOrWhiteSpace(connection.Id) ? Guid.NewGuid().ToString() : connection.Id,
-                Type = string.IsNullOrWhiteSpace(connection.Type) ? EtrnOperatorType.Saby : connection.Type,
-                Name = (connection.Name ?? "").Trim(),
-                Enable = connection.Enable
-            })
-            .ToList();
+        if (data.EtrnConnections != null)
+        {
+            entity.EtrnConnections = data.EtrnConnections
+                .Select(connection => new EtrnConnection
+                {
+                    Id = string.IsNullOrWhiteSpace(connection.Id) ? Guid.NewGuid().ToString() : connection.Id,
+                    Type = string.IsNullOrWhiteSpace(connection.Type) ? EtrnOperatorType.Saby : connection.Type,
+                    Name = (connection.Name ?? "").Trim(),
+                    Enable = connection.Enable
+                })
+                .ToList();
+        }
     }
 
     private OrganizationView ToView(OrganizationEntity entity)

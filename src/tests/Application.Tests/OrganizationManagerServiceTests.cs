@@ -9,6 +9,7 @@ using Domain.Entitys.Interfaces;
 using Domain.Entitys.Organization;
 using Domain.Entitys.Organization.Dto;
 using Domain.Entitys.Organization.Interfaces;
+using Domain.Etrn;
 using Domain.TrueApiIntegration;
 using Domain.TrueApiIntegration.Interfaces;
 
@@ -421,6 +422,58 @@ public class OrganizationManagerServiceTests
         }
 
         public Task<List<OrganizationEntity>> All() => Task.FromResult(Store.Values.ToList());
+    }
+
+    [Fact]
+    public async Task Update_сохраняет_подключения_ЭТрН()
+    {
+        var repository = new FakeOrganizationRepository();
+        repository.Store["o1"] = new OrganizationEntity { Id = "o1", Name = "Орг", Inn = "1234567890" };
+        var sut = CreateSut(repository);
+
+        var result = await sut.Update(new OrganizationView
+        {
+            Id = "o1",
+            Name = "Орг",
+            Inn = "1234567890",
+            EtrnConnections =
+            [
+                new EtrnConnection { Id = "c1", Type = EtrnOperatorType.Saby, Name = "СБИС", Enable = true }
+            ]
+        });
+
+        Assert.True(result.IsSuccess, result.IsFailure ? result.Error : "");
+        var connection = Assert.Single(repository.Store["o1"].EtrnConnections);
+        Assert.Equal("c1", connection.Id);
+        Assert.Equal(EtrnOperatorType.Saby, connection.Type);
+        Assert.True(connection.Enable);
+    }
+
+    [Fact]
+    public async Task Update_без_поля_подключений_не_стирает_ЭТрН()
+    {
+        var repository = new FakeOrganizationRepository();
+        repository.Store["o1"] = new OrganizationEntity
+        {
+            Id = "o1",
+            Name = "Орг",
+            Inn = "1234567890",
+            EtrnConnections =
+            [
+                new EtrnConnection { Id = "c1", Type = EtrnOperatorType.Saby, Name = "СБИС", Enable = true }
+            ]
+        };
+        var sut = CreateSut(repository);
+
+        var result = await sut.Update(new OrganizationView
+        {
+            Id = "o1",
+            Name = "Новое имя",
+            Inn = "1234567890"
+        });
+
+        Assert.True(result.IsSuccess, result.IsFailure ? result.Error : "");
+        Assert.Single(repository.Store["o1"].EtrnConnections);
     }
 
     private static OrganizationManagerService CreateSut(

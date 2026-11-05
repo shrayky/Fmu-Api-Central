@@ -40,5 +40,5 @@ public record OrganizationView
     public OrganizationVetisSettings? VetisSettings { get; set; }
 
     [JsonPropertyName("etrnConnections")]
-    public List<EtrnConnection> EtrnConnections { get; set; } = [];
+    public List<EtrnConnection>? EtrnConnections { get; set; }
 }
