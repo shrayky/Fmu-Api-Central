@@ -108,10 +108,10 @@ public sealed class EtrnIncomingQueryService
     {
         var organizations = await _organizations.All();
         var result = new List<EtrnFilterOrganization>();
-        foreach (var item in organizations.Where(item => item.EtrnConnections.Count > 0))
+        foreach (var item in organizations.Where(item => (item.EtrnConnections ?? []).Count > 0))
         {
             var organization = new EtrnFilterOrganization { Id = item.Id, Name = item.Name };
-            foreach (var connection in item.EtrnConnections)
+            foreach (var connection in item.EtrnConnections ?? [])
             {
                 var sync = await _syncStates.Find(connection.Id);
                 organization.Connections.Add(new EtrnFilterConnection

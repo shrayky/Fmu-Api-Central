@@ -80,7 +80,7 @@ public sealed class EtrnAcceptanceService
         if (organization.IsFailure)
             return Result.Failure<EtrnIncomingView>(organization.Error);
 
-        var connection = organization.Value.EtrnConnections.FirstOrDefault(item =>
+        var connection = (organization.Value.EtrnConnections ?? []).FirstOrDefault(item =>
             string.Equals(item.Id, document.Operator.ConnectionId, StringComparison.OrdinalIgnoreCase));
         if (connection == null)
             return Result.Failure<EtrnIncomingView>("Подключение оператора не найдено.");

@@ -57,7 +57,7 @@ export async function openEtrnIncomingWindow(row, { onAccepted } = {}) {
                         {},
                     ],
                 },
-                { view: "template", id: ERROR_ID, borderless: true, height: 34, template: "" },
+                { view: "template", id: ERROR_ID, borderless: true, autoheight: true, template: "" },
                 {
                     view: "datatable",
                     id: TABLE_ID,

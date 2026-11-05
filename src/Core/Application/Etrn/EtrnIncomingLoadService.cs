@@ -53,7 +53,7 @@ public sealed class EtrnIncomingLoadService : IEtrnIncomingLoader
         var saved = new HashSet<string>(StringComparer.Ordinal);
         foreach (var organization in organizations)
         {
-            foreach (var connection in organization.EtrnConnections.Where(item => item.Enable))
+            foreach (var connection in (organization.EtrnConnections ?? []).Where(item => item.Enable))
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 await LoadConnectionAsync(organization, connection, now, saved, cancellationToken);
@@ -199,7 +199,7 @@ public sealed class EtrnIncomingLoadService : IEtrnIncomingLoader
             cancellationToken.ThrowIfCancellationRequested();
             var organization = organizations.FirstOrDefault(item =>
                 string.Equals(item.Id, document.OrganizationId, StringComparison.OrdinalIgnoreCase));
-            var connection = organization?.EtrnConnections.FirstOrDefault(item =>
+            var connection = (organization?.EtrnConnections ?? []).FirstOrDefault(item =>
                 string.Equals(item.Id, document.Operator.ConnectionId, StringComparison.OrdinalIgnoreCase));
             if (organization == null || connection == null)
                 continue;
