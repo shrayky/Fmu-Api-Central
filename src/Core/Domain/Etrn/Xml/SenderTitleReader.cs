@@ -4,7 +4,7 @@ using System.Xml.Linq;
 using CSharpFunctionalExtensions;
 using Domain.Etrn;
 
-namespace EtrnSaby.Xml;
+namespace Domain.Etrn.Xml;
 
 public sealed class SenderTitle
 {

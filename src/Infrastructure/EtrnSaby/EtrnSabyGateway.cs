@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using CSharpFunctionalExtensions;
 using Domain.Etrn;
+using Domain.Etrn.Xml;
 using EtrnSaby.Xml;
 using Microsoft.Extensions.Logging;
 

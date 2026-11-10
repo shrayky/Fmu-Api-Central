@@ -1,5 +1,6 @@
 using System.Text;
 using Domain.Etrn;
+using Domain.Etrn.Xml;
 using EtrnSaby.Xml;
 
 namespace EtrnSaby.Tests;
