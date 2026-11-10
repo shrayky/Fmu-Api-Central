@@ -46,6 +46,7 @@
         <ProjectReference Include="..\..\Infrastructure\GisMt\GisMtExchange.csproj" />
         <ProjectReference Include="..\..\Infrastructure\VetisApi\VetisApi.csproj" />
         <ProjectReference Include="..\..\Infrastructure\EtrnSaby\EtrnSaby.csproj" />
+        <ProjectReference Include="..\..\Infrastructure\EtrnOfd\EtrnOfd.csproj" />
     </ItemGroup>
 
     <Target Name="CleanupPublishFolder" AfterTargets="Publish">

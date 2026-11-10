@@ -18,6 +18,7 @@ using Scalar.AspNetCore;
 using Shared.Installer;
 using TrueApiIntegration;
 using GisMtExchange;
+using EtrnOfd;
 using EtrnSaby;
 using VetisApi;
 using WebApi.Workers;
@@ -66,6 +67,7 @@ builder.Services.AddTrueApiIntegration();
 builder.Services.AddGisMtExchange();
 builder.Services.AddVetisApi();
 builder.Services.AddEtrnSaby();
+builder.Services.AddEtrnOfd();
 builder.Services.AddBotService(appSettings.BotSettings);
 
 builder.Services.AddControllers();

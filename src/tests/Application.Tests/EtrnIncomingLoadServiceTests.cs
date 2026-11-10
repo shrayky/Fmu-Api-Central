@@ -167,7 +167,8 @@ public class EtrnIncomingLoadServiceTests
         world.Operator.EnqueueStage(new EtrnStageResult
         {
             Completed = true,
-            Stage = EtrnPollEvent.AcceptanceStage
+            Stage = EtrnPollEvent.AcceptanceStage,
+            StillAcceptance = true
         });
 
         await world.Loader.LoadAsync(CancellationToken.None);

@@ -118,10 +118,10 @@ public sealed class EtrnStageResult
 
     public string Stage { get; init; } = "";
 
-    public bool StillAcceptance => string.Equals(
-        (Stage ?? "").Trim(),
-        EtrnPollEvent.AcceptanceStage,
-        StringComparison.OrdinalIgnoreCase);
+    /// <summary>
+    /// Этап приёмки у операторов называется по-разному, поэтому признак считает шлюз.
+    /// </summary>
+    public bool StillAcceptance { get; init; }
 
     public List<EtrnExchange> Exchanges { get; init; } = [];
 }

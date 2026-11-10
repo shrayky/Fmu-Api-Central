@@ -2,6 +2,7 @@ using System.Net.Http.Headers;
 using System.Text.Json;
 using CSharpFunctionalExtensions;
 using Domain.Etrn;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace EtrnOfd;
 
@@ -12,6 +13,7 @@ public sealed class OfdTokenClient
     private readonly OfdTokenStore _store;
     private readonly Func<DateTimeOffset> _now;
 
+    [ActivatorUtilitiesConstructor]
     public OfdTokenClient(HttpClient http, IOfdApiKeyHash hash, OfdTokenStore store)
         : this(http, hash, store, () => DateTimeOffset.Now)
     {

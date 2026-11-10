@@ -218,7 +218,12 @@ internal sealed class ScriptedEtrnOperator : IEtrnOperator
         LastContext = context;
         var result = _stage.Count > 0
             ? _stage.Dequeue()
-            : new EtrnStageResult { Completed = true, Stage = EtrnPollEvent.AcceptanceStage };
+            : new EtrnStageResult
+            {
+                Completed = true,
+                Stage = EtrnPollEvent.AcceptanceStage,
+                StillAcceptance = true
+            };
         return Task.FromResult(Result.Success(result));
     }
 

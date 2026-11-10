@@ -235,6 +235,7 @@ public sealed class EtrnSabyGateway : IEtrnOperator
         {
             Completed = true,
             Stage = stage,
+            StillAcceptance = new EtrnPollEvent("", "", stage).IsAcceptance,
             Exchanges = exchanges
         });
     }
