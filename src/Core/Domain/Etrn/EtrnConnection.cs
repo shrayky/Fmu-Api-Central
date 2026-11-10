@@ -5,13 +5,20 @@ namespace Domain.Etrn;
 public static class EtrnOperatorType
 {
     public const string Saby = "saby";
+    public const string Ofd = "ofd";
 
     private const string SabyLabel = "Saby";
+    private const string OfdLabel = "Платформа ОФД";
 
-    public static string Label(string? type) =>
-        string.Equals((type ?? "").Trim(), Saby, StringComparison.OrdinalIgnoreCase)
-            ? SabyLabel
-            : (type ?? "").Trim();
+    public static string Label(string? type)
+    {
+        var normalized = (type ?? "").Trim();
+        if (string.Equals(normalized, Saby, StringComparison.OrdinalIgnoreCase))
+            return SabyLabel;
+        if (string.Equals(normalized, Ofd, StringComparison.OrdinalIgnoreCase))
+            return OfdLabel;
+        return normalized;
+    }
 }
 
 public sealed class EtrnConnection
@@ -27,6 +34,12 @@ public sealed class EtrnConnection
 
     [JsonPropertyName("enable")]
     public bool Enable { get; set; }
+
+    [JsonPropertyName("subscriberId")]
+    public string SubscriberId { get; set; } = "";
+
+    [JsonPropertyName("apiKey")]
+    public string ApiKey { get; set; } = "";
 }
 
 public sealed class EtrnOperator

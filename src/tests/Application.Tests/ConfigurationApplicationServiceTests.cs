@@ -119,6 +119,45 @@ public class ConfigurationApplicationServiceTests
     }
 
     /// <summary>
+    /// Секрет интегратора ОФД на экран не отдаётся. Пустое поле и маска его не стирают.
+    /// В переносимый файл настроек секция ЭТрН не входит.
+    /// </summary>
+    [Fact]
+    public async Task Секрет_интегратора_ОФД_маскируется_и_не_попадает_в_экспорт()
+    {
+        var parameters = new FakeParametersService { CurrentValue = new Parameters() };
+        parameters.CurrentValue.EtrnSettings.OfdClientSecret = "ofd-secret";
+        parameters.CurrentValue.EtrnSettings.OfdClientId = "central";
+        var sut = new ConfigurationApplicationService(parameters, NullLogger<ConfigurationApplicationService>.Instance);
+
+        var current = await sut.Current();
+        Assert.DoesNotContain("ofd-secret", current);
+        Assert.Contains("\"ofdClientSecret\": \"***\"", current);
+
+        var kept = await sut.Update("""
+            {"etrnSettings":{"incomingFetchIntervalMinutes":5,"ofdClientId":"central","ofdClientSecret":"","ofdKeycloakUrl":"","ofdRealm":"","ofdApiUrl":""}}
+            """);
+        Assert.True(kept.IsSuccess, kept.IsFailure ? kept.Error : "");
+        Assert.Equal("ofd-secret", parameters.CurrentValue.EtrnSettings.OfdClientSecret);
+        Assert.Equal("https://oauth-test.platformaofd.ru", parameters.CurrentValue.EtrnSettings.OfdKeycloakUrl);
+        Assert.Equal("playground", parameters.CurrentValue.EtrnSettings.OfdRealm);
+        Assert.Equal("https://api-test.platformaofd.ru", parameters.CurrentValue.EtrnSettings.OfdApiUrl);
+
+        var replaced = await sut.Update("""
+            {"etrnSettings":{"incomingFetchIntervalMinutes":5,"ofdClientSecret":"new-secret","ofdKeycloakUrl":"https://oauth.example/","ofdApiUrl":"https://api.example"}}
+            """);
+        Assert.True(replaced.IsSuccess, replaced.IsFailure ? replaced.Error : "");
+        Assert.Equal("new-secret", parameters.CurrentValue.EtrnSettings.OfdClientSecret);
+        Assert.Equal("https://oauth.example", parameters.CurrentValue.EtrnSettings.OfdKeycloakUrl);
+        Assert.Equal("https://api.example", parameters.CurrentValue.EtrnSettings.OfdApiUrl);
+
+        var exported = await sut.ExportPortable(CancellationToken.None);
+        Assert.True(exported.IsSuccess);
+        Assert.DoesNotContain("new-secret", exported.Value.Json);
+        Assert.DoesNotContain("ofdClientSecret", exported.Value.Json);
+    }
+
+    /// <summary>
     /// Флажок и адрес Ветис сохраняются отдельной секцией и попадают в переносимый файл.
     /// Полный адрес сервиса при сохранении сворачивается до площадки: путь 2.1 подставляет код.
     /// </summary>

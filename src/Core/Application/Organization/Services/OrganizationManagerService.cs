@@ -184,6 +184,17 @@ public class OrganizationManagerService : IOrganizationManagerService
 
     private static string NormalizeInn(string? inn) => (inn ?? string.Empty).Trim();
 
+    /// <summary>
+    /// Пустое поле и маска не стирают ключ: карточка не отличает «не меняли» от очистки, а выпустить ключ заново можно только в ОФД.
+    /// </summary>
+    private static string RestoreApiKey(string? incoming, string stored)
+    {
+        var value = (incoming ?? "").Trim();
+        if (value.Length == 0 || SecretMask.IsPlaceholder(value))
+            return stored;
+        return value;
+    }
+
     private static void Apply(OrganizationEntity entity, OrganizationView data)
     {
         entity.Name = data.Name;
@@ -197,13 +208,22 @@ public class OrganizationManagerService : IOrganizationManagerService
             OrganizationVetisScope.Apply(entity.VetisSettings ??= new(), data.VetisSettings);
         if (data.EtrnConnections != null)
         {
+            var stored = entity.EtrnConnections ?? [];
             entity.EtrnConnections = data.EtrnConnections
-                .Select(connection => new EtrnConnection
+                .Select(connection =>
                 {
-                    Id = string.IsNullOrWhiteSpace(connection.Id) ? Guid.NewGuid().ToString() : connection.Id,
-                    Type = string.IsNullOrWhiteSpace(connection.Type) ? EtrnOperatorType.Saby : connection.Type,
-                    Name = (connection.Name ?? "").Trim(),
-                    Enable = connection.Enable
+                    var id = string.IsNullOrWhiteSpace(connection.Id) ? Guid.NewGuid().ToString() : connection.Id;
+                    var previous = stored.FirstOrDefault(item =>
+                        string.Equals(item.Id, id, StringComparison.OrdinalIgnoreCase));
+                    return new EtrnConnection
+                    {
+                        Id = id,
+                        Type = string.IsNullOrWhiteSpace(connection.Type) ? EtrnOperatorType.Saby : connection.Type.Trim(),
+                        Name = (connection.Name ?? "").Trim(),
+                        Enable = connection.Enable,
+                        SubscriberId = (connection.SubscriberId ?? "").Trim(),
+                        ApiKey = RestoreApiKey(connection.ApiKey, previous?.ApiKey ?? "")
+                    };
                 })
                 .ToList();
         }
@@ -234,7 +254,9 @@ public class OrganizationManagerService : IOrganizationManagerService
                     Id = connection.Id,
                     Type = connection.Type,
                     Name = connection.Name,
-                    Enable = connection.Enable
+                    Enable = connection.Enable,
+                    SubscriberId = connection.SubscriberId,
+                    ApiKey = SecretMask.ForClient(connection.ApiKey)
                 })
                 .ToList()
         };

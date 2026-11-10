@@ -476,6 +476,82 @@ public class OrganizationManagerServiceTests
         Assert.Single(repository.Store["o1"].EtrnConnections);
     }
 
+    /// <summary>
+    /// Пустой ключ и маска оставляют секрет того же подключения. Чужой id чужой ключ не получает.
+    /// </summary>
+    [Fact]
+    public async Task Update_не_стирает_API_ключ_ОФД_и_List_отдаёт_маску()
+    {
+        var repository = new FakeOrganizationRepository();
+        repository.Store["o1"] = new OrganizationEntity
+        {
+            Id = "o1",
+            Name = "Орг",
+            Inn = "1234567890",
+            EtrnConnections =
+            [
+                new EtrnConnection
+                {
+                    Id = "ofd-1",
+                    Type = EtrnOperatorType.Ofd,
+                    Name = "ОФД",
+                    Enable = true,
+                    SubscriberId = "2775225",
+                    ApiKey = "ofd-secret"
+                },
+                new EtrnConnection
+                {
+                    Id = "saby-1",
+                    Type = EtrnOperatorType.Saby,
+                    Name = "СБИС",
+                    Enable = true,
+                    ApiKey = "saby-must-stay"
+                }
+            ]
+        };
+        var sut = CreateSut(repository);
+
+        var saved = await sut.Update(new OrganizationView
+        {
+            Id = "o1",
+            Name = "Орг",
+            Inn = "1234567890",
+            EtrnConnections =
+            [
+                new EtrnConnection
+                {
+                    Id = "ofd-1",
+                    Type = EtrnOperatorType.Ofd,
+                    Name = "ОФД Север",
+                    Enable = true,
+                    SubscriberId = " 2775225 ",
+                    ApiKey = ""
+                },
+                new EtrnConnection
+                {
+                    Id = "fresh",
+                    Type = EtrnOperatorType.Ofd,
+                    Name = "Второе",
+                    Enable = false,
+                    ApiKey = ""
+                }
+            ]
+        });
+
+        Assert.True(saved.IsSuccess, saved.IsFailure ? saved.Error : "");
+        var stored = repository.Store["o1"].EtrnConnections ?? [];
+        Assert.Equal("ofd-secret", Assert.Single(stored, item => item.Id == "ofd-1").ApiKey);
+        Assert.Equal("2775225", Assert.Single(stored, item => item.Id == "ofd-1").SubscriberId);
+        Assert.Equal("", Assert.Single(stored, item => item.Id == "fresh").ApiKey);
+
+        var listed = await sut.List(1, 50);
+        var viewConnections = Assert.Single(listed.Content).EtrnConnections;
+        Assert.NotNull(viewConnections);
+        var view = Assert.Single(viewConnections, item => item.Id == "ofd-1");
+        Assert.Equal(SecretMask.Placeholder, view.ApiKey);
+        Assert.Equal("ofd-secret", Assert.Single(stored, item => item.Id == "ofd-1").ApiKey);
+    }
+
     private static OrganizationManagerService CreateSut(
         FakeOrganizationRepository repository,
         FakeGroupRepository? groups = null)

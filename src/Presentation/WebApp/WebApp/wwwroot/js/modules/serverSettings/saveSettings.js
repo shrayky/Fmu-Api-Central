@@ -56,7 +56,12 @@ export function buildConfigurationUpdaters(values) {
         }),
         etrnSettings: prev => ({
             ...prev,
-            incomingFetchIntervalMinutes: parseInt(values.etrnIncomingInterval)
+            incomingFetchIntervalMinutes: parseInt(values.etrnIncomingInterval),
+            ofdClientId: String(values.ofdClientId || "").trim(),
+            ofdClientSecret: String(values.ofdClientSecret || ""),
+            ofdKeycloakUrl: String(values.ofdKeycloakUrl || "").trim(),
+            ofdRealm: String(values.ofdRealm || "").trim(),
+            ofdApiUrl: String(values.ofdApiUrl || "").trim()
         })
     };
 }

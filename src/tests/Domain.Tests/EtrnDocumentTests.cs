@@ -34,6 +34,13 @@ public class EtrnOperatorTests
         Assert.Equal("Saby", EtrnOperatorType.Label("SABY"));
         Assert.Equal("Другой", EtrnOperatorType.Label("Другой"));
     }
+
+    [Fact]
+    public void Подпись_типа_для_площадки_ОФД()
+    {
+        Assert.Equal("Платформа ОФД", EtrnOperatorType.Label("ofd"));
+        Assert.Equal("Платформа ОФД", EtrnOperatorType.Label("OFD"));
+    }
 }
 
 public class EtrnDocumentStatusTests

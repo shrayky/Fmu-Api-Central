@@ -35,6 +35,9 @@ class OrganizationElementView {
             etrnAdd: "Добавить",
             etrnRemove: "Удалить",
             etrnSaby: "Saby",
+            etrnOfd: "Платформа ОФД",
+            etrnSubscriber: "Абонент ЭДО",
+            etrnApiKey: "API-ключ",
             vetisSettingsTab: "Настройка",
             vetisEnterprisesTab: "Предприятия",
             apiKey: "API-ключ",
@@ -907,9 +910,15 @@ class OrganizationElementView {
                         {
                             id: "type",
                             header: this.LABELS.etrnType,
-                            width: 100,
-                            template: (row) => this._escape(row.type === "saby" ? this.LABELS.etrnSaby : row.type)
+                            width: 160,
+                            editor: "richselect",
+                            options: [
+                                { id: "saby", value: this.LABELS.etrnSaby },
+                                { id: "ofd", value: this.LABELS.etrnOfd }
+                            ]
                         },
+                        { id: "subscriberId", header: this.LABELS.etrnSubscriber, width: 140, editor: "text" },
+                        { id: "apiKey", header: this.LABELS.etrnApiKey, width: 140, editor: "password" },
                         {
                             id: "lastError",
                             header: this.LABELS.etrnError,
@@ -925,13 +934,7 @@ class OrganizationElementView {
                             template: "<span class='webix_icon wxi-trash' title='Удалить'></span>"
                         }
                     ],
-                    data: (this._loadedEtrn || []).map(connection => ({
-                        id: connection.id || newUuid(),
-                        name: connection.name || "",
-                        type: connection.type || "saby",
-                        enable: !!connection.enable,
-                        lastError: ""
-                    })),
+                    data: (this._loadedEtrn || []).map(connection => this._etrnRow(connection)),
                     on: {
                         onItemClick(cell) {
                             if (!cell || cell.column !== "remove")
@@ -945,7 +948,7 @@ class OrganizationElementView {
                     view: "template",
                     autoheight: true,
                     borderless: true,
-                    template: "Логин и пароль не хранятся: Saby принимает сертификат организации с вкладки «Маркировка»."
+                    template: "Saby подписывает сертификатом с вкладки «Маркировка». Для Платформы ОФД укажите абонента ЭДО и API-ключ. Пустой ключ уже сохранённый не стирает."
                 }
             ]
         };
@@ -957,13 +960,20 @@ class OrganizationElementView {
             return;
 
         table.clearAll();
-        table.parse((connections || []).map(connection => ({
+        table.parse((connections || []).map(connection => this._etrnRow(connection)));
+    }
+
+    _etrnRow(connection) {
+        const type = connection.type === "ofd" ? "ofd" : "saby";
+        return {
             id: connection.id || newUuid(),
             name: connection.name || "",
-            type: connection.type || "saby",
+            type,
             enable: !!connection.enable,
+            subscriberId: type === "ofd" ? (connection.subscriberId || "") : "",
+            apiKey: type === "ofd" ? (connection.apiKey || "") : "",
             lastError: ""
-        })));
+        };
     }
 
     _addEtrnConnection() {
@@ -1044,12 +1054,17 @@ class OrganizationElementView {
         if (!table)
             return this._loadedEtrn || [];
 
-        return table.serialize().map(row => ({
-            id: row.id,
-            type: "saby",
-            name: String(row.name || "").trim(),
-            enable: !!row.enable
-        }));
+        return table.serialize().map(row => {
+            const type = row.type === "ofd" ? "ofd" : "saby";
+            return {
+                id: row.id,
+                type,
+                name: String(row.name || "").trim(),
+                enable: !!row.enable,
+                subscriberId: type === "ofd" ? String(row.subscriberId || "").trim() : "",
+                apiKey: type === "ofd" ? String(row.apiKey || "") : ""
+            };
+        });
     }
 
     _groupsTable(groups) {
