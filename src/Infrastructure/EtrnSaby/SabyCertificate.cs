@@ -214,16 +214,15 @@ public sealed class EtrnSignatureService : IEtrnSignaturePort
 
     private async Task<byte[]> ContentAsync(EtrnSignatureRequest request, CancellationToken cancellationToken)
     {
-        var hash = (request.Hash ?? "").Trim();
-        if (hash.Length > 0)
-            return Convert.FromBase64String(hash);
+        var material = EtrnSignatureMaterial.Resolve(request);
+        if (material.IsFailure)
+            throw new InvalidOperationException(material.Error);
 
-        var url = (request.FileUrl ?? "").Trim();
-        if (url.Length == 0)
-            throw new InvalidOperationException("Saby не вернула хеш или ссылку для подписи.");
+        if (material.Value.Bytes != null)
+            return material.Value.Bytes;
 
         using var http = _httpClientFactory.CreateClient(HttpClientName);
-        return await http.GetByteArrayAsync(url, cancellationToken);
+        return await http.GetByteArrayAsync(material.Value.FileUrl, cancellationToken);
     }
 
     private static AsymmetricAlgorithm? PrivateKey(CpX509Certificate2 certificate, string? password)

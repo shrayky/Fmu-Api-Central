@@ -141,6 +141,34 @@ public sealed class EtrnSignatureRequest
     /// Ссылка на файл вместо хеша.
     /// </summary>
     public string FileUrl { get; init; } = "";
+
+    /// <summary>
+    /// Байты титула. Если заданы, хеш и ссылка Saby не используются.
+    /// </summary>
+    public byte[] Content { get; init; } = [];
+}
+
+public sealed class EtrnSignatureMaterial
+{
+    public byte[]? Bytes { get; init; }
+
+    public string FileUrl { get; init; } = "";
+
+    public static Result<EtrnSignatureMaterial> Resolve(EtrnSignatureRequest request)
+    {
+        if (request.Content is { Length: > 0 })
+            return Result.Success(new EtrnSignatureMaterial { Bytes = request.Content });
+
+        var hash = (request.Hash ?? "").Trim();
+        if (hash.Length > 0)
+            return Result.Success(new EtrnSignatureMaterial { Bytes = Convert.FromBase64String(hash) });
+
+        var url = (request.FileUrl ?? "").Trim();
+        if (url.Length == 0)
+            return Result.Failure<EtrnSignatureMaterial>("Saby не вернула хеш или ссылку для подписи.");
+
+        return Result.Success(new EtrnSignatureMaterial { FileUrl = url });
+    }
 }
 
 public interface IEtrnSignaturePort
