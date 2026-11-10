@@ -18,6 +18,7 @@ public class EtrnSignatureMaterialTests
 
         Assert.True(material.IsSuccess);
         Assert.Equal(new byte[] { 1, 2, 3 }, material.Value.Bytes);
+        Assert.False(material.Value.PreparedHash);
         Assert.Equal("", material.Value.FileUrl);
     }
 
@@ -34,6 +35,7 @@ public class EtrnSignatureMaterialTests
 
         Assert.True(material.IsSuccess);
         Assert.Equal(new byte[] { 4, 5 }, material.Value.Bytes);
+        Assert.True(material.Value.PreparedHash);
     }
 
     [Fact]

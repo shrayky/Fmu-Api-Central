@@ -72,6 +72,20 @@ public class EtrnPollPageTests
     }
 
     [Fact]
+    public void Полностью_прочитанная_страница_сохраняет_время_последнего_события()
+    {
+        var page = new[]
+        {
+            new EtrnPollEvent("e1", "d1", "", "01.10.2026 10.00.00"),
+            new EtrnPollEvent("e2", "d2", "", "02.10.2026 11.00.00")
+        };
+
+        var next = EtrnPollPage.Advance(EtrnPollPosition.Empty, page, processed: 2);
+
+        Assert.Equal(new EtrnPollPosition("e2", "d2", "02.10.2026 11.00.00"), next);
+    }
+
+    [Fact]
     public void Этап_приёмки_распознаётся_без_учёта_регистра_и_пробелов()
     {
         Assert.True(Event("e1", "d1", "  приемка ГРУЗА ").IsAcceptance);

@@ -26,11 +26,6 @@ const fieldNames = [
     "vetisApplicationRetention",
     "vetisFailedApplicationRetention",
     "etrnIncomingInterval",
-    "ofdClientId",
-    "ofdClientSecret",
-    "ofdKeycloakUrl",
-    "ofdRealm",
-    "ofdApiUrl",
 ];
 
 const formIds = [serverSettingsFormId, vetisSettingsFormId, etrnSettingsFormId];

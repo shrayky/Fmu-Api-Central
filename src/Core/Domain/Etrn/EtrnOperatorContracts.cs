@@ -53,9 +53,11 @@ public sealed class EtrnFetchedDocument
     public List<EtrnCargoLine> Lines { get; set; } = [];
 
     /// <summary>
-    /// Титул прочитан, но в строке нет ни мест, ни массы.
+    /// Титул прочитан, но в строке нет ни мест, ни массы. Либо этап приёмки ещё не открыт.
     /// </summary>
-    public string Error { get; init; } = "";
+    public string Error { get; set; } = "";
+
+    public string Status { get; set; } = EtrnDocumentStatus.Waiting;
 
     public EtrnIncomingDocumentEntity ToEntity(EtrnOperatorContext context) => new()
     {
@@ -68,7 +70,7 @@ public sealed class EtrnFetchedDocument
         Consignor = Consignor,
         Uid = Uid,
         DeliveryAddress = DeliveryAddress,
-        Status = EtrnDocumentStatus.Waiting,
+        Status = Status,
         Lines = Lines,
         RawXml = RawXml,
         LastError = Error,
@@ -105,9 +107,57 @@ public sealed class EtrnExecuteResult
 {
     public bool Completed { get; init; }
 
+    /// <summary>
+    /// Состояние 7 или 9: этап приёмки уже недоступен, карточку надо закрыть, а не вернуть в ожидание.
+    /// </summary>
+    public bool CloseDocument { get; init; }
+
     public string Error { get; init; } = "";
 
     public List<EtrnExchange> Exchanges { get; init; } = [];
+}
+
+public sealed class EtrnProbeResult
+{
+    public bool Ok { get; init; }
+
+    public string Message { get; init; } = "";
+
+    public List<EtrnExchange> Exchanges { get; init; } = [];
+}
+
+public sealed class EtrnProbeRequest
+{
+    public string Id { get; set; } = "";
+
+    public string Type { get; set; } = "";
+
+    public string Name { get; set; } = "";
+
+    public string SubscriberId { get; set; } = "";
+
+    public string? ApiKey { get; set; }
+
+    public string ClientId { get; set; } = "";
+
+    public string? ClientSecret { get; set; }
+
+    public string KeycloakUrl { get; set; } = "";
+
+    public string Realm { get; set; } = "";
+
+    public string ApiUrl { get; set; } = "";
+
+    public string CertificateNumber { get; set; } = "";
+
+    public string? CertificatePassword { get; set; }
+}
+
+public sealed class EtrnProbeOutcome
+{
+    public bool Ok { get; init; }
+
+    public string Message { get; init; } = "";
 }
 
 public sealed class EtrnStageResult
@@ -122,6 +172,13 @@ public sealed class EtrnStageResult
     /// Этап приёмки у операторов называется по-разному, поэтому признак считает шлюз.
     /// </summary>
     public bool StillAcceptance { get; init; }
+
+    /// <summary>
+    /// Код состояния 7 или 9: документ в СБИС уже завершён, карточку надо закрыть.
+    /// </summary>
+    public bool CloseDocument { get; init; }
+
+    public string StateName { get; init; } = "";
 
     public List<EtrnExchange> Exchanges { get; init; } = [];
 }
@@ -152,6 +209,11 @@ public sealed class EtrnSignatureMaterial
 {
     public byte[]? Bytes { get; init; }
 
+    /// <summary>
+    /// Хеш ПодготовитьДействие уже посчитан. Подпись этих байт как файла даёт другой отпечаток.
+    /// </summary>
+    public bool PreparedHash { get; init; }
+
     public string FileUrl { get; init; } = "";
 
     public static Result<EtrnSignatureMaterial> Resolve(EtrnSignatureRequest request)
@@ -161,7 +223,11 @@ public sealed class EtrnSignatureMaterial
 
         var hash = (request.Hash ?? "").Trim();
         if (hash.Length > 0)
-            return Result.Success(new EtrnSignatureMaterial { Bytes = Convert.FromBase64String(hash) });
+            return Result.Success(new EtrnSignatureMaterial
+            {
+                Bytes = Convert.FromBase64String(hash),
+                PreparedHash = true
+            });
 
         var url = (request.FileUrl ?? "").Trim();
         if (url.Length == 0)
@@ -177,11 +243,13 @@ public interface IEtrnSignaturePort
 }
 
 /// <summary>
-/// Имён методов Saby в Domain нет: Application работает только с этими двумя действиями и сверкой этапа.
+/// Имён методов Saby в Domain нет: Application работает с опросом, приёмкой, сверкой этапа и проверкой входа.
 /// </summary>
 public interface IEtrnOperator
 {
     string Type { get; }
+
+    Task<Result<EtrnProbeResult>> ProbeAsync(EtrnOperatorContext context, CancellationToken cancellationToken);
 
     Task<Result<EtrnFetchResult>> FetchAsync(EtrnOperatorContext context, CancellationToken cancellationToken);
 

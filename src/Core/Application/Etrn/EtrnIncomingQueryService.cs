@@ -1,6 +1,7 @@
 using CSharpFunctionalExtensions;
 using Domain.Attributes;
 using Domain.Etrn;
+using Domain.Etrn.Xml;
 using Domain.Entitys.Organization;
 using Domain.Entitys.Organization.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
@@ -65,7 +66,13 @@ public sealed class EtrnIncomingQueryService
             return Result.Failure<EtrnRowsPage<EtrnIncomingRow>>(fetched.Error);
 
         var organizations = await _organizations.All();
-        var rows = fetched.Value.Select(item => ToRow(item, organizations)).ToList();
+        var rows = new List<EtrnIncomingRow>();
+        foreach (var item in fetched.Value)
+        {
+            await RememberAddress(item);
+            rows.Add(ToRow(item, organizations));
+        }
+
         return Result.Success(EtrnPaging.Page(rows, offset, size));
     }
 
@@ -79,6 +86,8 @@ public sealed class EtrnIncomingQueryService
 
         var organizations = await _organizations.All();
         var document = found.Value;
+        await RememberAddress(document);
+        await RememberWeight(document);
         var view = new EtrnIncomingView
         {
             Uid = document.Uid,
@@ -130,6 +139,75 @@ public sealed class EtrnIncomingQueryService
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Карточки, сохранённые до чтения АдресДостГр, держат пустой адрес. Титул уже в базе,
+    /// список его не отдаёт — читаем документ целиком и записываем адрес, чтобы следующий список шёл без разбора.
+    /// </summary>
+    private async Task RememberAddress(EtrnIncomingDocumentEntity listed)
+    {
+        if (!string.IsNullOrWhiteSpace(listed.DeliveryAddress))
+            return;
+
+        var full = listed;
+        if (string.IsNullOrWhiteSpace(listed.RawXml))
+        {
+            var found = await _incoming.Find(listed.Id);
+            if (found.IsFailure || found.Value == null)
+                return;
+
+            full = found.Value;
+            if (!string.IsNullOrWhiteSpace(full.DeliveryAddress))
+            {
+                listed.DeliveryAddress = full.DeliveryAddress;
+                return;
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(full.RawXml))
+            return;
+
+        var title = SenderTitleReader.Read(full.RawXml);
+        if (title.IsFailure || string.IsNullOrWhiteSpace(title.Value.Address))
+            return;
+
+        full.DeliveryAddress = title.Value.Address;
+        listed.DeliveryAddress = title.Value.Address;
+        await _incoming.Save(full);
+    }
+
+    /// <summary>
+    /// Карточки, сохранённые до чтения ПлМасГруз, держат пустую массу. Титул уже в базе.
+    /// </summary>
+    private async Task RememberWeight(EtrnIncomingDocumentEntity document)
+    {
+        if (document.Lines.All(line => line.HasWeight))
+            return;
+
+        if (string.IsNullOrWhiteSpace(document.RawXml))
+            return;
+
+        var title = SenderTitleReader.Read(document.RawXml);
+        if (title.IsFailure)
+            return;
+
+        var changed = false;
+        foreach (var line in document.Lines)
+        {
+            if (line.HasWeight)
+                continue;
+
+            var source = title.Value.Lines.FirstOrDefault(item => item.Index == line.Index);
+            if (source is not { HasWeight: true })
+                continue;
+
+            line.GrossWeight = source.GrossWeight;
+            changed = true;
+        }
+
+        if (changed)
+            await _incoming.Save(document);
     }
 
     private static EtrnIncomingRow ToRow(EtrnIncomingDocumentEntity document, List<OrganizationEntity> organizations)

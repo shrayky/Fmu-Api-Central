@@ -105,7 +105,7 @@ public sealed class SabyAuthenticator : ISabyAuthenticator
         var answer = await _rpc.SendAsync(
             SabyJsonRpc.AuthUrl,
             EtrnMethods.AuthByCertificate,
-            new Dictionary<string, object> { ["Сертификат"] = der },
+            CertificateParameters(der),
             sessionId: null,
             SabyUserAgent.Value,
             cancellationToken);
@@ -133,6 +133,18 @@ public sealed class SabyAuthenticator : ISabyAuthenticator
         }
     }
 
+    /// <summary>
+    /// Saby читает «Сертификат» как объект. Строка Base64 даёт 500: The value is not an object.
+    /// </summary>
+    internal static Dictionary<string, object> CertificateParameters(string der) =>
+        new()
+        {
+            ["Сертификат"] = new Dictionary<string, string>
+            {
+                ["ДвоичныеДанные"] = der
+            }
+        };
+
     private static string ReadSessionId(string text)
     {
         var value = text.Trim().Trim('"');
@@ -154,6 +166,24 @@ public sealed class SabyAuthenticator : ISabyAuthenticator
 public static class SabyUserAgent
 {
     public const string Value = "FmuApiCentral/2.3";
+}
+
+/// <summary>
+/// Хеш Saby — готовый ГОСТ Р 34.11-2012 256. Обычный ContentInfo хеширует байты ещё раз.
+/// </summary>
+internal static class EtrnSignatureContent
+{
+    public const string Gost2012Hash256 = "1.2.643.7.1.1.2.2";
+
+    private const string Pkcs7Data = "1.2.840.113549.1.7.1";
+
+    public static string ContentTypeOid(bool preparedHash) =>
+        preparedHash ? Gost2012Hash256 : Pkcs7Data;
+
+    public static ContentInfo Create(bool preparedHash, byte[] content) =>
+        preparedHash
+            ? new ContentInfo(new Oid(Gost2012Hash256), content)
+            : new ContentInfo(content);
 }
 
 public sealed class EtrnSignatureService : IEtrnSignaturePort
@@ -180,10 +210,10 @@ public sealed class EtrnSignatureService : IEtrnSignaturePort
         if (found.IsFailure)
             return Result.Failure<string>(found.Error);
 
-        byte[] content;
+        (byte[] content, bool preparedHash) material;
         try
         {
-            content = await ContentAsync(request, cancellationToken);
+            material = await ContentAsync(request, cancellationToken);
         }
         catch (Exception ex)
         {
@@ -197,7 +227,7 @@ public sealed class EtrnSignatureService : IEtrnSignaturePort
             if (privateKey == null)
                 return Result.Failure<string>("Не удалось получить закрытый ключ ГОСТ из сертификата");
 
-            var cms = new CpSignedCms(new ContentInfo(content), detached: true);
+            var cms = new CpSignedCms(EtrnSignatureContent.Create(material.preparedHash, material.content), detached: true);
             var signer = new CpCmsSigner(SubjectIdentifierType.IssuerAndSerialNumber, certificate, privateKey)
             {
                 IncludeOption = X509IncludeOption.EndCertOnly
@@ -212,17 +242,19 @@ public sealed class EtrnSignatureService : IEtrnSignaturePort
         }
     }
 
-    private async Task<byte[]> ContentAsync(EtrnSignatureRequest request, CancellationToken cancellationToken)
+    private async Task<(byte[] Bytes, bool PreparedHash)> ContentAsync(
+        EtrnSignatureRequest request,
+        CancellationToken cancellationToken)
     {
         var material = EtrnSignatureMaterial.Resolve(request);
         if (material.IsFailure)
             throw new InvalidOperationException(material.Error);
 
         if (material.Value.Bytes != null)
-            return material.Value.Bytes;
+            return (material.Value.Bytes, material.Value.PreparedHash);
 
         using var http = _httpClientFactory.CreateClient(HttpClientName);
-        return await http.GetByteArrayAsync(material.Value.FileUrl, cancellationToken);
+        return (await http.GetByteArrayAsync(material.Value.FileUrl, cancellationToken), false);
     }
 
     private static AsymmetricAlgorithm? PrivateKey(CpX509Certificate2 certificate, string? password)

@@ -30,6 +30,9 @@ public sealed class EtrnSyncState : IHaveStringId
     [JsonPropertyName("documentId")]
     public string DocumentId { get; set; } = "";
 
+    [JsonPropertyName("eventAt")]
+    public string EventAt { get; set; } = "";
+
     [JsonPropertyName("lastSuccessAt")]
     public string LastSuccessAt { get; set; } = "";
 
@@ -39,7 +42,7 @@ public sealed class EtrnSyncState : IHaveStringId
     public static string BuildId(string connectionId) => $"sync:{connectionId}";
 
     [JsonIgnore]
-    public EtrnPollPosition Position => new(EventId, DocumentId);
+    public EtrnPollPosition Position => new(EventId, DocumentId, EventAt);
 }
 
 public sealed class EtrnLineView

@@ -149,6 +149,8 @@ internal sealed class ScriptedEtrnOperator : IEtrnOperator
 
     public int FetchCalls { get; private set; }
 
+    public int StageCalls { get; private set; }
+
     public int ExecuteCalls { get; private set; }
 
     public EtrnOperatorContext? LastContext { get; private set; }
@@ -172,6 +174,12 @@ internal sealed class ScriptedEtrnOperator : IEtrnOperator
     public void EnqueueExecute(EtrnExecuteResult result) => _execute.Enqueue(result);
 
     public void EnqueueStage(EtrnStageResult result) => _stage.Enqueue(result);
+
+    public Task<Result<EtrnProbeResult>> ProbeAsync(EtrnOperatorContext context, CancellationToken cancellationToken)
+    {
+        LastContext = context;
+        return Task.FromResult(Result.Success(new EtrnProbeResult { Ok = true }));
+    }
 
     public Task<Result<EtrnFetchResult>> FetchAsync(EtrnOperatorContext context, CancellationToken cancellationToken)
     {
@@ -215,6 +223,7 @@ internal sealed class ScriptedEtrnOperator : IEtrnOperator
         string operatorDocumentId,
         CancellationToken cancellationToken)
     {
+        StageCalls++;
         LastContext = context;
         var result = _stage.Count > 0
             ? _stage.Dequeue()
@@ -230,7 +239,7 @@ internal sealed class ScriptedEtrnOperator : IEtrnOperator
     public static EtrnFetchResult Fetching(params EtrnFetchedDocument[] documents) => new()
     {
         Completed = true,
-        Position = new EtrnPollPosition("e-last", "d-last"),
+        Position = new EtrnPollPosition("e-last", "d-last", "11.10.2026 12.00.00"),
         Documents = documents.ToList(),
         Exchanges =
         [

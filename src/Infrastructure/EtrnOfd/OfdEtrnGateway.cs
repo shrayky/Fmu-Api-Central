@@ -2,7 +2,6 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using CSharpFunctionalExtensions;
-using Domain.Configuration.Interfaces;
 using Domain.Etrn;
 using Domain.Etrn.Xml;
 using Microsoft.Extensions.DependencyInjection;
@@ -20,16 +19,14 @@ public sealed class OfdEtrnGateway : IEtrnOperator
     private readonly IHttpClientFactory _http;
     private readonly OfdTokenClient _tokens;
     private readonly IEtrnSignaturePort _signer;
-    private readonly IParametersService _parameters;
     private readonly Func<DateTimeOffset> _now;
 
     [ActivatorUtilitiesConstructor]
     public OfdEtrnGateway(
         IHttpClientFactory http,
         OfdTokenClient tokens,
-        IEtrnSignaturePort signer,
-        IParametersService parameters)
-        : this(http, tokens, signer, parameters, () => DateTimeOffset.Now)
+        IEtrnSignaturePort signer)
+        : this(http, tokens, signer, () => DateTimeOffset.Now)
     {
     }
 
@@ -37,17 +34,65 @@ public sealed class OfdEtrnGateway : IEtrnOperator
         IHttpClientFactory http,
         OfdTokenClient tokens,
         IEtrnSignaturePort signer,
-        IParametersService parameters,
         Func<DateTimeOffset> clock)
     {
         _http = http;
         _tokens = tokens;
         _signer = signer;
-        _parameters = parameters;
         _now = clock;
     }
 
     public string Type => EtrnOperatorType.Ofd;
+
+    public async Task<Result<EtrnProbeResult>> ProbeAsync(
+        EtrnOperatorContext context,
+        CancellationToken cancellationToken)
+    {
+        var exchanges = new List<EtrnExchange>();
+        try
+        {
+            var ready = Ready(context);
+            if (ready.IsFailure)
+                return Result.Success(ProbeStopped(ready.Error, exchanges));
+
+            if (string.IsNullOrWhiteSpace(context.Connection.ClientId))
+                return Result.Success(ProbeStopped("Не задан client_id Платформы ОФД", exchanges));
+
+            var token = await _tokens.AccessTokenAsync(context.Connection, fresh: true, cancellationToken);
+            if (token.IsFailure)
+                return Result.Success(ProbeStopped(token.Error, exchanges));
+
+            var subscriber = context.Connection.SubscriberId.Trim();
+            var listUrl = $"{context.Connection.ResolvedApiUrl()}/transedm/public/api/v1/etrns?subscriber-id={Uri.EscapeDataString(subscriber)}";
+            var list = await CallAsync(
+                HttpMethod.Get,
+                listUrl,
+                token.Value,
+                null,
+                null,
+                null,
+                EtrnMethods.Probe,
+                subscriber,
+                "",
+                exchanges,
+                cancellationToken);
+            if (!list.Ok)
+                return Result.Success(ProbeStopped(list.Error, exchanges));
+            if (!TryCards(list.Text, out _))
+                return Result.Success(ProbeStopped("ОФД вернула не список ЭТрН", exchanges));
+
+            return Result.Success(new EtrnProbeResult
+            {
+                Ok = true,
+                Message = "Платформа ОФД приняла подключение",
+                Exchanges = exchanges
+            });
+        }
+        catch (Exception ex) when (IsTransport(ex, cancellationToken))
+        {
+            return Result.Success(ProbeStopped(ex.Message, exchanges));
+        }
+    }
 
     public async Task<Result<EtrnFetchResult>> FetchAsync(
         EtrnOperatorContext context,
@@ -60,17 +105,13 @@ public sealed class OfdEtrnGateway : IEtrnOperator
             if (ready.IsFailure)
                 return Result.Success(Stopped(context.Position, exchanges, ready.Error));
 
-            var settings = await SettingsAsync();
-            var token = await _tokens.AccessTokenAsync(
-                context.Connection.Id,
-                settings,
-                context.Connection.ApiKey,
-                cancellationToken);
+            var token = await _tokens.AccessTokenAsync(context.Connection, cancellationToken);
             if (token.IsFailure)
                 return Result.Success(Stopped(context.Position, exchanges, token.Error));
 
+            var api = context.Connection.ResolvedApiUrl();
             var subscriber = context.Connection.SubscriberId.Trim();
-            var listUrl = $"{Api(settings)}/transedm/public/api/v1/etrns?subscriber-id={Uri.EscapeDataString(subscriber)}";
+            var listUrl = $"{api}/transedm/public/api/v1/etrns?subscriber-id={Uri.EscapeDataString(subscriber)}";
             var list = await CallAsync(
                 HttpMethod.Get,
                 listUrl,
@@ -100,7 +141,7 @@ public sealed class OfdEtrnGateway : IEtrnOperator
                     continue;
                 }
 
-                var title = await ReadShipperAsync(settings, token.Value, card, exchanges, cancellationToken);
+                var title = await ReadShipperAsync(api, token.Value, card, exchanges, cancellationToken);
                 if (title.IsFailure)
                 {
                     return Result.Success(new EtrnFetchResult
@@ -144,19 +185,14 @@ public sealed class OfdEtrnGateway : IEtrnOperator
             if (ready.IsFailure)
                 return Result.Success(new EtrnExecuteResult { Error = ready.Error, Exchanges = exchanges });
 
-            var settings = await SettingsAsync();
-            var token = await _tokens.AccessTokenAsync(
-                context.Connection.Id,
-                settings,
-                context.Connection.ApiKey,
-                cancellationToken);
+            var token = await _tokens.AccessTokenAsync(context.Connection, cancellationToken);
             if (token.IsFailure)
                 return Result.Success(new EtrnExecuteResult { Error = token.Error, Exchanges = exchanges });
 
             var xml = ConsigneeTitleWriter.Build(command.Document, command.Decision, _now());
             var bytes = ConsigneeTitleWriter.ToUtf8(xml);
             var id = (command.Document.OperatorDocumentId ?? "").Trim();
-            var documentUrl = $"{Api(settings)}/transedm/public/api/v1/etrns/{Uri.EscapeDataString(id)}/documents/{ConsigneeType}";
+            var documentUrl = $"{context.Connection.ResolvedApiUrl()}/transedm/public/api/v1/etrns/{Uri.EscapeDataString(id)}/documents/{ConsigneeType}";
             var written = await CallAsync(
                 HttpMethod.Put,
                 documentUrl,
@@ -230,17 +266,12 @@ public sealed class OfdEtrnGateway : IEtrnOperator
             if (ready.IsFailure)
                 return Result.Success(new EtrnStageResult { Error = ready.Error, Exchanges = exchanges });
 
-            var settings = await SettingsAsync();
-            var token = await _tokens.AccessTokenAsync(
-                context.Connection.Id,
-                settings,
-                context.Connection.ApiKey,
-                cancellationToken);
+            var token = await _tokens.AccessTokenAsync(context.Connection, cancellationToken);
             if (token.IsFailure)
                 return Result.Success(new EtrnStageResult { Error = token.Error, Exchanges = exchanges });
 
             var id = (operatorDocumentId ?? "").Trim();
-            var url = $"{Api(settings)}/transedm/public/api/v1/etrns/{Uri.EscapeDataString(id)}";
+            var url = $"{context.Connection.ResolvedApiUrl()}/transedm/public/api/v1/etrns/{Uri.EscapeDataString(id)}";
             var card = await CallAsync(
                 HttpMethod.Get,
                 url,
@@ -281,13 +312,13 @@ public sealed class OfdEtrnGateway : IEtrnOperator
     }
 
     private async Task<Result<EtrnFetchedDocument>> ReadShipperAsync(
-        Domain.Etrn.EtrnSettings settings,
+        string api,
         string token,
         OfdCard card,
         List<EtrnExchange> exchanges,
         CancellationToken cancellationToken)
     {
-        var documentsUrl = $"{Api(settings)}/transedm/public/api/v1/etrns/{Uri.EscapeDataString(card.Id)}/documents";
+        var documentsUrl = $"{api}/transedm/public/api/v1/etrns/{Uri.EscapeDataString(card.Id)}/documents";
         var documents = await CallAsync(
             HttpMethod.Get,
             documentsUrl,
@@ -306,7 +337,7 @@ public sealed class OfdEtrnGateway : IEtrnOperator
         if (!TryShipperDocument(documents.Text, out var documentId))
             return Result.Failure<EtrnFetchedDocument>("Титул грузоотправителя не найден");
 
-        var contentUrl = $"{Api(settings)}/transedm/public/api/v1/documents/{Uri.EscapeDataString(documentId)}/content";
+        var contentUrl = $"{api}/transedm/public/api/v1/documents/{Uri.EscapeDataString(documentId)}/content";
         var content = await CallAsync(
             HttpMethod.Get,
             contentUrl,
@@ -327,14 +358,6 @@ public sealed class OfdEtrnGateway : IEtrnOperator
             return Result.Failure<EtrnFetchedDocument>(title.Error);
 
         return Result.Success(Overlay(title.Value, card));
-    }
-
-    private async Task<Domain.Etrn.EtrnSettings> SettingsAsync()
-    {
-        var parameters = await _parameters.Current();
-        parameters.EtrnSettings ??= new Domain.Etrn.EtrnSettings();
-        parameters.EtrnSettings.ApplyDefaults();
-        return parameters.EtrnSettings;
     }
 
     private async Task<OfdResponse> CallAsync(
@@ -385,6 +408,13 @@ public sealed class OfdEtrnGateway : IEtrnOperator
             return Result.Failure("Не задан API-ключ Платформы ОФД");
         return Result.Success();
     }
+
+    private static EtrnProbeResult ProbeStopped(string error, List<EtrnExchange> exchanges) => new()
+    {
+        Ok = false,
+        Message = error,
+        Exchanges = exchanges
+    };
 
     private static EtrnFetchResult Stopped(EtrnPollPosition position, List<EtrnExchange> exchanges, string error) => new()
     {
@@ -519,9 +549,6 @@ public sealed class OfdEtrnGateway : IEtrnOperator
 
     private static string First(string current, string fallback) =>
         string.IsNullOrWhiteSpace(current) ? fallback : current;
-
-    private static string Api(Domain.Etrn.EtrnSettings settings) =>
-        (settings.OfdApiUrl ?? "").Trim().TrimEnd('/');
 
     private static string Id(JsonElement item)
     {

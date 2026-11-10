@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json.Serialization;
 
 namespace Domain.Etrn;
@@ -40,6 +41,59 @@ public sealed class EtrnConnection
 
     [JsonPropertyName("apiKey")]
     public string ApiKey { get; set; } = "";
+
+    [JsonPropertyName("clientId")]
+    public string ClientId { get; set; } = "";
+
+    [JsonPropertyName("clientSecret")]
+    public string ClientSecret { get; set; } = "";
+
+    [JsonPropertyName("keycloakUrl")]
+    public string KeycloakUrl { get; set; } = "";
+
+    [JsonPropertyName("realm")]
+    public string Realm { get; set; } = "";
+
+    [JsonPropertyName("apiUrl")]
+    public string ApiUrl { get; set; } = "";
+
+    [JsonPropertyName("incomingFrom")]
+    public string IncomingFrom { get; set; } = "";
+
+    /// <summary>
+    /// С этой даты ЭТрН обязательна. Пустая дата подключения означает её.
+    /// </summary>
+    public const string DefaultIncomingFrom = "2026-09-01";
+
+    public const string DefaultKeycloakUrl = "https://oauth-test.platformaofd.ru";
+    public const string DefaultRealm = "playground";
+    public const string DefaultApiUrl = "https://api-test.platformaofd.ru";
+
+    public string ResolvedKeycloakUrl() => AddressOr(KeycloakUrl, DefaultKeycloakUrl);
+
+    public string ResolvedRealm() => string.IsNullOrWhiteSpace(Realm) ? DefaultRealm : Realm.Trim();
+
+    public string ResolvedApiUrl() => AddressOr(ApiUrl, DefaultApiUrl);
+
+    public static string NormalizeIncomingFrom(string? value)
+    {
+        var text = (value ?? "").Trim();
+        if (DateOnly.TryParseExact(text, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var iso))
+            return iso.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+        if (DateOnly.TryParseExact(text, "dd.MM.yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out var russian))
+            return russian.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+        return DefaultIncomingFrom;
+    }
+
+    public string ResolvedIncomingFrom() => NormalizeIncomingFrom(IncomingFrom);
+
+    private static string AddressOr(string? value, string fallback)
+    {
+        var text = (value ?? "").Trim().TrimEnd('/');
+        return text.Length == 0 ? fallback : text;
+    }
 }
 
 public sealed class EtrnOperator

@@ -6,6 +6,9 @@ import { loadConfiguration } from '../../services/ConfigurationService.js';
 import organizationService from '../../services/organizationService.js';
 import etrnService from '../../services/etrnService.js';
 
+// С этой даты ЭТрН обязательна.
+const ETRN_INCOMING_FROM = "2026-09-01";
+
 class OrganizationElementView {
     constructor() {
         this.elementId = "";
@@ -34,6 +37,8 @@ class OrganizationElementView {
             etrnError: "Последняя ошибка",
             etrnAdd: "Добавить",
             etrnRemove: "Удалить",
+            etrnCheck: "Проверить подключение",
+            etrnIncomingFrom: "Дата начала",
             etrnSaby: "Saby",
             etrnOfd: "Платформа ОФД",
             etrnSubscriber: "Абонент ЭДО",
@@ -112,7 +117,17 @@ class OrganizationElementView {
             autoQuench: "organizationVetisAutoQuench",
             autoQuenchDelay: "organizationVetisAutoQuenchDelay",
             etrnTab: "organizationEtrnTab",
-            etrnConnections: "organizationEtrnConnections"
+            etrnConnections: "organizationEtrnConnections",
+            etrnOfdForm: "organizationEtrnOfdForm",
+            etrnOfdSubscriber: "organizationEtrnOfdSubscriber",
+            etrnOfdApiKey: "organizationEtrnOfdApiKey",
+            etrnOfdClientId: "organizationEtrnOfdClientId",
+            etrnOfdClientSecret: "organizationEtrnOfdClientSecret",
+            etrnOfdKeycloak: "organizationEtrnOfdKeycloak",
+            etrnOfdRealm: "organizationEtrnOfdRealm",
+            etrnOfdApi: "organizationEtrnOfdApi",
+            etrnCheck: "organizationEtrnCheck",
+            etrnProbeStatus: "organizationEtrnProbeStatus"
         };
     }
 
@@ -888,13 +903,28 @@ class OrganizationElementView {
                     cols: [
                         { view: "button", value: this.LABELS.etrnAdd, width: 140, click: () => this._addEtrnConnection() },
                         { view: "button", value: this.LABELS.etrnRemove, width: 140, click: () => this._removeSelectedEtrnConnection() },
+                        {
+                            view: "button",
+                            id: this.NAMES.etrnCheck,
+                            value: this.LABELS.etrnCheck,
+                            width: 220,
+                            click: () => this._checkEtrn()
+                        },
                         {}
                     ]
+                },
+                {
+                    view: "template",
+                    id: this.NAMES.etrnProbeStatus,
+                    height: 36,
+                    borderless: true,
+                    template: ""
                 },
                 {
                     view: "datatable",
                     id: this.NAMES.etrnConnections,
                     gravity: 1,
+                    select: "row",
                     editable: true,
                     editaction: "click",
                     columns: [
@@ -910,15 +940,20 @@ class OrganizationElementView {
                         {
                             id: "type",
                             header: this.LABELS.etrnType,
-                            width: 160,
+                            width: 180,
                             editor: "richselect",
                             options: [
                                 { id: "saby", value: this.LABELS.etrnSaby },
                                 { id: "ofd", value: this.LABELS.etrnOfd }
                             ]
                         },
-                        { id: "subscriberId", header: this.LABELS.etrnSubscriber, width: 140, editor: "text" },
-                        { id: "apiKey", header: this.LABELS.etrnApiKey, width: 140, editor: "password" },
+                        {
+                            id: "incomingFrom",
+                            header: this.LABELS.etrnIncomingFrom,
+                            width: 140,
+                            editor: "date",
+                            format: webix.Date.dateToStr("%d.%m.%Y")
+                        },
                         {
                             id: "lastError",
                             header: this.LABELS.etrnError,
@@ -936,6 +971,13 @@ class OrganizationElementView {
                     ],
                     data: (this._loadedEtrn || []).map(connection => this._etrnRow(connection)),
                     on: {
+                        onSelectChange() {
+                            view._showOfdFields();
+                        },
+                        onAfterEditStop(state, editor) {
+                            if (editor.column === "type")
+                                view._showOfdFields();
+                        },
                         onItemClick(cell) {
                             if (!cell || cell.column !== "remove")
                                 return;
@@ -944,11 +986,12 @@ class OrganizationElementView {
                         }
                     }
                 },
+                this._etrnOfdForm(),
                 {
                     view: "template",
                     autoheight: true,
                     borderless: true,
-                    template: "Saby подписывает сертификатом с вкладки «Маркировка». Для Платформы ОФД укажите абонента ЭДО и API-ключ. Пустой ключ уже сохранённый не стирает."
+                    template: "Saby подписывает сертификатом с вкладки «Маркировка»."
                 }
             ]
         };
@@ -961,6 +1004,135 @@ class OrganizationElementView {
 
         table.clearAll();
         table.parse((connections || []).map(connection => this._etrnRow(connection)));
+        this._showOfdFields();
+    }
+
+    _etrnOfdForm() {
+        const view = this;
+        const text = (label, name, placeholder) => Text(label, name, "", placeholder ? { placeholder } : {});
+        return {
+            id: this.NAMES.etrnOfdForm,
+            view: "form",
+            hidden: true,
+            elements: [
+                Text(this.LABELS.etrnSubscriber, this.NAMES.etrnOfdSubscriber, ""),
+                PasswordBox(this.LABELS.etrnApiKey, this.NAMES.etrnOfdApiKey),
+                Text("client_id", this.NAMES.etrnOfdClientId, ""),
+                PasswordBox("client_secret", this.NAMES.etrnOfdClientSecret),
+                text("Адрес Keycloak", this.NAMES.etrnOfdKeycloak, "https://oauth-test.platformaofd.ru"),
+                text("Область", this.NAMES.etrnOfdRealm, "playground"),
+                text("Адрес API", this.NAMES.etrnOfdApi, "https://api-test.platformaofd.ru"),
+                {
+                    view: "template",
+                    autoheight: true,
+                    borderless: true,
+                    template: "Пустые адрес и область — тестовый стенд. Пустые API-ключ и client_secret уже сохранённые не стирают."
+                }
+            ],
+            on: {
+                onChange() {
+                    view._writeOfdFields();
+                }
+            }
+        };
+    }
+
+    _showOfdFields() {
+        const form = $$(this.NAMES.etrnOfdForm);
+        const table = $$(this.NAMES.etrnConnections);
+        if (!form || !table)
+            return;
+
+        const row = table.getSelectedItem();
+        if (!row || row.type !== "ofd") {
+            form.hide();
+            return;
+        }
+
+        form.show();
+        this._ofdSilent = true;
+        this._setOfdField(this.NAMES.etrnOfdSubscriber, row.subscriberId);
+        this._setOfdField(this.NAMES.etrnOfdApiKey, row.apiKey);
+        this._setOfdField(this.NAMES.etrnOfdClientId, row.clientId);
+        this._setOfdField(this.NAMES.etrnOfdClientSecret, row.clientSecret);
+        this._setOfdField(this.NAMES.etrnOfdKeycloak, row.keycloakUrl);
+        this._setOfdField(this.NAMES.etrnOfdRealm, row.realm);
+        this._setOfdField(this.NAMES.etrnOfdApi, row.apiUrl);
+        this._ofdSilent = false;
+    }
+
+    _setOfdField(name, value) {
+        const field = $$(name);
+        if (field)
+            field.setValue(value || "");
+    }
+
+    _writeOfdFields() {
+        if (this._ofdSilent)
+            return;
+
+        const table = $$(this.NAMES.etrnConnections);
+        const row = table?.getSelectedItem();
+        if (!table || !row || row.type !== "ofd")
+            return;
+
+        row.subscriberId = this._ofdValue(this.NAMES.etrnOfdSubscriber);
+        row.apiKey = this._ofdValue(this.NAMES.etrnOfdApiKey);
+        row.clientId = this._ofdValue(this.NAMES.etrnOfdClientId);
+        row.clientSecret = this._ofdValue(this.NAMES.etrnOfdClientSecret);
+        row.keycloakUrl = this._ofdValue(this.NAMES.etrnOfdKeycloak);
+        row.realm = this._ofdValue(this.NAMES.etrnOfdRealm);
+        row.apiUrl = this._ofdValue(this.NAMES.etrnOfdApi);
+        table.updateItem(row.id, row);
+    }
+
+    _ofdValue(name) {
+        return String($$(name)?.getValue() || "");
+    }
+
+    async _checkEtrn() {
+        this._writeOfdFields();
+        const table = $$(this.NAMES.etrnConnections);
+        const row = table?.getSelectedItem();
+        if (!row) {
+            this._setEtrnStatus("Выберите подключение", true);
+            return;
+        }
+
+        const button = $$(this.NAMES.etrnCheck);
+        if (button)
+            button.disable();
+        this._setEtrnStatus("Проверка подключения...", false);
+        try {
+            const result = await organizationService.checkEtrn(this.elementId, {
+                id: row.id,
+                type: row.type,
+                name: row.name || "",
+                subscriberId: row.subscriberId || "",
+                apiKey: row.apiKey || "",
+                clientId: row.clientId || "",
+                clientSecret: row.clientSecret || "",
+                keycloakUrl: row.keycloakUrl || "",
+                realm: row.realm || "",
+                apiUrl: row.apiUrl || "",
+                certificateNumber: String($$(this.NAMES.digitalSignature)?.getValue() || ""),
+                certificatePassword: String($$(this.NAMES.password)?.getValue() || "")
+            });
+            this._setEtrnStatus(result.message || "", !result.ok);
+        } catch (error) {
+            this._setEtrnStatus(this._errorText(error.message), true);
+        } finally {
+            if (button)
+                button.enable();
+        }
+    }
+
+    _setEtrnStatus(text, failed) {
+        const status = $$(this.NAMES.etrnProbeStatus);
+        if (!status)
+            return;
+
+        status.setHTML(`<div style="color:${failed ? "#9b2335" : "#0f6b4c"};white-space:normal;">${this._escape(text)}</div>`);
     }
 
     _etrnRow(connection) {
@@ -972,6 +1144,12 @@ class OrganizationElementView {
             enable: !!connection.enable,
             subscriberId: type === "ofd" ? (connection.subscriberId || "") : "",
             apiKey: type === "ofd" ? (connection.apiKey || "") : "",
+            clientId: type === "ofd" ? (connection.clientId || "") : "",
+            clientSecret: type === "ofd" ? (connection.clientSecret || "") : "",
+            keycloakUrl: type === "ofd" ? (connection.keycloakUrl || "") : "",
+            realm: type === "ofd" ? (connection.realm || "") : "",
+            apiUrl: type === "ofd" ? (connection.apiUrl || "") : "",
+            incomingFrom: this._toDate(connection.incomingFrom || ETRN_INCOMING_FROM),
             lastError: ""
         };
     }
@@ -987,6 +1165,7 @@ class OrganizationElementView {
             name: "",
             type: "saby",
             enable: true,
+            incomingFrom: this._toDate(ETRN_INCOMING_FROM),
             lastError: ""
         });
         table.select(id);
@@ -1054,6 +1233,7 @@ class OrganizationElementView {
         if (!table)
             return this._loadedEtrn || [];
 
+        this._writeOfdFields();
         return table.serialize().map(row => {
             const type = row.type === "ofd" ? "ofd" : "saby";
             return {
@@ -1062,7 +1242,13 @@ class OrganizationElementView {
                 name: String(row.name || "").trim(),
                 enable: !!row.enable,
                 subscriberId: type === "ofd" ? String(row.subscriberId || "").trim() : "",
-                apiKey: type === "ofd" ? String(row.apiKey || "") : ""
+                apiKey: type === "ofd" ? String(row.apiKey || "") : "",
+                clientId: type === "ofd" ? String(row.clientId || "").trim() : "",
+                clientSecret: type === "ofd" ? String(row.clientSecret || "") : "",
+                keycloakUrl: type === "ofd" ? String(row.keycloakUrl || "").trim() : "",
+                realm: type === "ofd" ? String(row.realm || "").trim() : "",
+                apiUrl: type === "ofd" ? String(row.apiUrl || "").trim() : "",
+                incomingFrom: this._fromDate(row.incomingFrom) || ETRN_INCOMING_FROM
             };
         });
     }

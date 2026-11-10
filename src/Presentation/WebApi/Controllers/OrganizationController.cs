@@ -1,4 +1,6 @@
+using Application.Etrn;
 using Application.Vetis;
+using Domain.Etrn;
 using Domain.Entitys.Organization.Dto;
 using Domain.Entitys.Organization.Interfaces;
 using Domain.GisMt.Enum;
@@ -17,15 +19,18 @@ public class OrganizationController : ControllerBase
     private readonly IOrganizationManagerService _manager;
     private readonly IGisMtExchangeService _gisMtExchange;
     private readonly VetisProbeService _vetis;
+    private readonly EtrnProbeService _etrn;
 
     public OrganizationController(
         IOrganizationManagerService manager,
         IGisMtExchangeService gisMtExchange,
-        VetisProbeService vetis)
+        VetisProbeService vetis,
+        EtrnProbeService etrn)
     {
         _manager = manager;
         _gisMtExchange = gisMtExchange;
         _vetis = vetis;
+        _etrn = etrn;
     }
 
     [HttpGet]
@@ -92,6 +97,16 @@ public class OrganizationController : ControllerBase
     [HttpPost("vetis/letter")]
     public IActionResult ParseLetter([FromBody] VetisLetterText? request)
         => Ok(VetisAccessLetter.Parse(request?.Text));
+
+    /// <summary>
+    /// Проверка выбранного подключения ЭТрН по полям карточки. Пустой секрет берётся из сохранённого подключения.
+    /// </summary>
+    [HttpPost("{id}/etrn/check")]
+    public async Task<IActionResult> CheckEtrn(string id, [FromBody] EtrnProbeRequest? request, CancellationToken cancellationToken)
+    {
+        var result = await _etrn.CheckAsync(id, request ?? new EtrnProbeRequest(), cancellationToken);
+        return result.IsSuccess ? Ok(result.Value) : BadRequest(result.Error);
+    }
 
     /// <summary>
     /// Проверка GetBusinessEntityUser по полям вкладки. Адрес берётся из настроек сервера.

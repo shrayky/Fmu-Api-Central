@@ -1,8 +1,6 @@
 using System.Net;
 using System.Text;
 using CSharpFunctionalExtensions;
-using Domain.Configuration;
-using Domain.Configuration.Interfaces;
 using Domain.Etrn;
 using Domain.Etrn.Xml;
 using EtrnOfd;
@@ -213,6 +211,67 @@ public class OfdEtrnGatewayTests
         Assert.False(closed.Value.StillAcceptance);
     }
 
+    [Fact]
+    public async Task Проверка_берёт_новый_токен_и_пустой_список_считает_успехом()
+    {
+        var world = World.Ready();
+        world.Store.Remember(world.Context.Connection.Id, "cached-token", "refresh", 900, DateTimeOffset.Now);
+        world.Context.Connection.ClientId = "central";
+        world.Handler.Respond = call =>
+        {
+            if (call.Url.Contains("/protocol/openid-connect/token", StringComparison.Ordinal))
+                return OfdHandler.Json("""{"access_token":"fresh-token","expires_in":900}""");
+            if (call.Url.Contains("/etrns?", StringComparison.Ordinal))
+                return OfdHandler.Json("[]");
+            return OfdHandler.Status(HttpStatusCode.NotFound);
+        };
+
+        var result = await world.Gateway.ProbeAsync(world.Context, CancellationToken.None);
+
+        Assert.True(result.Value.Ok, result.Value.Message);
+        Assert.Equal("Платформа ОФД приняла подключение", result.Value.Message);
+        var token = Assert.Single(world.Handler.Calls, call => call.Url.Contains("/protocol/openid-connect/token", StringComparison.Ordinal));
+        Assert.Contains("grant_type=password", Encoding.UTF8.GetString(token.Body), StringComparison.Ordinal);
+        var list = Assert.Single(world.Handler.Calls, call => call.Url.Contains("/etrns?", StringComparison.Ordinal));
+        Assert.Contains("subscriber-id=2775225", list.Url, StringComparison.Ordinal);
+        Assert.DoesNotContain("number=", list.Url, StringComparison.Ordinal);
+        Assert.Equal("Bearer fresh-token", list.Authorization);
+        Assert.DoesNotContain(world.Handler.Calls, call => call.Url.Contains("/documents", StringComparison.Ordinal));
+        var exchange = Assert.Single(result.Value.Exchanges);
+        Assert.Equal("Проверка подключения", exchange.Method);
+        Assert.DoesNotContain("fresh-token", exchange.RequestBody, StringComparison.Ordinal);
+        Assert.DoesNotContain("plain-key", exchange.ResponseBody, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Проверка_без_client_id_не_ходит_в_ОФД()
+    {
+        var world = World.Ready();
+
+        var result = await world.Gateway.ProbeAsync(world.Context, CancellationToken.None);
+
+        Assert.False(result.Value.Ok);
+        Assert.Equal("Не задан client_id Платформы ОФД", result.Value.Message);
+        Assert.Empty(world.Handler.Calls);
+    }
+
+    [Fact]
+    public async Task Отказ_списка_при_проверке_не_читает_титулы()
+    {
+        var world = World.Ready();
+        world.Context.Connection.ClientId = "central";
+        world.Handler.Respond = call => call.Url.Contains("/protocol/openid-connect/token", StringComparison.Ordinal)
+            ? OfdHandler.Json("""{"access_token":"fresh-token","expires_in":900}""")
+            : OfdHandler.Status(HttpStatusCode.Unauthorized);
+
+        var result = await world.Gateway.ProbeAsync(world.Context, CancellationToken.None);
+
+        Assert.False(result.Value.Ok);
+        Assert.Equal("ОФД ответила 401", result.Value.Message);
+        Assert.DoesNotContain(world.Handler.Calls, call => call.Url.Contains("/documents", StringComparison.Ordinal));
+        Assert.Equal("Проверка подключения", Assert.Single(result.Value.Exchanges).Method);
+    }
+
     private static EtrnOperatorContext Context(string subscriberId, string apiKey) => new()
     {
         OrganizationId = "o1",
@@ -237,13 +296,15 @@ public class OfdEtrnGatewayTests
 
         public OfdHandler Handler { get; }
         public RecordingSigner Signer { get; }
+        public OfdTokenStore Store { get; }
         public OfdEtrnGateway Gateway { get; }
         public EtrnOperatorContext Context { get; set; } = OfdEtrnGatewayTests.Context("2775225", "plain-key");
 
-        private World(OfdHandler handler, RecordingSigner signer, OfdEtrnGateway gateway)
+        private World(OfdHandler handler, RecordingSigner signer, OfdTokenStore store, OfdEtrnGateway gateway)
         {
             Handler = handler;
             Signer = signer;
+            Store = store;
             Gateway = gateway;
         }
 
@@ -251,24 +312,18 @@ public class OfdEtrnGatewayTests
         {
             var handler = new OfdHandler();
             var signer = new RecordingSigner();
+            var store = new OfdTokenStore();
             var tokens = new OfdTokenClient(
                 new HttpClient(handler, disposeHandler: false),
                 new FixedHash("AB"),
-                new OfdTokenStore());
+                store);
             var gateway = new OfdEtrnGateway(
                 new SingleClientFactory(handler),
                 tokens,
                 signer,
-                new FixedParameters(),
                 () => SignedAt);
-            return new World(handler, signer, gateway);
+            return new World(handler, signer, store, gateway);
         }
-    }
-
-    private sealed class FixedParameters : IParametersService
-    {
-        public Task<Parameters> Current() => Task.FromResult(new Parameters());
-        public Task<bool> Update(Parameters parameters) => Task.FromResult(true);
     }
 
     private sealed class FixedHash(string hex) : IOfdApiKeyHash

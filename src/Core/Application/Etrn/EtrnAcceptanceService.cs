@@ -88,6 +88,9 @@ public sealed class EtrnAcceptanceService
         if (string.IsNullOrWhiteSpace(organization.Value.TrueApiIntegrationSettings?.DigitalSignature))
             return Result.Failure<EtrnIncomingView>("Не выбран сертификат организации");
 
+        if (EtrnDocumentState.IsStageNote(document.LastError))
+            return Result.Failure<EtrnIncomingView>(document.LastError);
+
         var @operator = _operators.FirstOrDefault(item =>
             string.Equals(item.Type, connection.Type, StringComparison.OrdinalIgnoreCase));
         if (@operator == null)
@@ -130,9 +133,14 @@ public sealed class EtrnAcceptanceService
 
         await _recorder.RecordAsync(executed.Value.Exchanges, document.OrganizationId, context.Operator);
         if (!executed.Value.Completed)
-            return await FailAsync(
-                document,
-                string.IsNullOrWhiteSpace(executed.Value.Error) ? "Saby не подтвердила отправку титула." : executed.Value.Error);
+        {
+            var error = string.IsNullOrWhiteSpace(executed.Value.Error)
+                ? "Saby не подтвердила отправку титула."
+                : executed.Value.Error;
+            return executed.Value.CloseDocument
+                ? await FinishAsync(document, error)
+                : await FailAsync(document, error);
+        }
 
         var succeeded = EtrnDocumentState.Succeed(document, decision.Value, now);
         if (succeeded.IsFailure)
@@ -143,6 +151,16 @@ public sealed class EtrnAcceptanceService
             return Result.Failure<EtrnIncomingView>("Титул отправлен, но документ не сохранён: " + stored.Error);
 
         return await _query.GetAsync(document.Id);
+    }
+
+    private async Task<Result<EtrnIncomingView>> FinishAsync(EtrnIncomingDocumentEntity document, string? error)
+    {
+        EtrnDocumentState.Finish(document, error);
+        var saved = await _incoming.Save(document);
+        if (saved.IsFailure)
+            return Result.Failure<EtrnIncomingView>("Документ завершён в СБИС, но не сохранён: " + saved.Error);
+
+        return Result.Failure<EtrnIncomingView>(document.LastError);
     }
 
     /// <summary>

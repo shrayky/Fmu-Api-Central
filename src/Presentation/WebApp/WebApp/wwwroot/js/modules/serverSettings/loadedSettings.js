@@ -30,11 +30,6 @@ export function mapServerSettings(configuration) {
         },
         etrn: {
             incomingFetchIntervalMinutes: etrn.incomingFetchIntervalMinutes ?? 5,
-            ofdClientId: etrn.ofdClientId || "",
-            ofdClientSecret: etrn.ofdClientSecret || "",
-            ofdKeycloakUrl: etrn.ofdKeycloakUrl || "https://oauth-test.platformaofd.ru",
-            ofdRealm: etrn.ofdRealm || "playground",
-            ofdApiUrl: etrn.ofdApiUrl || "https://api-test.platformaofd.ru",
         }
     };
 }

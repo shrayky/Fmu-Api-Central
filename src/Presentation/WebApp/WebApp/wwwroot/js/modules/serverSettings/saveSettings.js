@@ -55,13 +55,7 @@ export function buildConfigurationUpdaters(values) {
             failedApplicationRetentionDays: parseInt(values.vetisFailedApplicationRetention)
         }),
         etrnSettings: prev => ({
-            ...prev,
-            incomingFetchIntervalMinutes: parseInt(values.etrnIncomingInterval),
-            ofdClientId: String(values.ofdClientId || "").trim(),
-            ofdClientSecret: String(values.ofdClientSecret || ""),
-            ofdKeycloakUrl: String(values.ofdKeycloakUrl || "").trim(),
-            ofdRealm: String(values.ofdRealm || "").trim(),
-            ofdApiUrl: String(values.ofdApiUrl || "").trim()
+            incomingFetchIntervalMinutes: parseInt(values.etrnIncomingInterval)
         })
     };
 }

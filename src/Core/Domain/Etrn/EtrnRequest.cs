@@ -13,13 +13,16 @@ public static class EtrnMethods
     public const string ExecuteAction = "СБИС.ВыполнитьДействие";
     public const string AuthByCertificate = "СБИС.АутентифицироватьПоСертификату";
 
+    public const string Probe = "Проверка подключения";
+
     public static readonly string[] Service =
     [
         ChangesList,
         ReadDocument,
         WriteEnclosure,
         PrepareAction,
-        ExecuteAction
+        ExecuteAction,
+        Probe
     ];
 
     public static string Label(string? method) => method switch

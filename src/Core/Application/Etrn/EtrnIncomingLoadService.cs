@@ -13,6 +13,8 @@ public sealed class EtrnIncomingLoadService : IEtrnIncomingLoader
 {
     private const int ReconcileLimit = 50;
 
+    private const int WaitingReadLimit = 50;
+
     private static readonly TimeSpan SendingLimit = TimeSpan.FromMinutes(10);
 
     private readonly IReadOnlyList<IEtrnOperator> _operators;
@@ -139,6 +141,8 @@ public sealed class EtrnIncomingLoadService : IEtrnIncomingLoader
             saved.Add(entity.Id);
         }
 
+        await RefreshWaitingAsync(organization, connection, @operator, context, saved, cancellationToken);
+
         foreach (var operatorDocumentId in (batch.ClosedDocumentIds ?? []).Distinct(StringComparer.Ordinal))
         {
             var closedId = EtrnIncomingDocumentEntity.BuildId(
@@ -162,6 +166,7 @@ public sealed class EtrnIncomingLoadService : IEtrnIncomingLoader
         // Пара идёт по разобранному префиксу и при обрыве середины: следующий круг начнётся с непрочитанного события.
         sync.EventId = batch.Position.EventId;
         sync.DocumentId = batch.Position.DocumentId;
+        sync.EventAt = batch.Position.EventAt;
         if (!batch.Completed)
         {
             LastError = EtrnDocumentState.Truncate(batch.Error);
@@ -177,6 +182,94 @@ public sealed class EtrnIncomingLoadService : IEtrnIncomingLoader
         var stored = await _syncStates.Save(sync);
         if (stored.IsFailure)
             _logger.LogWarning("Состояние опроса ЭТрН {Connection} не сохранено: {Error}", connection.Id, stored.Error);
+    }
+
+    /// <summary>
+    /// Курсор к уже сохранённой накладной не возвращается. Пока она ждёт приёмки, состояние читаем отдельно:
+    /// код 7 или 9 закрывает карточку, чужой этап остаётся в ожидании с текстом.
+    /// </summary>
+    private async Task RefreshWaitingAsync(
+        OrganizationEntity organization,
+        EtrnConnection connection,
+        IEtrnOperator @operator,
+        EtrnOperatorContext context,
+        HashSet<string> savedThisPass,
+        CancellationToken cancellationToken)
+    {
+        if (!string.Equals(connection.Type, EtrnOperatorType.Saby, StringComparison.OrdinalIgnoreCase))
+            return;
+
+        var waiting = await _incoming.List(
+            new EtrnIncomingFilter
+            {
+                OrganizationId = organization.Id,
+                ConnectionId = connection.Id,
+                Status = EtrnDocumentStatus.Waiting
+            },
+            0,
+            WaitingReadLimit);
+        if (waiting.IsFailure)
+        {
+            _logger.LogWarning("Ожидающие ЭТрН подключения {Connection} не прочитаны: {Error}", connection.Id, waiting.Error);
+            return;
+        }
+
+        foreach (var document in waiting.Value)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (savedThisPass.Contains(document.Id))
+                continue;
+
+            Result<EtrnStageResult> stage;
+            try
+            {
+                stage = await @operator.ReadStageAsync(context, document.OperatorDocumentId, cancellationToken);
+            }
+            catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
+            {
+                _logger.LogWarning(ex, "Состояние ЭТрН {Id} не прочитано", document.Id);
+                continue;
+            }
+
+            if (stage.IsFailure || !stage.Value.Completed)
+                continue;
+
+            await _recorder.RecordAsync(stage.Value.Exchanges, organization.Id, context.Operator);
+            if (stage.Value.CloseDocument)
+            {
+                var name = stage.Value.StateName.Length > 0 ? stage.Value.StateName : stage.Value.Error;
+                EtrnDocumentState.Finish(document, name);
+                await SaveWaitingAsync(document);
+                continue;
+            }
+
+            if (stage.Value.Stage.Length > 0 && !stage.Value.StillAcceptance)
+            {
+                if (document.LastError.Length > 0 && !EtrnDocumentState.IsStageNote(document.LastError))
+                    continue;
+
+                var note = EtrnDocumentState.StageUnavailable(stage.Value.Stage);
+                if (document.LastError == note)
+                    continue;
+
+                document.LastError = note;
+                await SaveWaitingAsync(document);
+                continue;
+            }
+
+            if (stage.Value.StillAcceptance && EtrnDocumentState.IsStageNote(document.LastError))
+            {
+                document.LastError = "";
+                await SaveWaitingAsync(document);
+            }
+        }
+    }
+
+    private async Task SaveWaitingAsync(EtrnIncomingDocumentEntity document)
+    {
+        var written = await _incoming.Save(document);
+        if (written.IsFailure)
+            _logger.LogWarning("Состояние ЭТрН {Id} не сохранено: {Error}", document.Id, written.Error);
     }
 
     /// <summary>

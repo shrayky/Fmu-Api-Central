@@ -12,6 +12,25 @@ public static class EtrnDocumentState
     public const string AlreadyRunning = "Приёмка уже выполняется";
     public const string AlreadyClosed = "Документ уже закрыт";
 
+    public static string StageUnavailable(string stage) => $"Сейчас этап «{stage}», приёмка недоступна";
+
+    public static bool IsStageNote(string? error) =>
+        StageOf(error).Length > 0;
+
+    /// <summary>
+    /// Список показывает только подпись статуса. Заметка этапа иначе выглядит как «Ждёт приёмки».
+    /// </summary>
+    public static string StageOf(string? error)
+    {
+        var text = (error ?? "").Trim();
+        const string prefix = "Сейчас этап «";
+        const string suffix = "», приёмка недоступна";
+        if (!text.StartsWith(prefix, StringComparison.Ordinal) || !text.EndsWith(suffix, StringComparison.Ordinal))
+            return "";
+
+        return text[prefix.Length..^suffix.Length];
+    }
+
     public static Result StartSending(EtrnIncomingDocumentEntity document, DateTimeOffset now)
     {
         if (document.Status == EtrnDocumentStatus.Sending)
@@ -69,6 +88,17 @@ public static class EtrnDocumentState
         document.SendingAt = null;
         document.SendingAtUnix = 0;
         document.LastError = "";
+    }
+
+    /// <summary>
+    /// Документ в СБИС уже завершён. Текст состояния остаётся: Close его стирает, и в списке не видно, почему приёмка закрыта.
+    /// </summary>
+    public static void Finish(EtrnIncomingDocumentEntity document, string? reason)
+    {
+        document.Status = EtrnDocumentStatus.Closed;
+        document.SendingAt = null;
+        document.SendingAtUnix = 0;
+        document.LastError = Truncate(reason);
     }
 
     /// <summary>

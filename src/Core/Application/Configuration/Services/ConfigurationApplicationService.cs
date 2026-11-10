@@ -82,8 +82,6 @@ public class ConfigurationApplicationService : IConfigurationApplicationService
             if (etrn.IsFailure)
                 return etrn;
 
-            parameters.EtrnSettings.ApplyDefaults();
-
             parameters.VetisSettings.Endpoint = VetisEndpoints.Origin(parameters.VetisSettings.Endpoint);
             RestoreMaskedSecrets(parameters, current);
 
@@ -187,8 +185,6 @@ public class ConfigurationApplicationService : IConfigurationApplicationService
     {
         parameters.DatabaseConnection.Password = SecretMask.ForClient(parameters.DatabaseConnection.Password);
         parameters.BotSettings.BotToken = SecretMask.ForClient(parameters.BotSettings.BotToken);
-        parameters.EtrnSettings ??= new();
-        parameters.EtrnSettings.OfdClientSecret = SecretMask.ForClient(parameters.EtrnSettings.OfdClientSecret);
     }
 
     private static void RestoreMaskedSecrets(Parameters incoming, Parameters current)
@@ -199,21 +195,5 @@ public class ConfigurationApplicationService : IConfigurationApplicationService
         incoming.BotSettings.BotToken = SecretMask.Restore(
             incoming.BotSettings.BotToken,
             current.BotSettings.BotToken);
-        incoming.EtrnSettings ??= new();
-        current.EtrnSettings ??= new();
-        incoming.EtrnSettings.OfdClientSecret = RestoreKeptSecret(
-            incoming.EtrnSettings.OfdClientSecret,
-            current.EtrnSettings.OfdClientSecret);
-    }
-
-    /// <summary>
-    /// Пустая строка тоже оставляет секрет: поле пароля на вкладке не присылает старое значение, если его не трогали.
-    /// </summary>
-    private static string RestoreKeptSecret(string? incoming, string current)
-    {
-        var value = incoming ?? "";
-        if (value.Length == 0 || SecretMask.IsPlaceholder(value))
-            return current;
-        return value;
     }
 }

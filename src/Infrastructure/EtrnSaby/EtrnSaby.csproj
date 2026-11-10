@@ -19,6 +19,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="EtrnSaby.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\Core\Domain\Domain.csproj" />
     <ProjectReference Include="..\..\Core\Shared\Shared.csproj" />
   </ItemGroup>

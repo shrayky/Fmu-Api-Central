@@ -41,6 +41,21 @@ public class EtrnOperatorTests
         Assert.Equal("Платформа ОФД", EtrnOperatorType.Label("ofd"));
         Assert.Equal("Платформа ОФД", EtrnOperatorType.Label("OFD"));
     }
+
+    [Fact]
+    public void Пустой_адрес_подключения_ОФД_это_тестовый_стенд()
+    {
+        var connection = new EtrnConnection
+        {
+            KeycloakUrl = "  ",
+            Realm = "",
+            ApiUrl = "https://api.example/"
+        };
+
+        Assert.Equal(EtrnConnection.DefaultKeycloakUrl, connection.ResolvedKeycloakUrl());
+        Assert.Equal(EtrnConnection.DefaultRealm, connection.ResolvedRealm());
+        Assert.Equal("https://api.example", connection.ResolvedApiUrl());
+    }
 }
 
 public class EtrnDocumentStatusTests
@@ -82,6 +97,27 @@ public class EtrnIncomingDocumentTests
     public void Id_складывается_из_организации_подключения_и_документа_оператора()
     {
         Assert.Equal("doc:o1:c1:d-7", EtrnIncomingDocumentEntity.BuildId("o1", "c1", "d-7"));
+    }
+
+    [Fact]
+    public void Этап_перевозчика_не_подписывается_как_ожидание_приёмки()
+    {
+        var waiting = new EtrnIncomingDocumentEntity
+        {
+            Status = EtrnDocumentStatus.Waiting,
+            Lines = [new EtrnCargoLine { Index = 1, Name = "Сыр", Places = 2, GrossWeight = "3.79" }]
+        };
+        var carrier = new EtrnIncomingDocumentEntity
+        {
+            Status = EtrnDocumentStatus.Waiting,
+            LastError = EtrnDocumentState.StageUnavailable("Получение груза"),
+            Lines = [new EtrnCargoLine { Index = 1, Name = "Сыр", Places = 2, GrossWeight = "3.79" }]
+        };
+
+        Assert.Equal("Ждёт приёмки", waiting.StatusLabel);
+        Assert.True(waiting.CanDecide);
+        Assert.Equal("Получение груза", carrier.StatusLabel);
+        Assert.False(carrier.CanDecide);
     }
 
     [Fact]

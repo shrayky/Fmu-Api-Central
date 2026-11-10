@@ -157,10 +157,18 @@ public sealed class EtrnIncomingDocumentEntity : IHaveStringId
     public bool HasQuantity => Lines.Count > 0 && Lines.All(line => line.HasQuantity);
 
     [JsonIgnore]
-    public bool CanDecide => EtrnDocumentStatus.CanAccept(Status) && HasQuantity;
+    public bool CanDecide =>
+        EtrnDocumentStatus.CanAccept(Status) && HasQuantity && EtrnDocumentState.StageOf(LastError).Length == 0;
 
     [JsonIgnore]
-    public string StatusLabel => EtrnDocumentStatus.Label(Status, Action);
+    public string StatusLabel
+    {
+        get
+        {
+            var stage = EtrnDocumentState.StageOf(LastError);
+            return stage.Length > 0 ? stage : EtrnDocumentStatus.Label(Status, Action);
+        }
+    }
 
     public static string BuildId(string organizationId, string connectionId, string operatorDocumentId) =>
         $"doc:{organizationId}:{connectionId}:{operatorDocumentId}";

@@ -27,21 +27,24 @@ public sealed class OfdTokenClient
         _now = clock;
     }
 
+    public Task<Result<string>> AccessTokenAsync(EtrnConnection connection, CancellationToken cancellationToken) =>
+        AccessTokenAsync(connection, fresh: false, cancellationToken);
+
     public async Task<Result<string>> AccessTokenAsync(
-        string connectionId,
-        EtrnSettings settings,
-        string apiKey,
+        EtrnConnection connection,
+        bool fresh,
         CancellationToken cancellationToken)
     {
-        if (_store.TryGet(connectionId, _now(), out var cached))
+        var connectionId = connection.Id ?? "";
+        if (!fresh && _store.TryGet(connectionId, _now(), out var cached))
             return Result.Success(cached);
 
         try
         {
-            var refresh = _store.RefreshToken(connectionId);
+            var refresh = fresh ? "" : _store.RefreshToken(connectionId);
             if (refresh.Length > 0)
             {
-                var refreshed = await RequestAsync(settings, RefreshForm(settings, refresh), cancellationToken);
+                var refreshed = await RequestAsync(connection, RefreshForm(connection, refresh), cancellationToken);
                 if (refreshed.IsSuccess)
                 {
                     Remember(connectionId, refreshed.Value);
@@ -49,7 +52,7 @@ public sealed class OfdTokenClient
                 }
             }
 
-            var logged = await RequestAsync(settings, PasswordForm(settings, apiKey), cancellationToken);
+            var logged = await RequestAsync(connection, PasswordForm(connection), cancellationToken);
             if (logged.IsFailure)
                 return Result.Failure<string>(logged.Error);
 
@@ -67,11 +70,11 @@ public sealed class OfdTokenClient
         _store.Remember(connectionId, response.AccessToken, response.RefreshToken, response.ExpiresIn, _now());
 
     private async Task<Result<OfdTokenResponse>> RequestAsync(
-        EtrnSettings settings,
+        EtrnConnection connection,
         IEnumerable<KeyValuePair<string, string>> form,
         CancellationToken cancellationToken)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Post, TokenUrl(settings))
+        using var request = new HttpRequestMessage(HttpMethod.Post, TokenUrl(connection))
         {
             Content = new FormUrlEncodedContent(form)
         };
@@ -94,40 +97,36 @@ public sealed class OfdTokenClient
         return Result.Success(new OfdTokenResponse(access, Text(root, "refresh_token"), expires));
     }
 
-    private List<KeyValuePair<string, string>> PasswordForm(EtrnSettings settings, string apiKey)
+    private List<KeyValuePair<string, string>> PasswordForm(EtrnConnection connection)
     {
-        var form = BaseForm(settings);
+        var form = BaseForm(connection);
         form.Add(new KeyValuePair<string, string>("grant_type", "password"));
-        form.Add(new KeyValuePair<string, string>("api_key", _hash.Hex(apiKey)));
+        form.Add(new KeyValuePair<string, string>("api_key", _hash.Hex(connection.ApiKey)));
         return form;
     }
 
-    private static List<KeyValuePair<string, string>> RefreshForm(EtrnSettings settings, string refreshToken)
+    private static List<KeyValuePair<string, string>> RefreshForm(EtrnConnection connection, string refreshToken)
     {
-        var form = BaseForm(settings);
+        var form = BaseForm(connection);
         form.Add(new KeyValuePair<string, string>("grant_type", "refresh_token"));
         form.Add(new KeyValuePair<string, string>("refresh_token", refreshToken));
         return form;
     }
 
-    private static List<KeyValuePair<string, string>> BaseForm(EtrnSettings settings)
+    private static List<KeyValuePair<string, string>> BaseForm(EtrnConnection connection)
     {
         var form = new List<KeyValuePair<string, string>>
         {
-            new("client_id", (settings.OfdClientId ?? "").Trim())
+            new("client_id", (connection.ClientId ?? "").Trim())
         };
-        var secret = settings.OfdClientSecret ?? "";
+        var secret = connection.ClientSecret ?? "";
         if (!string.IsNullOrWhiteSpace(secret))
             form.Add(new KeyValuePair<string, string>("client_secret", secret));
         return form;
     }
 
-    private static string TokenUrl(EtrnSettings settings)
-    {
-        var root = (settings.OfdKeycloakUrl ?? "").Trim().TrimEnd('/');
-        var realm = (settings.OfdRealm ?? "").Trim();
-        return $"{root}/realms/{realm}/protocol/openid-connect/token";
-    }
+    private static string TokenUrl(EtrnConnection connection) =>
+        $"{connection.ResolvedKeycloakUrl()}/realms/{connection.ResolvedRealm()}/protocol/openid-connect/token";
 
     private static string Text(JsonElement root, string name) =>
         root.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String

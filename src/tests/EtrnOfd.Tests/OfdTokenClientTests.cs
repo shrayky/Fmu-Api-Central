@@ -14,8 +14,8 @@ public class OfdTokenClientTests
         var now = new DateTimeOffset(2026, 11, 10, 13, 0, 0, TimeSpan.FromHours(7));
         var client = Client(handler, () => now);
 
-        var first = await client.AccessTokenAsync("c1", Settings(""), "plain-key", CancellationToken.None);
-        var second = await client.AccessTokenAsync("c1", Settings(""), "plain-key", CancellationToken.None);
+        var first = await client.AccessTokenAsync(Connection(""), CancellationToken.None);
+        var second = await client.AccessTokenAsync(Connection(""), CancellationToken.None);
 
         Assert.True(first.IsSuccess, first.IsFailure ? first.Error : "");
         Assert.Equal("access-1", first.Value);
@@ -39,7 +39,7 @@ public class OfdTokenClientTests
         var handler = new TokenHandler(_ => Json(access: "access-1", refresh: "refresh-1", expiresIn: 900));
         var client = Client(handler, () => DateTimeOffset.UnixEpoch);
 
-        var result = await client.AccessTokenAsync("c1", Settings("s3cret"), "plain-key", CancellationToken.None);
+        var result = await client.AccessTokenAsync(Connection("s3cret"), CancellationToken.None);
 
         Assert.True(result.IsSuccess, result.IsFailure ? result.Error : "");
         Assert.Equal("s3cret", Form(Assert.Single(handler.Calls).Body)["client_secret"]);
@@ -51,7 +51,7 @@ public class OfdTokenClientTests
         var handler = new TokenHandler(_ => """{"expires_in":900}""");
         var client = Client(handler, () => DateTimeOffset.UnixEpoch);
 
-        var result = await client.AccessTokenAsync("c1", Settings(""), "plain-key", CancellationToken.None);
+        var result = await client.AccessTokenAsync(Connection(""), CancellationToken.None);
 
         Assert.True(result.IsFailure);
         Assert.Equal("ОФД не вернула токен", result.Error);
@@ -75,9 +75,9 @@ public class OfdTokenClientTests
         var now = new DateTimeOffset(2026, 11, 10, 13, 0, 0, TimeSpan.FromHours(7));
         var client = Client(handler, () => now);
 
-        var first = await client.AccessTokenAsync("c1", Settings(""), "plain-key", CancellationToken.None);
+        var first = await client.AccessTokenAsync(Connection(""), CancellationToken.None);
         now = now.AddSeconds(10);
-        var second = await client.AccessTokenAsync("c1", Settings(""), "plain-key", CancellationToken.None);
+        var second = await client.AccessTokenAsync(Connection(""), CancellationToken.None);
 
         Assert.Equal("access-1", first.Value);
         Assert.Equal("access-2", second.Value);
@@ -88,15 +88,32 @@ public class OfdTokenClientTests
         Assert.Equal("password", Form(handler.Calls[2].Body)["grant_type"]);
     }
 
+    [Fact]
+    public async Task Проверка_подключения_берёт_новый_токен_мимо_кэша()
+    {
+        var handler = new TokenHandler(call => Json(access: "access-" + call, refresh: "refresh-" + call, expiresIn: 900));
+        var now = new DateTimeOffset(2026, 11, 10, 13, 0, 0, TimeSpan.FromHours(7));
+        var client = Client(handler, () => now);
+
+        await client.AccessTokenAsync(Connection(""), CancellationToken.None);
+        var fresh = await client.AccessTokenAsync(Connection(""), fresh: true, CancellationToken.None);
+
+        Assert.Equal("access-2", fresh.Value);
+        Assert.Equal(2, handler.Calls.Count);
+        Assert.Equal("password", Form(handler.Calls[1].Body)["grant_type"]);
+        Assert.Equal("AB", Form(handler.Calls[1].Body)["api_key"]);
+    }
+
     private static OfdTokenClient Client(TokenHandler handler, Func<DateTimeOffset> clock) =>
         new(new HttpClient(handler, disposeHandler: false), new FixedHash("AB"), new OfdTokenStore(), clock);
 
-    private static EtrnSettings Settings(string secret) => new()
+    private static EtrnConnection Connection(string secret) => new()
     {
-        OfdClientId = "central",
-        OfdClientSecret = secret,
-        OfdKeycloakUrl = EtrnSettings.DefaultKeycloakUrl,
-        OfdRealm = EtrnSettings.DefaultRealm
+        Id = "c1",
+        Type = EtrnOperatorType.Ofd,
+        ClientId = "central",
+        ClientSecret = secret,
+        ApiKey = "plain-key"
     };
 
     private static string Json(string access, string refresh, int expiresIn) =>

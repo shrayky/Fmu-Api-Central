@@ -137,6 +137,20 @@ public class EtrnDocumentStateTests
     }
 
     [Fact]
+    public void Завершённый_у_оператора_закрывается_и_сохраняет_текст_состояния()
+    {
+        var document = Waiting();
+        EtrnDocumentState.StartSending(document, Now);
+
+        EtrnDocumentState.Finish(document, "Выполнение завершено успешно");
+
+        Assert.Equal(EtrnDocumentStatus.Closed, document.Status);
+        Assert.Equal("Выполнение завершено успешно", document.LastError);
+        Assert.Null(document.SendingAt);
+        Assert.Equal(0, document.SendingAtUnix);
+    }
+
+    [Fact]
     public void Опрос_закрывает_документ_если_этап_приёмки_закрыт_не_нами()
     {
         var document = Waiting();

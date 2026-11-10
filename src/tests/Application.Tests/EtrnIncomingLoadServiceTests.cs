@@ -32,6 +32,8 @@ public class EtrnIncomingLoadServiceTests
         Assert.Equal("СБИС Север", document.Operator.Name);
         Assert.Equal(10, Assert.Single(document.Lines).Places);
         Assert.Equal("e-last", world.Sync.Store["c1"].EventId);
+        Assert.Equal("d-last", world.Sync.Store["c1"].DocumentId);
+        Assert.Equal("11.10.2026 12.00.00", world.Sync.Store["c1"].EventAt);
         Assert.NotEqual("", world.Sync.Store["c1"].LastSuccessAt);
     }
 
@@ -104,13 +106,14 @@ public class EtrnIncomingLoadServiceTests
             OrganizationId = "o1",
             ConnectionId = "c1",
             EventId = "e1",
-            DocumentId = "d1"
+            DocumentId = "d1",
+            EventAt = "11.10.2026 12.00.00"
         };
         world.Operator.EnqueueFetch(new EtrnFetchResult
         {
             Completed = false,
             Error = "Нет связи с Saby",
-            Position = new EtrnPollPosition("e1", "d1")
+            Position = new EtrnPollPosition("e1", "d1", "11.10.2026 12.00.00")
         });
 
         var saved = await world.Loader.LoadAsync(CancellationToken.None);
@@ -118,6 +121,7 @@ public class EtrnIncomingLoadServiceTests
         Assert.Equal(0, saved);
         Assert.Equal("e1", world.Sync.Store["c1"].EventId);
         Assert.Equal("d1", world.Sync.Store["c1"].DocumentId);
+        Assert.Equal("11.10.2026 12.00.00", world.Operator.LastContext!.Position.EventAt);
         Assert.Equal("Нет связи с Saby", world.Sync.Store["c1"].LastError);
         Assert.Empty(world.Incoming.Store);
     }
@@ -225,6 +229,51 @@ public class EtrnIncomingLoadServiceTests
     }
 
     [Fact]
+    public async Task Load_закрывает_ожидающую_накладную_по_состоянию_СБИС()
+    {
+        var world = new World();
+        world.Organizations.Store["o1"] = Organization(connection: Connection());
+        var waiting = Stored("d-1", EtrnDocumentStatus.Waiting);
+        var accepted = Stored("d-2", EtrnDocumentStatus.Accepted);
+        world.Incoming.Store[waiting.Id] = waiting;
+        world.Incoming.Store[accepted.Id] = accepted;
+        world.Operator.EnqueueStage(new EtrnStageResult
+        {
+            Completed = true,
+            CloseDocument = true,
+            StateName = "Выполнение завершено успешно"
+        });
+
+        await world.Loader.LoadAsync(CancellationToken.None);
+
+        Assert.Equal(EtrnDocumentStatus.Closed, world.Incoming.Store[waiting.Id].Status);
+        Assert.Equal("Выполнение завершено успешно", world.Incoming.Store[waiting.Id].LastError);
+        Assert.Equal(EtrnDocumentStatus.Accepted, world.Incoming.Store[accepted.Id].Status);
+        Assert.Equal(1, world.Operator.StageCalls);
+    }
+
+    [Fact]
+    public async Task Load_чужой_этап_ожидающей_накладной_остаётся_в_ожидании()
+    {
+        var world = new World();
+        world.Organizations.Store["o1"] = Organization(connection: Connection());
+        var waiting = Stored("d-1", EtrnDocumentStatus.Waiting);
+        world.Incoming.Store[waiting.Id] = waiting;
+        world.Operator.EnqueueStage(new EtrnStageResult
+        {
+            Completed = true,
+            Stage = "Получение груза",
+            StillAcceptance = false
+        });
+
+        await world.Loader.LoadAsync(CancellationToken.None);
+
+        var stored = world.Incoming.Store[waiting.Id];
+        Assert.Equal(EtrnDocumentStatus.Waiting, stored.Status);
+        Assert.Equal(EtrnDocumentState.StageUnavailable("Получение груза"), stored.LastError);
+    }
+
+    [Fact]
     public async Task Load_не_переписывает_чужое_решение()
     {
         var world = new World();
@@ -249,6 +298,16 @@ public class EtrnIncomingLoadServiceTests
 
         Assert.Equal(EtrnDocumentStatus.Accepted, world.Incoming.Store[document.Id].Status);
     }
+
+    private static EtrnIncomingDocumentEntity Stored(string operatorDocumentId, string status) => new()
+    {
+        Id = EtrnIncomingDocumentEntity.BuildId("o1", "c1", operatorDocumentId),
+        OrganizationId = "o1",
+        OperatorDocumentId = operatorDocumentId,
+        Operator = EtrnOperator.For(Connection()),
+        Status = status,
+        Lines = [new EtrnCargoLine { Index = 1, Places = 1, GrossWeight = "1" }]
+    };
 
     private static EtrnConnection Connection(string name = "СБИС", bool enable = true) =>
         new() { Id = "c1", Type = EtrnOperatorType.Saby, Name = name, Enable = enable };

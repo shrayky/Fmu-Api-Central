@@ -360,7 +360,8 @@ public class OrganizationManagerServiceTests
             repository,
             new SessionTrueApiAuthService(new TrueApiSession("123e4567-e89b-12d3-a456-426655440000", liveUntil)),
             state,
-            new FakeGroupRepository());
+            new FakeGroupRepository(),
+            new FakeEtrnSync());
 
         var result = await sut.Token("7700000000");
 
@@ -447,6 +448,87 @@ public class OrganizationManagerServiceTests
         Assert.Equal("c1", connection.Id);
         Assert.Equal(EtrnOperatorType.Saby, connection.Type);
         Assert.True(connection.Enable);
+        Assert.Equal(EtrnConnection.DefaultIncomingFrom, connection.IncomingFrom);
+    }
+
+    [Fact]
+    public async Task Update_смена_даты_начала_сбрасывает_пару_опроса()
+    {
+        var repository = new FakeOrganizationRepository();
+        repository.Store["o1"] = new OrganizationEntity
+        {
+            Id = "o1",
+            Name = "Орг",
+            Inn = "1234567890",
+            EtrnConnections =
+            [
+                new EtrnConnection
+                {
+                    Id = "c1",
+                    Type = EtrnOperatorType.Saby,
+                    Name = "СБИС",
+                    Enable = true,
+                    IncomingFrom = "2026-09-01"
+                }
+            ]
+        };
+        var sync = new FakeEtrnSync();
+        sync.Store["c1"] = new EtrnSyncState
+        {
+            Id = EtrnSyncState.BuildId("c1"),
+            OrganizationId = "o1",
+            ConnectionId = "c1",
+            EventId = "e1",
+            DocumentId = "d1",
+            EventAt = "11.10.2026 12.00.00"
+        };
+        var sut = CreateSut(repository, sync: sync);
+
+        var same = await sut.Update(new OrganizationView
+        {
+            Id = "o1",
+            Name = "Орг",
+            Inn = "1234567890",
+            EtrnConnections =
+            [
+                new EtrnConnection
+                {
+                    Id = "c1",
+                    Type = EtrnOperatorType.Saby,
+                    Name = "СБИС",
+                    Enable = true,
+                    IncomingFrom = "2026-09-01"
+                }
+            ]
+        });
+
+        Assert.True(same.IsSuccess, same.IsFailure ? same.Error : "");
+        Assert.Equal("e1", sync.Store["c1"].EventId);
+        Assert.Equal("d1", sync.Store["c1"].DocumentId);
+
+        var moved = await sut.Update(new OrganizationView
+        {
+            Id = "o1",
+            Name = "Орг",
+            Inn = "1234567890",
+            EtrnConnections =
+            [
+                new EtrnConnection
+                {
+                    Id = "c1",
+                    Type = EtrnOperatorType.Saby,
+                    Name = "СБИС",
+                    Enable = true,
+                    IncomingFrom = "2026-10-01"
+                }
+            ]
+        });
+
+        Assert.True(moved.IsSuccess, moved.IsFailure ? moved.Error : "");
+        Assert.Equal("2026-10-01", repository.Store["o1"].EtrnConnections[0].IncomingFrom);
+        Assert.Equal("", sync.Store["c1"].EventId);
+        Assert.Equal("", sync.Store["c1"].DocumentId);
+        Assert.Equal("", sync.Store["c1"].EventAt);
     }
 
     [Fact]
@@ -497,7 +579,9 @@ public class OrganizationManagerServiceTests
                     Name = "ОФД",
                     Enable = true,
                     SubscriberId = "2775225",
-                    ApiKey = "ofd-secret"
+                    ApiKey = "ofd-secret",
+                    ClientId = "old-client",
+                    ClientSecret = "client-secret"
                 },
                 new EtrnConnection
                 {
@@ -525,7 +609,12 @@ public class OrganizationManagerServiceTests
                     Name = "ОФД Север",
                     Enable = true,
                     SubscriberId = " 2775225 ",
-                    ApiKey = ""
+                    ApiKey = "",
+                    ClientId = " new-client ",
+                    ClientSecret = "",
+                    KeycloakUrl = "",
+                    Realm = "",
+                    ApiUrl = " https://api.example/ "
                 },
                 new EtrnConnection
                 {
@@ -540,22 +629,38 @@ public class OrganizationManagerServiceTests
 
         Assert.True(saved.IsSuccess, saved.IsFailure ? saved.Error : "");
         var stored = repository.Store["o1"].EtrnConnections ?? [];
-        Assert.Equal("ofd-secret", Assert.Single(stored, item => item.Id == "ofd-1").ApiKey);
-        Assert.Equal("2775225", Assert.Single(stored, item => item.Id == "ofd-1").SubscriberId);
+        var kept = Assert.Single(stored, item => item.Id == "ofd-1");
+        Assert.Equal("ofd-secret", kept.ApiKey);
+        Assert.Equal("2775225", kept.SubscriberId);
+        Assert.Equal("new-client", kept.ClientId);
+        Assert.Equal("client-secret", kept.ClientSecret);
+        Assert.Equal("", kept.KeycloakUrl);
+        Assert.Equal("", kept.Realm);
+        Assert.Equal("https://api.example", kept.ApiUrl);
         Assert.Equal("", Assert.Single(stored, item => item.Id == "fresh").ApiKey);
+        Assert.Equal("", Assert.Single(stored, item => item.Id == "fresh").ClientSecret);
 
         var listed = await sut.List(1, 50);
         var viewConnections = Assert.Single(listed.Content).EtrnConnections;
         Assert.NotNull(viewConnections);
         var view = Assert.Single(viewConnections, item => item.Id == "ofd-1");
         Assert.Equal(SecretMask.Placeholder, view.ApiKey);
+        Assert.Equal(SecretMask.Placeholder, view.ClientSecret);
+        Assert.Equal("new-client", view.ClientId);
         Assert.Equal("ofd-secret", Assert.Single(stored, item => item.Id == "ofd-1").ApiKey);
+        Assert.Equal("client-secret", Assert.Single(stored, item => item.Id == "ofd-1").ClientSecret);
     }
 
     private static OrganizationManagerService CreateSut(
         FakeOrganizationRepository repository,
-        FakeGroupRepository? groups = null)
-        => new(repository, new FakeTrueApiAuthService(), new FakeApplicationState(), groups ?? new FakeGroupRepository());
+        FakeGroupRepository? groups = null,
+        FakeEtrnSync? sync = null)
+        => new(
+            repository,
+            new FakeTrueApiAuthService(),
+            new FakeApplicationState(),
+            groups ?? new FakeGroupRepository(),
+            sync ?? new FakeEtrnSync());
 
     private sealed class FakeGroupRepository : IInstanceGroupRepository
     {
@@ -598,6 +703,23 @@ public class OrganizationManagerServiceTests
 
         public Task<Result<bool>> HasCheckerSettings(string groupId)
             => throw new NotImplementedException();
+    }
+
+    private sealed class FakeEtrnSync : IEtrnSyncStateRepository
+    {
+        public Dictionary<string, EtrnSyncState> Store { get; } = new();
+
+        public Task<Result<EtrnSyncState?>> Find(string connectionId)
+        {
+            Store.TryGetValue(connectionId, out var state);
+            return Task.FromResult(Result.Success(state));
+        }
+
+        public Task<Result> Save(EtrnSyncState state)
+        {
+            Store[state.ConnectionId] = state;
+            return Task.FromResult(Result.Success());
+        }
     }
 
     private sealed class FakeTrueApiAuthService : ITrueApiAuthService

@@ -96,6 +96,23 @@ class OrganizationService {
         return true;
     }
 
+    async checkEtrn(id, payload) {
+        const data = await this.authService.makeAuthenticatedRequest(
+            `${this.apiEndpoint}/${encodeURIComponent(id)}/etrn/check`,
+            {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            }
+        );
+
+        if (!data.result) {
+            throw new Error(data.error);
+        }
+
+        return data.value;
+    }
+
     async checkVetis(id, payload) {
         return this._vetis(id, "check", payload);
     }

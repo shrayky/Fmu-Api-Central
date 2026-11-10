@@ -1,13 +1,13 @@
 namespace Domain.Etrn;
 
-public sealed record EtrnPollPosition(string EventId = "", string DocumentId = "")
+public sealed record EtrnPollPosition(string EventId = "", string DocumentId = "", string EventAt = "")
 {
     public static EtrnPollPosition Empty { get; } = new();
 
     public bool IsEmpty => EventId.Length == 0 && DocumentId.Length == 0;
 }
 
-public sealed record EtrnPollEvent(string EventId, string DocumentId, string Stage = "")
+public sealed record EtrnPollEvent(string EventId, string DocumentId, string Stage = "", string EventAt = "")
 {
     public const string AcceptanceStage = "Приемка груза";
 
@@ -28,6 +28,6 @@ public static class EtrnPollPage
 
         var index = Math.Clamp(processed, 0, page.Count);
         var target = index < page.Count ? page[index] : page[^1];
-        return new EtrnPollPosition(target.EventId, target.DocumentId);
+        return new EtrnPollPosition(target.EventId, target.DocumentId, target.EventAt);
     }
 }

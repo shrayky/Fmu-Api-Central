@@ -11,6 +11,25 @@ public class EtrnAcceptanceServiceTests
     private static readonly DateTimeOffset Now = new(2026, 11, 5, 12, 0, 0, TimeSpan.Zero);
 
     [Fact]
+    public async Task Accept_на_этапе_перевозчика_не_зовёт_шлюз()
+    {
+        var world = new World();
+        var document = Document();
+        document.LastError = EtrnDocumentState.StageUnavailable("Получение груза");
+        world.Put(document);
+
+        var result = await world.Acceptance.AcceptAsync(
+            document.Id,
+            new EtrnAcceptCommand { Intent = EtrnAcceptanceIntent.Sign },
+            CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(EtrnDocumentState.StageUnavailable("Получение груза"), result.Error);
+        Assert.Equal(0, world.Operator.ExecuteCalls);
+        Assert.Equal(EtrnDocumentStatus.Waiting, world.Incoming.Store[document.Id].Status);
+    }
+
+    [Fact]
     public async Task Accept_ошибка_решения_не_зовёт_шлюз_и_не_меняет_статус()
     {
         var world = new World();
@@ -89,6 +108,32 @@ public class EtrnAcceptanceServiceTests
         Assert.True(result.IsFailure);
         Assert.Equal(EtrnDocumentState.AlreadyRunning, result.Error);
         Assert.Equal(0, world.Operator.ExecuteCalls);
+    }
+
+    [Fact]
+    public async Task Accept_завершённый_в_СБИС_закрывает_карточку()
+    {
+        var world = new World();
+        world.Put(Document());
+        world.Operator.EnqueueExecute(new EtrnExecuteResult
+        {
+            Completed = false,
+            CloseDocument = true,
+            Error = "Выполнение завершено успешно",
+            Exchanges = [new EtrnExchange { Method = EtrnMethods.ReadDocument, Completed = true }]
+        });
+
+        var result = await world.Acceptance.AcceptAsync(
+            Document().Id,
+            new EtrnAcceptCommand { Intent = EtrnAcceptanceIntent.Reject, Comment = "брак" },
+            CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("Выполнение завершено успешно", result.Error);
+        var stored = world.Incoming.Store[Document().Id];
+        Assert.Equal(EtrnDocumentStatus.Closed, stored.Status);
+        Assert.Equal("Выполнение завершено успешно", stored.LastError);
+        Assert.Null(stored.SendingAt);
     }
 
     [Fact]

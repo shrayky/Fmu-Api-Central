@@ -41,9 +41,16 @@ public static class SenderTitleReader
 
     private const string Knd = "1110339";
 
+    private static readonly string[] AddressPointNames =
+    [
+        "АдрПунктНазн", "АдресВыгрузки", "АдрМестаВыгрузки", "ПунктВыгрузки", "АдресПунктаНазначения",
+        "АдресДостГр"
+    ];
+
     private static readonly string[] AddressNames =
     [
-        "АдрПунктНазн", "АдресВыгрузки", "АдрМестаВыгрузки", "ПунктВыгрузки", "АдресПунктаНазначения"
+        .. AddressPointNames,
+        "АдресИнф", "АдресРФ", "АдрИнф", "АдрРФ"
     ];
 
     private static readonly string[] AddressTextNames =
@@ -74,6 +81,26 @@ public static class SenderTitleReader
             return Result.Failure<SenderTitle>($"{NotParsed}: {ex.Message}");
         }
 
+        return FromDocument(document, Decode(xml));
+    }
+
+    public static Result<SenderTitle> Read(string xml)
+    {
+        XDocument document;
+        try
+        {
+            document = XDocument.Parse(xml, LoadOptions.PreserveWhitespace);
+        }
+        catch (Exception ex)
+        {
+            return Result.Failure<SenderTitle>($"{NotParsed}: {ex.Message}");
+        }
+
+        return FromDocument(document, xml);
+    }
+
+    private static Result<SenderTitle> FromDocument(XDocument document, string rawXml)
+    {
         var root = document.Root;
         if (root == null || !string.Equals(root.Name.LocalName, "Файл", StringComparison.OrdinalIgnoreCase))
             return Result.Failure<SenderTitle>(NotParsed);
@@ -84,13 +111,13 @@ public static class SenderTitleReader
 
         return Result.Success(new SenderTitle
         {
-            Number = AnyAttribute(title, "НомДок", "НомерДок", "Номер", "НомДок") ?? "",
-            Date = NormalizeDate(AnyAttribute(title, "ДатаДок", "ДатаДокумента", "Дата")),
-            Uid = AnyAttribute(title, "УИД_ЕТД", "УИД", "ИдГИСЭПД", "ИдентификаторГИСЭПД") ?? "",
+            Number = WaybillValue(title, "НомерТрН", "НомДок", "НомерДок"),
+            Date = NormalizeDate(WaybillValue(title, "ДатаТрН", "ДатаДок", "ДатаДокумента")),
+            Uid = WaybillValue(title, "УИД_ТрН", "УИД_ЕТД", "УИД", "ИдГИСЭПД", "ИдентификаторГИСЭПД"),
             Consignor = Consignor(root, title),
             Address = Address(title),
             Lines = Lines(title),
-            RawXml = Decode(xml)
+            RawXml = rawXml
         });
     }
 
@@ -123,6 +150,10 @@ public static class SenderTitleReader
                 .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
             if (!string.IsNullOrWhiteSpace(name))
                 return name.Trim();
+
+            var person = Person(element);
+            if (person.Length > 0)
+                return person;
         }
 
         return (Attribute(title, "Грузоотправитель", "НаимГО") ?? "").Trim();
@@ -131,9 +162,9 @@ public static class SenderTitleReader
     private static string Address(XElement title)
     {
         var points = title.Descendants()
-            .Where(element => AddressNames.Contains(element.Name.LocalName, StringComparer.OrdinalIgnoreCase))
+            .Where(element => AddressPointNames.Contains(element.Name.LocalName, StringComparer.OrdinalIgnoreCase))
             .Where(element => !element.Ancestors().Any(ancestor =>
-                AddressNames.Contains(ancestor.Name.LocalName, StringComparer.OrdinalIgnoreCase)))
+                AddressPointNames.Contains(ancestor.Name.LocalName, StringComparer.OrdinalIgnoreCase)))
             .Select(FormatAddress)
             .Where(text => text.Length > 0)
             .Distinct(StringComparer.Ordinal)
@@ -170,11 +201,13 @@ public static class SenderTitleReader
         var parts = new List<string>();
         Add(parts, point, "Индекс");
         Add(parts, point, "НаимРегион", "Регион", "КодРегион");
+        Add(parts, point, "Район");
         Add(parts, point, "Город");
         Add(parts, point, "НаселПункт", "НаселенныйПункт");
         Add(parts, point, "Улица");
         Add(parts, point, "Дом");
         Add(parts, point, "Корпус");
+        Add(parts, point, "Кварт", "Квартира");
         if (parts.Count > 0)
             return string.Join(", ", parts);
 
@@ -208,7 +241,7 @@ public static class SenderTitleReader
                 Index = ParseIndex(Attribute(element, "НомерГруз", "Номер", "НомПоряд"), index + 1),
                 Name = (Attribute(element, "НаимГруз", "НаименованиеГруза", "Наименование", "Название") ?? "").Trim(),
                 Places = places,
-                GrossWeight = NormalizeWeight(Attribute(element, "ВесГруз", "МассаБрутто", "ВесБрутто", "Масса"))
+                GrossWeight = NormalizeWeight(Weight(element))
             });
         }
 
@@ -224,6 +257,20 @@ public static class SenderTitleReader
         int.TryParse((value ?? "").Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var places) && places >= 0
             ? places
             : null;
+
+    /// <summary>
+    /// В 5.01 плановая масса брутто — МасБрутЗнач у дочернего ПлМасГруз, не атрибут строки.
+    /// </summary>
+    private static string? Weight(XElement element)
+    {
+        var own = Attribute(element, "ВесГруз", "МассаБрутто", "ВесБрутто", "Масса", "МасБрутЗнач");
+        if (!string.IsNullOrWhiteSpace(own))
+            return own;
+
+        var planned = element.Elements()
+            .FirstOrDefault(child => string.Equals(child.Name.LocalName, "ПлМасГруз", StringComparison.OrdinalIgnoreCase));
+        return planned == null ? null : Attribute(planned, "МасБрутЗнач");
+    }
 
     private static string NormalizeWeight(string? value)
     {
@@ -256,13 +303,33 @@ public static class SenderTitleReader
             .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
 
     /// <summary>
-    /// Номер, дата и УИД лежат на вложенном СодИнфГО, а не на самом Документе.
+    /// Номер и дата накладной лежат на СодИнфГО. Первое НомерДок в дереве — сопроводительный документ.
     /// </summary>
-    private static string? AnyAttribute(XElement title, params string[] names) =>
-        Attribute(title, names)
-        ?? title.Descendants()
-            .Select(element => Attribute(element, names))
-            .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+    private static string WaybillValue(XElement title, params string[] names)
+    {
+        var content = title.DescendantsAndSelf()
+            .FirstOrDefault(element => string.Equals(element.Name.LocalName, "СодИнфГО", StringComparison.OrdinalIgnoreCase))
+            ?? title;
+        return (Attribute(content, names) ?? Attribute(title, names) ?? "").Trim();
+    }
+
+    private static string Person(XElement container)
+    {
+        foreach (var element in container.DescendantsAndSelf())
+        {
+            if (!string.Equals(element.Name.LocalName, "ФИО", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            var parts = new[] { Attribute(element, "Фамилия"), Attribute(element, "Имя"), Attribute(element, "Отчество") }
+                .Where(part => !string.IsNullOrWhiteSpace(part))
+                .Select(part => part!.Trim());
+            var name = string.Join(' ', parts);
+            if (name.Length > 0)
+                return name;
+        }
+
+        return "";
+    }
 
     private static string? Value(XElement element, params string[] names) =>
         element.Elements()

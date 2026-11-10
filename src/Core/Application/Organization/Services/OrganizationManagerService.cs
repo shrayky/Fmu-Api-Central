@@ -23,17 +23,20 @@ public class OrganizationManagerService : IOrganizationManagerService
     private readonly ITrueApiAuthService _trueApiAuthService;
     private readonly IApplicationState _applicationState;
     private readonly IInstanceGroupRepository _instanceGroupRepository;
+    private readonly IEtrnSyncStateRepository _etrnSync;
 
     public OrganizationManagerService(
         IOrganizationRepository repository,
         ITrueApiAuthService trueApiAuthService,
         IApplicationState applicationState,
-        IInstanceGroupRepository instanceGroupRepository)
+        IInstanceGroupRepository instanceGroupRepository,
+        IEtrnSyncStateRepository etrnSync)
     {
         _repository = repository;
         _trueApiAuthService = trueApiAuthService;
         _applicationState = applicationState;
         _instanceGroupRepository = instanceGroupRepository;
+        _etrnSync = etrnSync;
     }
 
     public async Task<Result> Create(OrganizationView data)
@@ -72,8 +75,14 @@ public class OrganizationManagerService : IOrganizationManagerService
         if (unique.IsFailure)
             return unique;
 
+        var previous = exist.Value.EtrnConnections ?? [];
         Apply(exist.Value, prepared.Value);
-        return await _repository.Update(exist.Value);
+        var saved = await _repository.Update(exist.Value);
+        if (saved.IsFailure)
+            return saved;
+
+        await ResetCursors(previous, exist.Value.EtrnConnections);
+        return saved;
     }
 
     public async Task<Result> Delete(string id)
@@ -187,12 +196,48 @@ public class OrganizationManagerService : IOrganizationManagerService
     /// <summary>
     /// Пустое поле и маска не стирают ключ: карточка не отличает «не меняли» от очистки, а выпустить ключ заново можно только в ОФД.
     /// </summary>
-    private static string RestoreApiKey(string? incoming, string stored)
+    private static string TrimAddress(string? value) => (value ?? "").Trim().TrimEnd('/');
+
+    /// <summary>
+    /// Пустое поле и маска «***» оставляют уже сохранённый секрет: пароль на карточке не присылает старое значение.
+    /// </summary>
+    private static string RestoreSecret(string? incoming, string stored)
     {
         var value = (incoming ?? "").Trim();
         if (value.Length == 0 || SecretMask.IsPlaceholder(value))
             return stored;
         return value;
+    }
+
+    /// <summary>
+    /// Пустая дата раньше означала «30 дней», теперь это 1 сентября 2026. Такая запись сдвигает опрос.
+    /// </summary>
+    private async Task ResetCursors(IReadOnlyList<EtrnConnection> previous, IReadOnlyList<EtrnConnection>? current)
+    {
+        foreach (var connection in current ?? [])
+        {
+            var before = previous.FirstOrDefault(item =>
+                string.Equals(item.Id, connection.Id, StringComparison.OrdinalIgnoreCase));
+            if (before == null)
+                continue;
+
+            var stored = string.IsNullOrWhiteSpace(before.IncomingFrom)
+                ? ""
+                : EtrnConnection.NormalizeIncomingFrom(before.IncomingFrom);
+            if (stored == connection.IncomingFrom)
+                continue;
+
+            var found = await _etrnSync.Find(connection.Id);
+            if (found.IsFailure || found.Value == null)
+                continue;
+
+            found.Value.EventId = "";
+            found.Value.DocumentId = "";
+            found.Value.EventAt = "";
+            var written = await _etrnSync.Save(found.Value);
+            if (written.IsFailure)
+                continue;
+        }
     }
 
     private static void Apply(OrganizationEntity entity, OrganizationView data)
@@ -215,14 +260,22 @@ public class OrganizationManagerService : IOrganizationManagerService
                     var id = string.IsNullOrWhiteSpace(connection.Id) ? Guid.NewGuid().ToString() : connection.Id;
                     var previous = stored.FirstOrDefault(item =>
                         string.Equals(item.Id, id, StringComparison.OrdinalIgnoreCase));
+                    var type = string.IsNullOrWhiteSpace(connection.Type) ? EtrnOperatorType.Saby : connection.Type.Trim();
+                    var ofd = string.Equals(type, EtrnOperatorType.Ofd, StringComparison.OrdinalIgnoreCase);
                     return new EtrnConnection
                     {
                         Id = id,
-                        Type = string.IsNullOrWhiteSpace(connection.Type) ? EtrnOperatorType.Saby : connection.Type.Trim(),
+                        Type = type,
                         Name = (connection.Name ?? "").Trim(),
                         Enable = connection.Enable,
-                        SubscriberId = (connection.SubscriberId ?? "").Trim(),
-                        ApiKey = RestoreApiKey(connection.ApiKey, previous?.ApiKey ?? "")
+                        SubscriberId = ofd ? (connection.SubscriberId ?? "").Trim() : "",
+                        ApiKey = ofd ? RestoreSecret(connection.ApiKey, previous?.ApiKey ?? "") : "",
+                        ClientId = ofd ? (connection.ClientId ?? "").Trim() : "",
+                        ClientSecret = ofd ? RestoreSecret(connection.ClientSecret, previous?.ClientSecret ?? "") : "",
+                        KeycloakUrl = ofd ? TrimAddress(connection.KeycloakUrl) : "",
+                        Realm = ofd ? (connection.Realm ?? "").Trim() : "",
+                        ApiUrl = ofd ? TrimAddress(connection.ApiUrl) : "",
+                        IncomingFrom = EtrnConnection.NormalizeIncomingFrom(connection.IncomingFrom)
                     };
                 })
                 .ToList();
@@ -256,7 +309,13 @@ public class OrganizationManagerService : IOrganizationManagerService
                     Name = connection.Name,
                     Enable = connection.Enable,
                     SubscriberId = connection.SubscriberId,
-                    ApiKey = SecretMask.ForClient(connection.ApiKey)
+                    ApiKey = SecretMask.ForClient(connection.ApiKey),
+                    ClientId = connection.ClientId,
+                    ClientSecret = SecretMask.ForClient(connection.ClientSecret),
+                    KeycloakUrl = connection.KeycloakUrl,
+                    Realm = connection.Realm,
+                    ApiUrl = connection.ApiUrl,
+                    IncomingFrom = connection.ResolvedIncomingFrom()
                 })
                 .ToList()
         };
