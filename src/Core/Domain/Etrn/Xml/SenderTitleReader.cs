@@ -22,6 +22,8 @@ public sealed class SenderTitle
 
     public string RawXml { get; init; } = "";
 
+    public string FileId { get; init; } = "";
+
     public EtrnFetchedDocument ToFetched(string operatorDocumentId) => new()
     {
         OperatorDocumentId = operatorDocumentId,
@@ -117,7 +119,8 @@ public static class SenderTitleReader
             Consignor = Consignor(root, title),
             Address = Address(title),
             Lines = Lines(title),
-            RawXml = rawXml
+            RawXml = rawXml,
+            FileId = (root.Attribute("ИдФайл")?.Value ?? "").Trim()
         });
     }
 

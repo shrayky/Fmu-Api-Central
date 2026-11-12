@@ -274,6 +274,23 @@ public class EtrnIncomingLoadServiceTests
     }
 
     [Fact]
+    public async Task Load_не_переписывает_чужой_ящик_в_ожидание()
+    {
+        var world = new World();
+        world.Organizations.Store["o1"] = Organization(connection: Connection());
+        var document = Stored("d-1", EtrnDocumentStatus.Foreign);
+        document.LastError = EtrnDocumentState.ForeignNote("2PS-potok");
+        world.Incoming.Store[document.Id] = document;
+        world.Operator.EnqueueFetch(ScriptedEtrnOperator.Fetching(ScriptedEtrnOperator.Document("d-1")));
+
+        await world.Loader.LoadAsync(CancellationToken.None);
+
+        var stored = world.Incoming.Store[document.Id];
+        Assert.Equal(EtrnDocumentStatus.Foreign, stored.Status);
+        Assert.Equal(EtrnDocumentState.ForeignNote("2PS-potok"), stored.LastError);
+    }
+
+    [Fact]
     public async Task Load_не_переписывает_чужое_решение()
     {
         var world = new World();

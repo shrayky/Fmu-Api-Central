@@ -653,11 +653,16 @@ public sealed class EtrnSabyGateway : IEtrnOperator
                 return;
             }
 
-            if (Stage.Length > 0 && !IsAcceptance)
-            {
-                document.Status = EtrnDocumentStatus.Waiting;
-                document.Error = EtrnDocumentState.StageUnavailable(Stage);
-            }
+            if (IsAcceptance)
+                return;
+
+            // Код 4 «Доставлен» приходит без Этап: в ленте это уже «Получение груза», водитель ещё не принял.
+            var stage = Stage.Length > 0 ? Stage : StateCode == "4" ? EtrnPollEvent.CarrierReceiptStage : "";
+            if (stage.Length == 0)
+                return;
+
+            document.Status = EtrnDocumentStatus.Waiting;
+            document.Error = EtrnDocumentState.StageUnavailable(stage);
         }
 
         public static DocumentPicture From(JsonElement? result)
@@ -741,7 +746,7 @@ public sealed class EtrnSabyGateway : IEtrnOperator
         List<EtrnExchange> exchanges,
         CancellationToken cancellationToken)
     {
-        var rows = new List<(string EventId, string DocumentId, string EventAt, string FileUrl)>();
+        var rows = new List<(string EventId, string DocumentId, string EventAt, string FileUrl, string FileName)>();
         foreach (var item in documents.EnumerateArray())
         {
             var documentId = Text(item, "Идентификатор");
@@ -749,7 +754,10 @@ public sealed class EtrnSabyGateway : IEtrnOperator
                 continue;
 
             foreach (var change in ChangesOf(item))
-                rows.Add((Text(change, "Идентификатор"), documentId, Text(change, "ДатаВремя"), ShipperFileUrl(change)));
+            {
+                var file = ShipperFile(change);
+                rows.Add((Text(change, "Идентификатор"), documentId, Text(change, "ДатаВремя"), file.Url, file.Name));
+            }
         }
 
         if (rows.Count == 0)
@@ -792,7 +800,9 @@ public sealed class EtrnSabyGateway : IEtrnOperator
                 return Failed(events, index, fetched, [], exchanges, state.Error, context.Position);
 
             var fetchedDocument = title.Value.ToFetched(row.DocumentId);
-            DocumentPicture.From(state.Result).Apply(fetchedDocument);
+            var picture = DocumentPicture.From(state.Result);
+            picture.Apply(fetchedDocument);
+            MarkForeignBox(context, row.FileName, title.Value.FileId, picture.Finished, fetchedDocument);
             fetched.Add(fetchedDocument);
         }
 
@@ -867,12 +877,35 @@ public sealed class EtrnSabyGateway : IEtrnOperator
         yield return document;
     }
 
-    private static string ShipperFileUrl(JsonElement change)
+    /// <summary>
+    /// Чужой ящик в Saby не принять. Отдельный статус, чтобы «Ждёт приёмки» его не листала.
+    /// </summary>
+    private static void MarkForeignBox(
+        EtrnOperatorContext context,
+        string fileName,
+        string fileId,
+        bool finished,
+        EtrnFetchedDocument document)
+    {
+        if (finished)
+            return;
+
+        var addressed = EtrnConsigneeBox.Of(fileName) == null ? fileId : fileName;
+        if (!EtrnConsigneeBox.IsForeign(addressed, context.Connection.EdoId))
+            return;
+
+        document.Status = EtrnDocumentStatus.Foreign;
+        document.Error = EtrnDocumentState.ForeignNote(EtrnConsigneeBox.Of(addressed)!);
+    }
+
+    private readonly record struct ShipperFileLink(string Url, string Name);
+
+    private static ShipperFileLink ShipperFile(JsonElement change)
     {
         if (change.ValueKind != JsonValueKind.Object
             || !change.TryGetProperty("Вложение", out var attachments)
             || attachments.ValueKind != JsonValueKind.Array)
-            return "";
+            return new ShipperFileLink("", "");
 
         foreach (var attachment in attachments.EnumerateArray())
         {
@@ -888,10 +921,10 @@ public sealed class EtrnSabyGateway : IEtrnOperator
             var subtype = Text(attachment, "Подтип");
             var name = Text(file, "Имя");
             if (subtype == "1110339" || name.Contains("TRNACLGROT", StringComparison.OrdinalIgnoreCase))
-                return link;
+                return new ShipperFileLink(link, name);
         }
 
-        return "";
+        return new ShipperFileLink("", "");
     }
 
     private static List<EtrnPollEvent> ReadEvents(JsonElement? result)

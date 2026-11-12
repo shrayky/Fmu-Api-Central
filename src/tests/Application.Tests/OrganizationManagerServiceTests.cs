@@ -452,6 +452,31 @@ public class OrganizationManagerServiceTests
     }
 
     [Fact]
+    public async Task Update_сохраняет_идентификатор_ЭДО_только_у_Saby()
+    {
+        var repository = new FakeOrganizationRepository();
+        repository.Store["o1"] = new OrganizationEntity { Id = "o1", Name = "Орг", Inn = "1234567890" };
+        var sut = CreateSut(repository);
+
+        var result = await sut.Update(new OrganizationView
+        {
+            Id = "o1",
+            Name = "Орг",
+            Inn = "1234567890",
+            EtrnConnections =
+            [
+                new EtrnConnection { Id = "saby", Type = EtrnOperatorType.Saby, Name = "СБИС", EdoId = " 2BE-ours " },
+                new EtrnConnection { Id = "ofd", Type = EtrnOperatorType.Ofd, Name = "ОФД", EdoId = "2BE-ours" }
+            ]
+        });
+
+        Assert.True(result.IsSuccess, result.IsFailure ? result.Error : "");
+        var stored = repository.Store["o1"].EtrnConnections;
+        Assert.Equal("2BE-ours", stored.Single(item => item.Id == "saby").EdoId);
+        Assert.Equal("", stored.Single(item => item.Id == "ofd").EdoId);
+    }
+
+    [Fact]
     public async Task Update_смена_даты_начала_сбрасывает_пару_опроса()
     {
         var repository = new FakeOrganizationRepository();

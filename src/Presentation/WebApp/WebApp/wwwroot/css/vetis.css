@@ -101,6 +101,10 @@
     color: #8a96a8;
 }
 
+.etrn-status-foreign {
+    color: #6f8caf;
+}
+
 .vetis-quench-stage {
     position: absolute;
     inset: 0;

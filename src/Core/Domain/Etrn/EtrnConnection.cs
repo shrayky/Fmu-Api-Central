@@ -61,6 +61,12 @@ public sealed class EtrnConnection
     public string IncomingFrom { get; set; } = "";
 
     /// <summary>
+    /// Идентификатор участника ЭДО в Saby. Второй идентификатор имени ON_TRNACLGROT сверяется с ним.
+    /// </summary>
+    [JsonPropertyName("edoId")]
+    public string EdoId { get; set; } = "";
+
+    /// <summary>
     /// С этой даты ЭТрН обязательна. Пустая дата подключения означает её.
     /// </summary>
     public const string DefaultIncomingFrom = "2026-09-01";

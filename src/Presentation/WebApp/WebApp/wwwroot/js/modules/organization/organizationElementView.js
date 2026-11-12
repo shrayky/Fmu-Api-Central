@@ -39,6 +39,7 @@ class OrganizationElementView {
             etrnRemove: "Удалить",
             etrnCheck: "Проверить подключение",
             etrnIncomingFrom: "Дата начала",
+            etrnEdoId: "Идентификатор ЭДО",
             etrnSaby: "Saby",
             etrnOfd: "Платформа ОФД",
             etrnSubscriber: "Абонент ЭДО",
@@ -119,6 +120,8 @@ class OrganizationElementView {
             etrnTab: "organizationEtrnTab",
             etrnConnections: "organizationEtrnConnections",
             etrnOfdForm: "organizationEtrnOfdForm",
+            etrnSabyForm: "organizationEtrnSabyForm",
+            etrnEdoId: "organizationEtrnEdoId",
             etrnOfdSubscriber: "organizationEtrnOfdSubscriber",
             etrnOfdApiKey: "organizationEtrnOfdApiKey",
             etrnOfdClientId: "organizationEtrnOfdClientId",
@@ -973,10 +976,13 @@ class OrganizationElementView {
                     on: {
                         onSelectChange() {
                             view._showOfdFields();
+                            view._showEdoField();
                         },
                         onAfterEditStop(state, editor) {
-                            if (editor.column === "type")
+                            if (editor.column === "type") {
                                 view._showOfdFields();
+                                view._showEdoField();
+                            }
                         },
                         onItemClick(cell) {
                             if (!cell || cell.column !== "remove")
@@ -986,6 +992,7 @@ class OrganizationElementView {
                         }
                     }
                 },
+                this._etrnSabyForm(),
                 this._etrnOfdForm(),
                 {
                     view: "template",
@@ -1005,6 +1012,57 @@ class OrganizationElementView {
         table.clearAll();
         table.parse((connections || []).map(connection => this._etrnRow(connection)));
         this._showOfdFields();
+        this._showEdoField();
+    }
+
+    _etrnSabyForm() {
+        const view = this;
+        return {
+            id: this.NAMES.etrnSabyForm,
+            view: "form",
+            hidden: true,
+            elements: [
+                Text(this.LABELS.etrnEdoId, this.NAMES.etrnEdoId, "")
+            ],
+            on: {
+                onChange() {
+                    view._writeEdoField();
+                }
+            }
+        };
+    }
+
+    _showEdoField() {
+        const form = $$(this.NAMES.etrnSabyForm);
+        const table = $$(this.NAMES.etrnConnections);
+        if (!form || !table)
+            return;
+
+        const row = table.getSelectedItem();
+        if (!row || row.type === "ofd") {
+            form.hide();
+            return;
+        }
+
+        form.show();
+        this._edoSilent = true;
+        const field = $$(this.NAMES.etrnEdoId);
+        if (field)
+            field.setValue(row.edoId || "");
+        this._edoSilent = false;
+    }
+
+    _writeEdoField() {
+        if (this._edoSilent)
+            return;
+
+        const table = $$(this.NAMES.etrnConnections);
+        const row = table?.getSelectedItem();
+        if (!table || !row || row.type === "ofd")
+            return;
+
+        row.edoId = String($$(this.NAMES.etrnEdoId)?.getValue() || "");
+        table.updateItem(row.id, row);
     }
 
     _etrnOfdForm() {
@@ -1092,6 +1150,7 @@ class OrganizationElementView {
 
     async _checkEtrn() {
         this._writeOfdFields();
+        this._writeEdoField();
         const table = $$(this.NAMES.etrnConnections);
         const row = table?.getSelectedItem();
         if (!row) {
@@ -1143,6 +1202,7 @@ class OrganizationElementView {
             type,
             enable: !!connection.enable,
             subscriberId: type === "ofd" ? (connection.subscriberId || "") : "",
+            edoId: type === "saby" ? (connection.edoId || "") : "",
             apiKey: type === "ofd" ? (connection.apiKey || "") : "",
             clientId: type === "ofd" ? (connection.clientId || "") : "",
             clientSecret: type === "ofd" ? (connection.clientSecret || "") : "",
@@ -1165,6 +1225,7 @@ class OrganizationElementView {
             name: "",
             type: "saby",
             enable: true,
+            edoId: "",
             incomingFrom: this._toDate(ETRN_INCOMING_FROM),
             lastError: ""
         });
@@ -1234,6 +1295,7 @@ class OrganizationElementView {
             return this._loadedEtrn || [];
 
         this._writeOfdFields();
+        this._writeEdoField();
         return table.serialize().map(row => {
             const type = row.type === "ofd" ? "ofd" : "saby";
             return {
@@ -1242,6 +1304,7 @@ class OrganizationElementView {
                 name: String(row.name || "").trim(),
                 enable: !!row.enable,
                 subscriberId: type === "ofd" ? String(row.subscriberId || "").trim() : "",
+                edoId: type === "saby" ? String(row.edoId || "").trim() : "",
                 apiKey: type === "ofd" ? String(row.apiKey || "") : "",
                 clientId: type === "ofd" ? String(row.clientId || "").trim() : "",
                 clientSecret: type === "ofd" ? String(row.clientSecret || "") : "",

@@ -123,8 +123,10 @@ public sealed class EtrnIncomingLoadService : IEtrnIncomingLoader
 
             if (existing.Value is { } previous)
             {
-                // Решённый документ и идущую отправку повторный опрос не перезаписывает.
-                if (EtrnDocumentStatus.IsFinal(previous.Status) || previous.Status == EtrnDocumentStatus.Sending)
+                // Решённый документ, чужой ящик и идущую отправку повторный опрос не перезаписывает.
+                if (EtrnDocumentStatus.IsFinal(previous.Status)
+                    || previous.Status == EtrnDocumentStatus.Sending
+                    || previous.Status == EtrnDocumentStatus.Foreign)
                     continue;
 
                 // Снимок оператора не обновляется: переименование подключения уже записанный объект не меняет.

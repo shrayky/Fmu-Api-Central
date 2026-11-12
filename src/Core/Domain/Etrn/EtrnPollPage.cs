@@ -11,6 +11,8 @@ public sealed record EtrnPollEvent(string EventId, string DocumentId, string Sta
 {
     public const string AcceptanceStage = "Приемка груза";
 
+    public const string CarrierReceiptStage = "Получение груза";
+
     public bool IsAcceptance =>
         string.Equals((Stage ?? "").Trim(), AcceptanceStage, StringComparison.OrdinalIgnoreCase);
 }

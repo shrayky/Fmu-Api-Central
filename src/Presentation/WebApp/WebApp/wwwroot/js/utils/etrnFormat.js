@@ -6,6 +6,7 @@ const STATUSES = {
     Accepted: { label: "Получен", css: "etrn-status-accepted" },
     Rejected: { label: "Не принят", css: "etrn-status-rejected" },
     Closed: { label: "Закрыт", css: "etrn-status-closed" },
+    Foreign: { label: "Другой оператор", css: "etrn-status-foreign" },
 };
 
 const METHODS = {

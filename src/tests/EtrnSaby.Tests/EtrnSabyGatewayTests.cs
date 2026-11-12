@@ -383,6 +383,85 @@ public class EtrnSabyGatewayTests
     }
 
     [Fact]
+    public async Task Чужой_ящик_в_имени_титула_не_предлагает_приёмку()
+    {
+        var world = new World();
+        world.Handler.Files["https://files.test/title.xml"] = File.ReadAllBytes(
+            Path.Combine(AppContext.BaseDirectory, "XmlSamples", "sender-simple.xml"));
+        world.Handler.Respond = (call, _) => call.Method == EtrnMethods.ChangesList
+            ? SabyHandler.Result("""
+                {
+                  "Документ": [{
+                    "Идентификатор": "d1",
+                    "Событие": [{
+                      "Идентификатор": "e1",
+                      "Название": "Пересылка вложений",
+                      "Вложение": [{
+                        "Подтип": "1110339",
+                        "Файл": {
+                          "Имя": "ON_TRNACLGROT_2BE-side_2PS-potok_2BE-other_0_20261016_aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee.xml",
+                          "Ссылка": "https://files.test/title.xml"
+                        }
+                      }]
+                    }]
+                  }],
+                  "Навигация": {"ЕстьЕще": "Нет"}
+                }
+                """)
+            : SabyHandler.Result("true");
+
+        var result = await world.Gateway.FetchAsync(Context(EtrnPollPosition.Empty, edoId: "2BE-ours"), CancellationToken.None);
+
+        Assert.True(result.Value.Completed, result.IsFailure ? result.Error : result.Value.Error);
+        var document = Assert.Single(result.Value.Documents);
+        Assert.Equal(EtrnDocumentStatus.Foreign, document.Status);
+        Assert.Equal(EtrnDocumentState.ForeignNote("2PS-potok"), document.Error);
+        Assert.Equal(new EtrnPollPosition("e1", "d1"), result.Value.Position);
+    }
+
+    [Fact]
+    public async Task Чужой_ящик_берётся_из_ИдФайл_если_в_событии_короткое_имя()
+    {
+        var world = new World();
+        var xml = """
+            <?xml version="1.0" encoding="utf-8"?>
+            <Файл ИдФайл="ON_TRNACLGROT_2BE-side_2PS-potok_2BE-other_0_20261016_aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee" ВерсФорм="5.01">
+              <Документ КНД="1110339">
+                <СодИнфГО НомДок="ТН-1" ДатаДок="16.10.2026">
+                  <СвГруз><ОпГруз НаимГруз="Сыр" КолМестГр="1" ВесГруз="1"/></СвГруз>
+                </СодИнфГО>
+              </Документ>
+            </Файл>
+            """;
+        world.Handler.Files["https://files.test/title.xml"] = Encoding.UTF8.GetBytes(xml);
+        world.Handler.Respond = (call, _) => call.Method == EtrnMethods.ChangesList
+            ? SabyHandler.Result("""
+                {
+                  "Документ": [{
+                    "Идентификатор": "d1",
+                    "Событие": [{
+                      "Идентификатор": "e1",
+                      "Вложение": [{
+                        "Подтип": "1110339",
+                        "Файл": {"Имя": "ON_TRNACLGROT_1.xml", "Ссылка": "https://files.test/title.xml"}
+                      }]
+                    }]
+                  }],
+                  "Навигация": {"ЕстьЕще": "Нет"}
+                }
+                """)
+            : SabyHandler.Result("true");
+
+        var result = await world.Gateway.FetchAsync(Context(EtrnPollPosition.Empty, edoId: "2BE-ours"), CancellationToken.None);
+
+        Assert.True(result.Value.Completed, result.IsFailure ? result.Error : result.Value.Error);
+        var document = Assert.Single(result.Value.Documents);
+        Assert.Equal(EtrnDocumentStatus.Foreign, document.Status);
+        Assert.Equal(EtrnDocumentState.ForeignNote("2PS-potok"), document.Error);
+        Assert.Equal(new EtrnPollPosition("e1", "d1"), result.Value.Position);
+    }
+
+    [Fact]
     public async Task ЕстьЕще_дочитывает_страницы_по_времени_последнего_события()
     {
         var world = new World();
@@ -483,6 +562,29 @@ public class EtrnSabyGatewayTests
         var document = Assert.Single(result.Value.Documents);
         Assert.Equal(EtrnDocumentStatus.Waiting, document.Status);
         Assert.Equal("Сейчас этап «Получение груза», приёмка недоступна", document.Error);
+    }
+
+    [Fact]
+    public async Task Доставлен_без_этапа_приёмки_это_получение_груза()
+    {
+        var world = new World();
+        world.Handler.Files["https://files.test/title.xml"] = File.ReadAllBytes(
+            Path.Combine(AppContext.BaseDirectory, "XmlSamples", "sender-simple.xml"));
+        world.Handler.Respond = (call, _) => call.Method switch
+        {
+            EtrnMethods.ChangesList => OneDocumentPage(),
+            EtrnMethods.ReadDocument => SabyHandler.Result("""
+                {"Состояние":{"Код":"4","Название":"Доставлен","Описание":"Ожидается утверждение"}}
+                """),
+            _ => SabyHandler.Result("true")
+        };
+
+        var result = await world.Gateway.FetchAsync(ContextEmpty, CancellationToken.None);
+
+        Assert.True(result.Value.Completed, result.Value.Error);
+        var document = Assert.Single(result.Value.Documents);
+        Assert.Equal(EtrnDocumentStatus.Waiting, document.Status);
+        Assert.Equal(EtrnDocumentState.StageUnavailable("Получение груза"), document.Error);
     }
 
     [Fact]
@@ -743,11 +845,11 @@ public class EtrnSabyGatewayTests
         }
     };
 
-    private static EtrnOperatorContext Context(EtrnPollPosition position, string inn = "7700000000") => new()
+    private static EtrnOperatorContext Context(EtrnPollPosition position, string inn = "7700000000", string edoId = "") => new()
     {
         OrganizationId = "o1",
         Inn = inn,
-        Connection = new EtrnConnection { Id = "c1", Type = EtrnOperatorType.Saby, Name = "СБИС" },
+        Connection = new EtrnConnection { Id = "c1", Type = EtrnOperatorType.Saby, Name = "СБИС", EdoId = edoId },
         CertificateNumber = "serial-1",
         CertificatePassword = "pwd",
         Position = position

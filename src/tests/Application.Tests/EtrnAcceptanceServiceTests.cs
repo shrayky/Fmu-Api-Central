@@ -30,6 +30,26 @@ public class EtrnAcceptanceServiceTests
     }
 
     [Fact]
+    public async Task Accept_на_чужой_ящик_не_зовёт_шлюз()
+    {
+        var world = new World();
+        var document = Document();
+        document.Status = EtrnDocumentStatus.Foreign;
+        document.LastError = EtrnDocumentState.ForeignNote("2PS-potok");
+        world.Put(document);
+
+        var result = await world.Acceptance.AcceptAsync(
+            document.Id,
+            new EtrnAcceptCommand { Intent = EtrnAcceptanceIntent.Sign },
+            CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(EtrnDocumentState.ForeignNote("2PS-potok"), result.Error);
+        Assert.Equal(0, world.Operator.ExecuteCalls);
+        Assert.Equal(EtrnDocumentStatus.Foreign, world.Incoming.Store[document.Id].Status);
+    }
+
+    [Fact]
     public async Task Accept_ошибка_решения_не_зовёт_шлюз_и_не_меняет_статус()
     {
         var world = new World();

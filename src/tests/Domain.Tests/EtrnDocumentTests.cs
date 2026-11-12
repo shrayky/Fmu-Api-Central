@@ -68,6 +68,7 @@ public class EtrnDocumentStatusTests
     [InlineData(EtrnDocumentStatus.Rejected, EtrnAcceptanceAction.Rejected, "Не принят")]
     [InlineData(EtrnDocumentStatus.Rejected, "", "Не принят")]
     [InlineData(EtrnDocumentStatus.Closed, "", "Закрыт")]
+    [InlineData(EtrnDocumentStatus.Foreign, "", "Другой оператор")]
     public void Подписи_статусов(string status, string action, string label)
     {
         Assert.Equal(label, EtrnDocumentStatus.Label(status, action));
@@ -88,6 +89,28 @@ public class EtrnDocumentStatusTests
     {
         Assert.True(EtrnDocumentStatus.CanAccept(EtrnDocumentStatus.Waiting));
         Assert.False(EtrnDocumentStatus.CanAccept(EtrnDocumentStatus.Sending));
+    }
+}
+
+public class EtrnConsigneeBoxTests
+{
+    private const string Ours = "2BE-ours";
+
+    private const string OurFile =
+        "ON_TRNACLGROT_2BM-sender_2BE-ours_2BM-shipper_0_20261110_aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee.xml";
+
+    private const string ForeignFile =
+        "ON_TRNACLGROT_2BE-side_2PS-potok_2BE-other_0_20261016_aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+
+    [Fact]
+    public void Второй_идентификатор_титула_это_ящик_грузополучателя()
+    {
+        Assert.Equal(Ours, EtrnConsigneeBox.Of(OurFile));
+        Assert.Equal("2PS-potok", EtrnConsigneeBox.Of(ForeignFile));
+        Assert.False(EtrnConsigneeBox.IsForeign(OurFile, Ours));
+        Assert.True(EtrnConsigneeBox.IsForeign(ForeignFile, Ours));
+        Assert.False(EtrnConsigneeBox.IsForeign(ForeignFile, "  "));
+        Assert.False(EtrnConsigneeBox.IsForeign("ON_TRNACLGROT_1.xml", Ours));
     }
 }
 
@@ -118,6 +141,22 @@ public class EtrnIncomingDocumentTests
         Assert.True(waiting.CanDecide);
         Assert.Equal("Получение груза", carrier.StatusLabel);
         Assert.False(carrier.CanDecide);
+    }
+
+    [Fact]
+    public void Чужой_ящик_не_ждёт_приёмки()
+    {
+        var document = new EtrnIncomingDocumentEntity
+        {
+            Status = EtrnDocumentStatus.Foreign,
+            LastError = EtrnDocumentState.ForeignNote("2PS-potok"),
+            Lines = [new EtrnCargoLine { Index = 1, Name = "Сыр", Places = 2, GrossWeight = "3" }]
+        };
+
+        Assert.Equal("Другой оператор", document.StatusLabel);
+        Assert.False(document.CanDecide);
+        Assert.False(EtrnDocumentStatus.CanAccept(EtrnDocumentStatus.Foreign));
+        Assert.False(EtrnDocumentStatus.IsFinal(EtrnDocumentStatus.Foreign));
     }
 
     [Fact]

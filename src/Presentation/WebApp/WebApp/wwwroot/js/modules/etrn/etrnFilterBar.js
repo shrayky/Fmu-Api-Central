@@ -1,7 +1,7 @@
 import { etrnStatusLabel } from '../../utils/etrnFormat.js';
 
 const ALL = "__all__";
-const STATUSES = ["Waiting", "Sending", "Accepted", "Rejected", "Closed"];
+const STATUSES = ["Waiting", "Sending", "Accepted", "Rejected", "Closed", "Foreign"];
 
 export class EtrnFilterBar {
     constructor({ prefix, organizations, withStatus, onChange }) {

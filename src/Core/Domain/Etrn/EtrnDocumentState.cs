@@ -14,6 +14,21 @@ public static class EtrnDocumentState
 
     public static string StageUnavailable(string stage) => $"Сейчас этап «{stage}», приёмка недоступна";
 
+    public static string ForeignNote(string box) => $"Титул адресован {box}, не идентификатору Saby";
+
+    public static bool IsForeignNote(string? error) => ForeignBox(error).Length > 0;
+
+    public static string ForeignBox(string? error)
+    {
+        var text = (error ?? "").Trim();
+        const string prefix = "Титул адресован ";
+        const string suffix = ", не идентификатору Saby";
+        if (!text.StartsWith(prefix, StringComparison.Ordinal) || !text.EndsWith(suffix, StringComparison.Ordinal))
+            return "";
+
+        return text[prefix.Length..^suffix.Length];
+    }
+
     public static bool IsStageNote(string? error) =>
         StageOf(error).Length > 0;
 

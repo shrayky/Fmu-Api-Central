@@ -88,7 +88,7 @@ public sealed class EtrnAcceptanceService
         if (string.IsNullOrWhiteSpace(organization.Value.TrueApiIntegrationSettings?.DigitalSignature))
             return Result.Failure<EtrnIncomingView>("Не выбран сертификат организации");
 
-        if (EtrnDocumentState.IsStageNote(document.LastError))
+        if (EtrnDocumentState.IsStageNote(document.LastError) || EtrnDocumentState.IsForeignNote(document.LastError))
             return Result.Failure<EtrnIncomingView>(document.LastError);
 
         var @operator = _operators.FirstOrDefault(item =>

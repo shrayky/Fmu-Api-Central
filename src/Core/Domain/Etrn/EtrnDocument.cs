@@ -11,6 +11,7 @@ public static class EtrnDocumentStatus
     public const string Accepted = "Accepted";
     public const string Rejected = "Rejected";
     public const string Closed = "Closed";
+    public const string Foreign = "Foreign";
 
     public const string NoQuantityError = "В строке груза нет количества";
 
@@ -28,6 +29,7 @@ public static class EtrnDocumentStatus
             : EtrnAcceptanceAction.Received,
         Rejected => EtrnAcceptanceAction.Rejected,
         Closed => "Закрыт",
+        Foreign => "Другой оператор",
         _ => status ?? ""
     };
 }
@@ -158,13 +160,19 @@ public sealed class EtrnIncomingDocumentEntity : IHaveStringId
 
     [JsonIgnore]
     public bool CanDecide =>
-        EtrnDocumentStatus.CanAccept(Status) && HasQuantity && EtrnDocumentState.StageOf(LastError).Length == 0;
+        EtrnDocumentStatus.CanAccept(Status)
+        && HasQuantity
+        && EtrnDocumentState.StageOf(LastError).Length == 0
+        && !EtrnDocumentState.IsForeignNote(LastError);
 
     [JsonIgnore]
     public string StatusLabel
     {
         get
         {
+            if (EtrnDocumentState.IsForeignNote(LastError))
+                return "Другой оператор";
+
             var stage = EtrnDocumentState.StageOf(LastError);
             return stage.Length > 0 ? stage : EtrnDocumentStatus.Label(Status, Action);
         }
