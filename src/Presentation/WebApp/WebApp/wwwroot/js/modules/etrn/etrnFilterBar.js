@@ -4,14 +4,17 @@ const ALL = "__all__";
 const STATUSES = ["Waiting", "Sending", "Accepted", "Rejected", "Closed", "Foreign"];
 
 export class EtrnFilterBar {
-    constructor({ prefix, organizations, withStatus, onChange }) {
+    constructor({ prefix, organizations, withStatus, withJournalSearch, onChange }) {
         this.organizations = organizations || [];
         this.withStatus = withStatus;
+        this.withJournalSearch = withJournalSearch;
         this.onChange = onChange;
         this.ids = {
             organization: `${prefix}OrganizationFilter`,
             connection: `${prefix}ConnectionFilter`,
             status: `${prefix}StatusFilter`,
+            number: `${prefix}NumberFilter`,
+            consignor: `${prefix}ConsignorFilter`,
         };
     }
 
@@ -42,10 +45,37 @@ export class EtrnFilterBar {
                 view: "richselect",
                 id: this.ids.status,
                 width: 200,
-                value: ALL,
+                value: "Waiting",
                 options: [{ id: ALL, value: "Все статусы" }, ...STATUSES.map((status) => ({ id: status, value: etrnStatusLabel({ status }) }))],
                 on: { onChange: () => this.onChange() },
             });
+        }
+
+        if (this.withJournalSearch) {
+            elements.push(
+                {
+                    view: "text",
+                    id: this.ids.number,
+                    width: 160,
+                    placeholder: "Номер",
+                    clear: true,
+                    on: {
+                        onTimedKeyPress: () => this.onChange(),
+                        onChange: () => this.onChange(),
+                    },
+                },
+                {
+                    view: "text",
+                    id: this.ids.consignor,
+                    width: 220,
+                    placeholder: "Поставщик",
+                    clear: true,
+                    on: {
+                        onTimedKeyPress: () => this.onChange(),
+                        onChange: () => this.onChange(),
+                    },
+                },
+            );
         }
 
         elements.push({});
@@ -65,6 +95,15 @@ export class EtrnFilterBar {
 
         if (this.withStatus) {
             values.status = pick(this.ids.status);
+        }
+
+        if (this.withJournalSearch) {
+            const number = ($$(this.ids.number)?.getValue() || "").trim();
+            const consignor = ($$(this.ids.consignor)?.getValue() || "").trim();
+            if (number)
+                values.number = number;
+            if (consignor)
+                values.consignor = consignor;
         }
 
         return values;

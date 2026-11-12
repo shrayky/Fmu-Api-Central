@@ -11,6 +11,10 @@ public sealed class EtrnIncomingFilter
     public string ConnectionId { get; set; } = "";
 
     public string Status { get; set; } = "";
+
+    public string Number { get; set; } = "";
+
+    public string Consignor { get; set; } = "";
 }
 
 public sealed class EtrnSyncState : IHaveStringId

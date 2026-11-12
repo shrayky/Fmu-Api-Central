@@ -38,6 +38,8 @@ public class EtrnController : ControllerBase
         [FromQuery] string? organizationId,
         [FromQuery] string? connectionId,
         [FromQuery] string? status,
+        [FromQuery] string? number,
+        [FromQuery] string? consignor,
         [FromQuery] int skip = 0,
         [FromQuery] int limit = 0)
     {
@@ -45,6 +47,8 @@ public class EtrnController : ControllerBase
             organizationId ?? "",
             connectionId ?? "",
             status ?? "",
+            number ?? "",
+            consignor ?? "",
             skip,
             limit);
         return result.IsSuccess ? Ok(result.Value) : BadRequest(result.Error);

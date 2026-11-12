@@ -33,8 +33,8 @@ public class EtrnIncomingQueryServiceTests
             organizations,
             new MemoryEtrnSyncStates());
 
-        var first = await query.ListAsync("", "", "", 0, 50);
-        var second = await query.ListAsync("", "", "", 0, 50);
+        var first = await query.ListAsync("", "", "", "", "", 0, 50);
+        var second = await query.ListAsync("", "", "", "", "", 0, 50);
 
         Assert.True(first.IsSuccess, first.IsFailure ? first.Error : "");
         Assert.Equal(Address, first.Value.Rows[0].DeliveryAddress);
@@ -107,10 +107,10 @@ public class EtrnIncomingQueryServiceTests
         organizations.Store["o1"] = new OrganizationEntity { Id = "o1", Name = "ИП" };
         var query = new EtrnIncomingQueryService(incoming, organizations, new MemoryEtrnSyncStates());
 
-        var foreign = await query.ListAsync("", "", EtrnDocumentStatus.Foreign, 0, 50);
-        var all = await query.ListAsync("", "", "", 0, 50);
-        var first = await query.ListAsync("", "", EtrnDocumentStatus.Waiting, 0, 2);
-        var second = await query.ListAsync("", "", EtrnDocumentStatus.Waiting, 2, 2);
+        var foreign = await query.ListAsync("", "", EtrnDocumentStatus.Foreign, "", "", 0, 50);
+        var all = await query.ListAsync("", "", "", "", "", 0, 50);
+        var first = await query.ListAsync("", "", EtrnDocumentStatus.Waiting, "", "", 0, 2);
+        var second = await query.ListAsync("", "", EtrnDocumentStatus.Waiting, "", "", 2, 2);
 
         Assert.True(foreign.IsSuccess, foreign.IsFailure ? foreign.Error : "");
         Assert.Equal("0001", Assert.Single(foreign.Value.Rows).Number);
@@ -121,6 +121,29 @@ public class EtrnIncomingQueryServiceTests
         Assert.Equal("Получение груза", first.Value.Rows[1].StatusLabel);
         Assert.Equal(["0004"], second.Value.Rows.Select(row => row.Number));
         Assert.False(second.Value.HasMore);
+    }
+
+    [Fact]
+    public async Task Список_отбирает_по_части_номера_и_поставщику()
+    {
+        var incoming = new MemoryEtrnIncoming();
+        incoming.Store["a"] = Card("a", "000014348", EtrnDocumentStatus.Waiting, "", 3);
+        incoming.Store["a"].Consignor = "ООО Алтайская буренка";
+        incoming.Store["b"] = Card("b", "000099999", EtrnDocumentStatus.Waiting, "", 2);
+        incoming.Store["b"].Consignor = "ООО Алтайская буренка";
+        incoming.Store["c"] = Card("c", "000014348", EtrnDocumentStatus.Waiting, "", 1);
+        incoming.Store["c"].Consignor = "ООО Другой поставщик";
+        incoming.Store["d"] = Card("d", "ТН-очаг", EtrnDocumentStatus.Waiting, "", 4);
+        incoming.Store["d"].Consignor = "Очаг";
+        var query = new EtrnIncomingQueryService(incoming, new MemoryOrganizationRepository(), new MemoryEtrnSyncStates());
+
+        var found = await query.ListAsync("", "", "", "1434", "БУРЕН", 0, 50);
+        var sameLetters = await query.ListAsync("", "", "", "ОчАг", "оЧаГ", 0, 50);
+
+        Assert.True(found.IsSuccess, found.IsFailure ? found.Error : "");
+        Assert.Equal("000014348", Assert.Single(found.Value.Rows).Number);
+        Assert.Equal("a", found.Value.Rows[0].Id);
+        Assert.Equal("d", Assert.Single(sameLetters.Value.Rows).Id);
     }
 
     private static EtrnIncomingDocumentEntity Card(string id, string number, string status, string lastError, long sortAt = 0) => new()

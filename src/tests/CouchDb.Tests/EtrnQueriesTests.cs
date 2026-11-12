@@ -43,6 +43,26 @@ public class EtrnQueriesTests
     }
 
     [Fact]
+    public void Список_входящих_ищет_часть_номера_и_поставщика_без_индекса_равенств()
+    {
+        var query = EtrnIncomingQuery.List(
+            new EtrnIncomingFilter { Number = "1.434", Consignor = "Бурен" },
+            0,
+            50);
+
+        var selector = Assert.IsType<Dictionary<string, object>>(query["selector"]);
+        var number = Assert.IsType<Dictionary<string, object>>(selector["data.number"]);
+        var consignor = Assert.IsType<Dictionary<string, object>>(selector["data.consignor"]);
+        Assert.Equal(@".*1\.434.*", number["$regex"]);
+        var pattern = Assert.IsType<string>(consignor["$regex"]);
+        Assert.Equal(".*[бБ][уУ][рР][еЕ][нН].*", pattern);
+        var regex = new System.Text.RegularExpressions.Regex(pattern);
+        Assert.Matches(regex, "ООО буренка");
+        Assert.Matches(regex, "ООО БУРЕНКА");
+        Assert.False(query.ContainsKey("use_index"));
+    }
+
+    [Fact]
     public void Список_входящих_фильтрует_по_подключению_внутри_оператора()
     {
         var query = EtrnIncomingQuery.List(

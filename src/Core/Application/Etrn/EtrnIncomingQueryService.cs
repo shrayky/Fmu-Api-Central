@@ -49,6 +49,8 @@ public sealed class EtrnIncomingQueryService
         string organizationId,
         string connectionId,
         string status,
+        string number,
+        string consignor,
         int skip,
         int limit)
     {
@@ -58,7 +60,9 @@ public sealed class EtrnIncomingQueryService
         {
             OrganizationId = organizationId ?? "",
             ConnectionId = connectionId ?? "",
-            Status = status ?? ""
+            Status = status ?? "",
+            Number = number ?? "",
+            Consignor = consignor ?? ""
         };
 
         var fetched = await _incoming.List(filter, offset, size + 1);

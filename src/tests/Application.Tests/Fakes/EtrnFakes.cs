@@ -51,6 +51,10 @@ internal sealed class MemoryEtrnIncoming : IEtrnIncomingRepository
             .Where(item => filter.OrganizationId.Length == 0 || item.OrganizationId == filter.OrganizationId)
             .Where(item => filter.ConnectionId.Length == 0 || item.Operator.ConnectionId == filter.ConnectionId)
             .Where(item => filter.Status.Length == 0 || item.Status == filter.Status)
+            .Where(item => filter.Number.Length == 0
+                || item.Number.Contains(filter.Number.Trim(), StringComparison.OrdinalIgnoreCase))
+            .Where(item => filter.Consignor.Length == 0
+                || item.Consignor.Contains(filter.Consignor.Trim(), StringComparison.OrdinalIgnoreCase))
             .OrderByDescending(item => item.SortAt)
             .ThenBy(item => item.Id, StringComparer.Ordinal)
             .Skip(skip)

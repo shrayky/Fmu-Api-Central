@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Domain.Etrn;
 
 namespace CouchDb.Repositories;
@@ -44,6 +45,9 @@ public static class EtrnIncomingQuery
         AddFilter(selector, sort, filtered, "organizationId", filter.OrganizationId);
         AddFilter(selector, sort, filtered, "operator.connectionId", filter.ConnectionId);
         AddFilter(selector, sort, filtered, "status", filter.Status);
+        // Подстрока не входит в индекс равенств: иначе CouchDB отвечает no_usable_index.
+        AddContains(selector, "number", filter.Number);
+        AddContains(selector, "consignor", filter.Consignor);
         sort.Add(new Dictionary<string, string> { ["data.sortAt"] = "desc" });
 
         var query = new Dictionary<string, object>
@@ -107,6 +111,41 @@ public static class EtrnIncomingQuery
         selector[fieldName] = text;
         sort.Add(new Dictionary<string, string> { [fieldName] = "desc" });
         filtered.Add(field);
+    }
+
+    private static void AddContains(Dictionary<string, object> selector, string field, string value)
+    {
+        var text = (value ?? "").Trim();
+        if (text.Length == 0)
+            return;
+
+        selector[Field(field)] = new Dictionary<string, object>
+        {
+            ["$regex"] = ContainsPattern(text)
+        };
+    }
+
+    /// <summary>
+    /// (?i) в CouchDB не складывает кириллицу, поэтому у каждой буквы в шаблоне оба регистра.
+    /// </summary>
+    private static string ContainsPattern(string text)
+    {
+        var pattern = new System.Text.StringBuilder(".*");
+        foreach (var symbol in text)
+        {
+            var lower = char.ToLowerInvariant(symbol);
+            var upper = char.ToUpperInvariant(symbol);
+            if (lower == upper)
+            {
+                pattern.Append(Regex.Escape(symbol.ToString()));
+                continue;
+            }
+
+            pattern.Append('[').Append(lower).Append(upper).Append(']');
+        }
+
+        pattern.Append(".*");
+        return pattern.ToString();
     }
 
     private static string IndexName(IReadOnlyList<string> fields) =>

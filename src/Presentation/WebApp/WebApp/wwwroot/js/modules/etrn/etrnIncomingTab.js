@@ -10,6 +10,7 @@ export class EtrnIncomingTab {
             prefix: "etrnIncoming",
             organizations,
             withStatus: true,
+            withJournalSearch: true,
             onChange: () => this.refresh(),
         });
         this.table = new VetisPagedTable({
@@ -26,7 +27,7 @@ export class EtrnIncomingTab {
                 this.table.config([
                     { id: "date", header: "Дата", width: 120, template: (row) => formatIsoMoment(row.date) },
                     { id: "number", header: "Номер", width: 160, template: (row) => this._escape(row.number) },
-                    { id: "consignor", header: "Грузоотправитель", fillspace: 1, template: (row) => this._escape(row.consignor) },
+                    { id: "consignor", header: "Поставщик", fillspace: 1, template: (row) => this._escape(row.consignor) },
                     { id: "deliveryAddress", header: "Адрес выгрузки", fillspace: 1.4, template: (row) => this._escape(row.deliveryAddress) },
                     { id: "operatorName", header: "Оператор", width: 180, template: (row) => this._escape(row.operatorName) },
                     { id: "organizationName", header: "Организация", width: 220, template: (row) => this._escape(row.organizationName) },
