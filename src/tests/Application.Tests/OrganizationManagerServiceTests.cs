@@ -466,7 +466,7 @@ public class OrganizationManagerServiceTests
             EtrnConnections =
             [
                 new EtrnConnection { Id = "saby", Type = EtrnOperatorType.Saby, Name = "СБИС", EdoId = " 2BE-ours " },
-                new EtrnConnection { Id = "ofd", Type = EtrnOperatorType.Ofd, Name = "ОФД", EdoId = "2BE-ours" }
+                new EtrnConnection { Id = "ofd", Type = EtrnOperatorType.Ofd, Name = "Платформа ЭТрН", EdoId = "2BE-ours" }
             ]
         });
 
@@ -584,10 +584,10 @@ public class OrganizationManagerServiceTests
     }
 
     /// <summary>
-    /// Пустой ключ и маска оставляют секрет того же подключения. Чужой id чужой ключ не получает.
+    /// Секреты старой авторизации Платформы ЭТрН не пишутся и не восстанавливаются: токен идёт по сертификату.
     /// </summary>
     [Fact]
-    public async Task Update_не_стирает_API_ключ_ОФД_и_List_отдаёт_маску()
+    public async Task Update_стирает_старые_секреты_площадки()
     {
         var repository = new FakeOrganizationRepository();
         repository.Store["o1"] = new OrganizationEntity
@@ -601,12 +601,14 @@ public class OrganizationManagerServiceTests
                 {
                     Id = "ofd-1",
                     Type = EtrnOperatorType.Ofd,
-                    Name = "ОФД",
+                    Name = "Платформа ЭТрН",
                     Enable = true,
                     SubscriberId = "2775225",
                     ApiKey = "ofd-secret",
                     ClientId = "old-client",
-                    ClientSecret = "client-secret"
+                    ClientSecret = "client-secret",
+                    KeycloakUrl = "https://old.example",
+                    Realm = "old-realm"
                 },
                 new EtrnConnection
                 {
@@ -631,14 +633,14 @@ public class OrganizationManagerServiceTests
                 {
                     Id = "ofd-1",
                     Type = EtrnOperatorType.Ofd,
-                    Name = "ОФД Север",
+                    Name = "Площадка Север",
                     Enable = true,
                     SubscriberId = " 2775225 ",
-                    ApiKey = "",
+                    ApiKey = "new-secret",
                     ClientId = " new-client ",
-                    ClientSecret = "",
-                    KeycloakUrl = "",
-                    Realm = "",
+                    ClientSecret = "new-client-secret",
+                    KeycloakUrl = "https://new.example",
+                    Realm = "new-realm",
                     ApiUrl = " https://api.example/ "
                 },
                 new EtrnConnection
@@ -647,7 +649,8 @@ public class OrganizationManagerServiceTests
                     Type = EtrnOperatorType.Ofd,
                     Name = "Второе",
                     Enable = false,
-                    ApiKey = ""
+                    ApiKey = "",
+                    ClientSecret = "не должно сохраниться"
                 }
             ]
         });
@@ -655,25 +658,26 @@ public class OrganizationManagerServiceTests
         Assert.True(saved.IsSuccess, saved.IsFailure ? saved.Error : "");
         var stored = repository.Store["o1"].EtrnConnections ?? [];
         var kept = Assert.Single(stored, item => item.Id == "ofd-1");
-        Assert.Equal("ofd-secret", kept.ApiKey);
+        Assert.Equal("", kept.ApiKey);
         Assert.Equal("2775225", kept.SubscriberId);
         Assert.Equal("new-client", kept.ClientId);
-        Assert.Equal("client-secret", kept.ClientSecret);
+        Assert.Equal("", kept.ClientSecret);
         Assert.Equal("", kept.KeycloakUrl);
         Assert.Equal("", kept.Realm);
         Assert.Equal("https://api.example", kept.ApiUrl);
-        Assert.Equal("", Assert.Single(stored, item => item.Id == "fresh").ApiKey);
-        Assert.Equal("", Assert.Single(stored, item => item.Id == "fresh").ClientSecret);
+        var fresh = Assert.Single(stored, item => item.Id == "fresh");
+        Assert.Equal("", fresh.ApiKey);
+        Assert.Equal("", fresh.ClientSecret);
 
         var listed = await sut.List(1, 50);
         var viewConnections = Assert.Single(listed.Content).EtrnConnections;
         Assert.NotNull(viewConnections);
         var view = Assert.Single(viewConnections, item => item.Id == "ofd-1");
-        Assert.Equal(SecretMask.Placeholder, view.ApiKey);
-        Assert.Equal(SecretMask.Placeholder, view.ClientSecret);
+        Assert.Equal("", view.ApiKey);
+        Assert.Equal("", view.ClientSecret);
         Assert.Equal("new-client", view.ClientId);
-        Assert.Equal("ofd-secret", Assert.Single(stored, item => item.Id == "ofd-1").ApiKey);
-        Assert.Equal("client-secret", Assert.Single(stored, item => item.Id == "ofd-1").ClientSecret);
+        Assert.Equal("", view.KeycloakUrl);
+        Assert.Equal("", view.Realm);
     }
 
     private static OrganizationManagerService CreateSut(

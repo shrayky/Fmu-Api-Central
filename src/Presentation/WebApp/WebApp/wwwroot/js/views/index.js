@@ -7,6 +7,7 @@ import { Sidebar } from '../components/Sidebar.js';
 import { MENU_ITEMS } from '../config/menu.js';
 import { visibleMenuItems } from '../config/menuAvailability.js';
 import { syncVetisMenu } from '../services/VetisMenuService.js';
+import { syncEtrnMenu } from '../services/EtrnMenuService.js';
 import { registerWebixEditors } from "../utils/webixEditors.js";
 
 import informationView from '../modules/informationView.js';
@@ -69,7 +70,7 @@ class App {
 
     createMainLayout() {
         const mainSidebar = new Sidebar({
-            items: visibleMenuItems(MENU_ITEMS, false),
+            items: visibleMenuItems(MENU_ITEMS, false, false),
             onSelect: (id) => this.router.navigate(id, this.bodyId),
             logo: "../../img/logo.svg",
             logoText: "FMU-API-CENTRAL"
@@ -145,6 +146,7 @@ class App {
         webix.ui(this.createMainLayout());
         this.router.navigate("informationView", "body");
         syncVetisMenu();
+        syncEtrnMenu();
         AuthService.startTokenRefreshTimer();
     }
 

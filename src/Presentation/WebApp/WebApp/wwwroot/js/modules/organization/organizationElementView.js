@@ -1,13 +1,13 @@
-import { incomingFromForSave, positiveSetting } from '../../utils/vetisFormat.js';
-import { Text, CheckBox, PasswordBox, Number as NumberField } from '../../utils/ui.js';
-import { newUuid } from '../../utils/uuid.js';
-import { copyText } from '../../utils/copyText.js';
-import { loadConfiguration } from '../../services/ConfigurationService.js';
-import organizationService from '../../services/organizationService.js';
-import etrnService from '../../services/etrnService.js';
-
-// С этой даты ЭТрН обязательна.
-const ETRN_INCOMING_FROM = "2026-09-01";
+import { Text, PasswordBox } from "../../utils/ui.js";
+import { newUuid } from "../../utils/uuid.js";
+import { positiveSetting } from "../../utils/vetisFormat.js";
+import { loadConfiguration } from "../../services/ConfigurationService.js";
+import organizationService from "../../services/organizationService.js";
+import { etrnTabState, organizationTabCells } from "./organizationEtrnAccess.js";
+import { markingBody } from "./organizationMarkingTab.js";
+import { setVetisFieldsEnabled, vetisBody, vetisSettings } from "./organizationVetisTab.js";
+import { closeLetter, showEnterprises } from "./organizationVetisEnterprises.js";
+import { etrnBody, etrnConnectionsFromTable, loadEtrnErrors, showEtrnConnections } from "./organizationEtrnTab.js";
 
 class OrganizationElementView {
     constructor() {
@@ -20,10 +20,12 @@ class OrganizationElementView {
             name: "Наименование",
             inn: "ИНН организации",
             enable: "Используется",
+            trueApiEnable: "Использовать",
             DigitalSignature: "Сертификат ЭЦП",
             signPassword: "Пароль от ЭЦП",
             LoadToken: "Получить токен",
-            cryptoProHint: "Сертификат ставится на вкладке «Сервис». Здесь выбирается уже установленный.",
+            trueApiSection: "True API",
+            cryptoProHint: "Сертификат загружается на вкладке «Сервис». Здесь выбирается уже загруженный.",
             gisMtTab: "Подключенные группы",
             gisMtGroupCode: "Код",
             gisMtGroupName: "Название",
@@ -41,7 +43,7 @@ class OrganizationElementView {
             etrnIncomingFrom: "Дата начала",
             etrnEdoId: "Идентификатор ЭДО",
             etrnSaby: "Saby",
-            etrnOfd: "Платформа ОФД",
+            etrnOfd: "Платформа ЭТрН",
             etrnSubscriber: "Абонент ЭДО",
             etrnApiKey: "API-ключ",
             vetisSettingsTab: "Настройка",
@@ -80,7 +82,8 @@ class OrganizationElementView {
             maxHeight: 1080,
             viewportMargin: 24,
             minTabview: 360,
-            tabviewChrome: 268
+            // Шапка, наименование, ИНН, сертификат, пароль, подсказка, кнопки и отступы.
+            tabviewChrome: 450
         };
 
         this.NAMES = {
@@ -91,10 +94,11 @@ class OrganizationElementView {
             enable: "TrueApiIntegrationEnable",
             digitalSignature: "TrueApiIntegrationDigitalSignature",
             password: "TrueApiIntegrationPassword",
+            trueApiSection: "organizationTrueApiSection",
             loadToken: "loadTrueApiToken",
+            trueApiTokenStatus: "organizationTrueApiTokenStatus",
             saveButton: "organizationSaveButton",
             cancelButton: "organizationCancelButton",
-            trueApiFields: "TrueApiIntegrationFields",
             tabs: "organizationTabs",
             trueApiTab: "organizationTrueApiTab",
             gisMtTab: "organizationGisMtTab",
@@ -143,7 +147,10 @@ class OrganizationElementView {
         const vetis = editedData.vetisSettings || {};
         this._loadedVetis = editedData.vetisSettings || null;
         this._loadedEtrn = editedData.etrnConnections || [];
-        const vetisOn = await this._vetisEnabled();
+        const configuration = await loadConfiguration();
+        const content = configuration?.value?.Content;
+        const vetisOn = !!content?.vetisSettings?.enable;
+        const etrnOn = content?.etrnSettings?.enable === true;
 
         if ($$(this.NAMES.windowId)) {
             $$(this.NAMES.windowId).destructor();
@@ -160,7 +167,7 @@ class OrganizationElementView {
             position: "center",
             on: {
                 onDestruct: () => {
-                    this._closeLetter();
+                    closeLetter(this);
                     if (onClose) {
                         onClose();
                     }
@@ -191,20 +198,26 @@ class OrganizationElementView {
                         required: true,
                         invalidMessage: this.LABELS.invalidInnMessage
                     }),
-                    this._tabs(trueApi, groups, vetis, windowHeight, vetisOn),                    this._createButtons(onSuccess, onClose)
+                    ...this._certificateFields(trueApi),
+                    this._tabs(groups, vetis, windowHeight, vetisOn, trueApi, {
+                        received: !!editedData.trueApiTokenReceived,
+                        expired: editedData.trueApiTokenExpired || null
+                    }, etrnOn),
+                    this._createButtons(onSuccess, onClose)
                 ]
             }
         }).show();
 
+        this._setEtrnTabEnabled("");
         await this._loadCertificates(trueApi.digitalSignature || "");
-        this._setTrueApiFieldsEnabled(!!trueApi.enable);
+        this._setEtrnTabEnabled($$(this.NAMES.digitalSignature)?.getValue());
         if (vetisOn) {
-            this._showEnterprises(vetis.enterprises || []);
-            this._setVetisFieldsEnabled(!!vetis.enable);
+            showEnterprises(this, vetis.enterprises || []);
+            setVetisFieldsEnabled(this, !!vetis.enable);
         }
 
-        this._showEtrnConnections(this._loadedEtrn);
-        this._loadEtrnErrors();
+        showEtrnConnections(this, this._loadedEtrn);
+        loadEtrnErrors(this);
 
         setTimeout(() => {
             const nameField = $$(this.NAMES.name);
@@ -212,6 +225,37 @@ class OrganizationElementView {
                 nameField.focus();
             }
         }, 100);
+    }
+
+    _certificateFields(trueApi) {
+        return [
+            {
+                view: "richselect",
+                id: this.NAMES.digitalSignature,
+                label: this.LABELS.DigitalSignature,
+                labelPosition: "top",
+                placeholder: "Выберите сертификат",
+                options: [],
+                on: {
+                    onChange: (value) => this._setEtrnTabEnabled(value)
+                }
+            },
+            PasswordBox(this.LABELS.signPassword, this.NAMES.password, {
+                value: trueApi.password || ""
+            }),
+            {
+                view: "template",
+                template: this.LABELS.cryptoProHint,
+                autoheight: true,
+                borderless: true,
+                css: {
+                    "white-space": "normal",
+                    "word-wrap": "break-word",
+                    "line-height": "1.4",
+                    "padding": "5px 0"
+                }
+            }
+        ];
     }
 
     async _loadCertificates(selectedNumber) {
@@ -239,53 +283,28 @@ class OrganizationElementView {
         }
     }
 
-    async _loadToken() {
-        const inn = String($$(this.NAMES.inn).getValue() || "").trim();
-        if (!inn) {
-            webix.message({ text: this.LABELS.invalidInnMessage, type: "error" });
+    _setEtrnTabEnabled(certificateNumber) {
+        const tabs = $$(this.NAMES.tabs);
+        const tabbar = tabs?.getTabbar?.();
+        if (!tabs || !tabbar)
             return;
-        }
 
-        const button = $$(this.NAMES.loadToken);
-        if (button) {
-            button.disable();
-        }
-
-        try {
-            const data = await organizationService.getToken(inn);
-            const token = data.token ?? data.Token ?? "";
-            if (!token) {
-                webix.message({ text: "Токен не получен", type: "error" });
-                return;
-            }
-
-            await copyText(token);
-            webix.message("Токен получен и скопирован в буфер обмена");
-        } catch (error) {
-            const message = error.message || "Ошибка при получении токена";
-            if (String(message).includes("Не найдена организация")) {
-                webix.message({ text: this.LABELS.saveFirst, type: "error" });
-                return;
-            }
-
-            webix.message({ text: message, type: "error" });
-        } finally {
-            this._setTrueApiFieldsEnabled(!!$$(this.NAMES.enable).getValue());
-        }
-    }
-
-    _setTrueApiFieldsEnabled(enabled) {
-        const fields = $$(this.NAMES.trueApiFields);
-        if (!fields) {
+        if (typeof tabbar.getOption === "function" && !tabbar.getOption(this.NAMES.etrnTab))
             return;
-        }
 
-        if (enabled) {
-            fields.enable();
-            return;
-        }
+        const state = etrnTabState(
+            certificateNumber,
+            tabs.getValue(),
+            this.NAMES.trueApiTab,
+            this.NAMES.etrnTab
+        );
+        if (!state.enabled && tabs.getValue() === this.NAMES.etrnTab)
+            tabs.setValue(state.tab);
 
-        fields.disable();
+        if (state.enabled)
+            tabbar.enableOption(this.NAMES.etrnTab);
+        else
+            tabbar.disableOption(this.NAMES.etrnTab);
     }
 
     /**
@@ -297,413 +316,25 @@ class OrganizationElementView {
     }
 
     /**
-     * Высота вкладок — это остаток окна после шапки, полей «Наименование» и «ИНН», кнопок и отступов формы.
+     * Высота вкладок — остаток окна после шапки, полей над вкладками и кнопок.
      */
     _tabviewHeight(windowHeight) {
         return Math.max(this.SIZES.minTabview, windowHeight - this.SIZES.tabviewChrome);
     }
 
-    _tabs(trueApi, groups, vetis, windowHeight, vetisOn = true) {
+    _tabs(groups, vetis, windowHeight, vetisOn = true, trueApi = {}, token = {}, etrnOn = true) {
         return {
             view: "tabview",
             id: this.NAMES.tabs,
             height: this._tabviewHeight(windowHeight),
-            cells: [
-                { header: this.LABELS.markingTab, body: this._markingBody(trueApi, groups) },
-                ...(vetisOn ? [{ header: this.LABELS.vetisTab, body: this._vetisBody(vetis) }] : []),
-                { header: this.LABELS.etrnTab, body: this._etrnBody() }
-            ]
+            cells: organizationTabCells(
+                { header: this.LABELS.markingTab, body: markingBody(this, groups, trueApi, token) },
+                { header: this.LABELS.vetisTab, body: vetisOn ? vetisBody(this, vetis) : {} },
+                { header: this.LABELS.etrnTab, body: etrnOn ? etrnBody(this) : {} },
+                vetisOn,
+                etrnOn
+            )
         };
-    }
-
-    _markingBody(trueApi, groups) {
-        return {
-            id: this.NAMES.trueApiTab,
-            padding: 10,
-            rows: [
-                CheckBox(this.LABELS.enable, this.NAMES.enable, {
-                    value: !!trueApi.enable,
-                    on: {
-                        onChange: (enabled) => this._setTrueApiFieldsEnabled(enabled)
-                    }
-                }),
-                {
-                    id: this.NAMES.trueApiFields,
-                    disabled: !trueApi.enable,
-                    rows: [
-                        {
-                            view: "richselect",
-                            id: this.NAMES.digitalSignature,
-                            label: this.LABELS.DigitalSignature,
-                            labelPosition: "top",
-                            placeholder: "Выберите сертификат",
-                            options: []
-                        },
-                        PasswordBox(this.LABELS.signPassword, this.NAMES.password, {
-                            value: trueApi.password || ""
-                        }),
-                        {
-                            cols: [
-                                {
-                                    view: "button",
-                                    value: this.LABELS.LoadToken,
-                                    id: this.NAMES.loadToken,
-                                    width: 200,
-                                    click: () => this._loadToken()
-                                },
-                                {}
-                            ]
-                        }
-                    ]
-                },
-                {
-                    view: "template",
-                    template: this.LABELS.cryptoProHint,
-                    css: {
-                        "white-space": "normal",
-                        "word-wrap": "break-word",
-                        "line-height": "1.4",
-                        "padding": "5px 0"
-                    },
-                    autoheight: true
-                },
-                { view: "label", label: this.LABELS.gisMtTab },
-                this._groupsTable(groups)
-            ]
-        };
-    }
-
-    _vetisBody(vetis) {
-        const view = this;
-        return {
-            rows: [
-                {
-                    view: "tabview",
-                    id: this.NAMES.vetisTabs,
-                    cells: [
-                        { header: this.LABELS.vetisSettingsTab, body: this._vetisSettingsBody(vetis) },
-                        { header: this.LABELS.vetisEnterprisesTab, body: this._vetisEnterprises() }
-                    ]
-                },
-                {
-                    view: "template",
-                    id: this.NAMES.vetisStatus,
-                    height: 36,
-                    borderless: true,
-                    template: ""
-                }
-            ],
-            on: {
-                onViewShow() {
-                    $$(view.NAMES.vetisSettingsScroll)?.resize();
-                    $$(view.NAMES.vetisEnterprises)?.resize();
-                }
-            }
-        };
-    }
-
-    _vetisSettingsBody(vetis) {
-        return {
-            view: "scrollview",
-            id: this.NAMES.vetisSettingsScroll,
-            scroll: "y",
-            body: {
-                padding: 10,
-                rows: [
-                    CheckBox(this.LABELS.enable, this.NAMES.vetisEnable, {
-                        value: !!vetis.enable,
-                        on: {
-                            onChange: (enabled) => this._setVetisFieldsEnabled(enabled)
-                        }
-                    }),
-                    {
-                        id: this.NAMES.vetisFields,
-                        disabled: !vetis.enable,
-                        rows: [
-                    {
-                        cols: [
-                            {
-                                view: "button",
-                                value: this.LABELS.pasteLetter,
-                                width: 200,
-                                click: () => this._openLetter()
-                            },
-                            {}
-                        ]
-                    },
-                    Text(this.LABELS.apiKey, this.NAMES.apiKey, vetis.apiKey || ""),
-                    Text(this.LABELS.apiUser, this.NAMES.apiUser, vetis.basicLogin || ""),
-                    PasswordBox(this.LABELS.apiPassword, this.NAMES.apiPassword, {
-                        value: vetis.basicPassword || ""
-                    }),
-                    {
-                        view: "template",
-                        template: this.LABELS.passwordHint,
-                        autoheight: true,
-                        borderless: true
-                    },
-                    Text(this.LABELS.issuerId, this.NAMES.issuerId, vetis.issuerId || ""),
-                    Text(this.LABELS.operatorLogin, this.NAMES.operatorLogin, vetis.initiatorLogin || ""),
-                    {
-                        view: "datepicker",
-                        id: this.NAMES.vetisIncomingFrom,
-                        label: this.LABELS.incomingFrom,
-                        labelPosition: "top",
-                        editable: true,
-                        format: "%d.%m.%Y",
-                        value: this._toDate(vetis.incomingFrom)
-                    },
-                    {
-                        view: "template",
-                        template: this.LABELS.incomingHint,
-                        autoheight: true,
-                        borderless: true
-                    },
-                    CheckBox(this.LABELS.autoQuench, this.NAMES.autoQuench, {
-                        value: !!vetis.autoQuench
-                    }),
-                    NumberField(this.LABELS.autoQuenchDelay, this.NAMES.autoQuenchDelay, vetis.autoQuenchDelayHours ?? 1, undefined, {
-                        validate: (input) => positiveSetting(input),
-                        invalidMessage: this.LABELS.positiveNumber
-                    }),
-                    {
-                        cols: [
-                            { view: "button", value: this.LABELS.check, width: 210, click: () => this._probe("check") },
-                            {}
-                        ]
-                    }
-                        ]
-                    }
-                ]
-            }
-        };
-    }
-
-    _setVetisFieldsEnabled(enabled) {
-        const fields = $$(this.NAMES.vetisFields);
-        if (fields) {
-            if (enabled)
-                fields.enable();
-            else
-                fields.disable();
-        }
-
-        const tabs = $$(this.NAMES.vetisTabs);
-        const tabbar = tabs?.getTabbar?.();
-        if (!tabbar)
-            return;
-
-        if (enabled) {
-            tabbar.enableOption(this.NAMES.vetisEnterprisesTab);
-            return;
-        }
-
-        if (tabs.getValue() === this.NAMES.vetisEnterprisesTab)
-            tabs.setValue(this.NAMES.vetisSettingsScroll);
-        tabbar.disableOption(this.NAMES.vetisEnterprisesTab);
-    }
-
-    _vetisEnterprises() {
-        const view = this;
-        return {
-            id: this.NAMES.vetisEnterprisesTab,
-            padding: 10,
-            rows: [
-                {
-                    cols: [
-                        { view: "button", value: this.LABELS.enterprises, width: 190, click: () => this._probe("enterprises") },
-                        { view: "button", value: this.LABELS.selectAll, width: 150, click: () => this._setEnterpriseSelection(true) },
-                        { view: "button", value: this.LABELS.clearAll, width: 140, click: () => this._setEnterpriseSelection(false) },
-                        {}
-                    ]
-                },
-                this._enterprisesTable(),
-            ],
-            on: {
-                onViewShow() {
-                    const table = $$(view.NAMES.vetisEnterprises);
-                    if (table)
-                        table.resize();
-                }
-            }
-        };
-    }
-
-    _enterprisesTable() {
-        const view = this;
-        return {
-            view: "datatable",
-            id: this.NAMES.vetisEnterprises,
-            gravity: 1,
-            scroll: "y",
-            editable: true,
-            editaction: "click",
-            columns: [
-                {
-                    id: "participates",
-                    header: "",
-                    template: "{common.checkbox()}",
-                    width: 40,
-                    checkValue: true,
-                    uncheckValue: false
-                },
-                { id: "presentation", header: this.LABELS.presentation, fillspace: 1, editor: "text" },
-                { id: "address", header: this.LABELS.address, fillspace: 1.4 },
-                {
-                    id: "incomingFrom",
-                    header: this.LABELS.rowDate,
-                    width: 140,
-                    editor: "date",
-                    format: webix.Date.dateToStr("%d.%m.%Y")
-                },
-                {
-                    id: "remove",
-                    header: "",
-                    width: 40,
-                    template: "<span class='webix_icon wxi-trash' title='Удалить'></span>"
-                }
-            ],
-            on: {
-                onCheck(rowId, column, state) {
-                    if (column !== "participates" || !state)
-                        return;
-
-                    view._fillEmptyDate(this.getItem(rowId), this);
-                },
-                onItemClick(cell) {
-                    if (!cell)
-                        return;
-
-                    if (cell.column === "remove") {
-                        view._confirmRemoveEnterprise(this, cell.row);
-                        return;
-                    }
-
-                    if (cell.column !== "address")
-                        return;
-
-                    const row = this.getItem(cell.row);
-                    if (row?.guid)
-                        view._copyGuid(row.guid);
-                }
-            }
-        };
-    }
-
-    _confirmRemoveEnterprise(table, rowId) {
-        const row = table.getItem(rowId);
-        const caption = this._confirmText(row?.presentation || "площадку");
-        this._setOrganizationHotkeys(false);
-        webix.confirm({
-            title: "Вы уверены?",
-            text: `Удалить «${caption}» из списка?`,
-            ok: "Да",
-            cancel: "Нет"
-        }).then(() => {
-            if (table.exists(rowId))
-                table.remove(rowId);
-        }).catch(() => {
-            // «Нет» отклоняет промис webix.confirm.
-        }).finally(() => {
-            this._setOrganizationHotkeys(true);
-        });
-    }
-
-    _confirmText(value) {
-        return String(value || "площадку").trim()
-            .replaceAll("&", "&amp;")
-            .replaceAll("<", "&lt;")
-            .replaceAll(">", "&gt;") || "площадку";
-    }
-
-    async _vetisEnabled() {
-        const configuration = await loadConfiguration();
-        return !!configuration?.value?.Content?.vetisSettings?.enable;
-    }
-
-    _openLetter() {
-        const opened = $$(this.NAMES.vetisLetterWindow);
-        if (opened) {
-            opened.show();
-            $$(this.NAMES.vetisLetter)?.focus();
-            return;
-        }
-
-        // Иначе Esc и Alt+Enter карточки срабатывают вместе с окном письма.
-        this._setOrganizationHotkeys(false);
-        const view = this;
-        webix.ui({
-            view: "window",
-            id: this.NAMES.vetisLetterWindow,
-            modal: true,
-            move: true,
-            position: "center",
-            width: Math.min(window.innerWidth * 0.8, 640),
-            head: {
-                view: "toolbar",
-                elements: [
-                    { view: "label", label: this.LABELS.letterTitle },
-                    {
-                        view: "icon",
-                        icon: "wxi-close",
-                        click: () => view._closeLetter()
-                    }
-                ]
-            },
-            on: {
-                onDestruct() {
-                    view._setOrganizationHotkeys(true);
-                }
-            },
-            body: {
-                padding: 10,
-                rows: [
-                    {
-                        view: "textarea",
-                        id: this.NAMES.vetisLetter,
-                        label: this.LABELS.letter,
-                        labelPosition: "top",
-                        height: 220
-                    },
-                    {
-                        view: "template",
-                        id: this.NAMES.vetisLetterStatus,
-                        autoheight: true,
-                        borderless: true,
-                        hidden: true,
-                        template: ""
-                    },
-                    {
-                        padding: { top: 10 },
-                        cols: [
-                            {
-                                view: "button",
-                                value: this.LABELS.fillLetter,
-                                width: 180,
-                                css: "webix_primary",
-                                hotkey: "alt+enter",
-                                click: () => view._applyLetter()
-                            },
-                            {
-                                view: "button",
-                                value: this.LABELS.cancelButton,
-                                width: 140,
-                                hotkey: "esc",
-                                click: () => view._closeLetter()
-                            },
-                            {}
-                        ]
-                    }
-                ]
-            }
-        }).show();
-        webix.delay(() => $$(this.NAMES.vetisLetter)?.focus());
-    }
-
-    _closeLetter() {
-        const windowView = $$(this.NAMES.vetisLetterWindow);
-        if (windowView)
-            windowView.close();
     }
 
     _setOrganizationHotkeys(enabled) {
@@ -713,626 +344,6 @@ class OrganizationElementView {
             save.define("hotkey", enabled ? "alt+enter" : "");
         if (cancel)
             cancel.define("hotkey", enabled ? "esc" : "");
-    }
-
-    async _applyLetter() {
-        const text = String($$(this.NAMES.vetisLetter)?.getValue() || "");
-        try {
-            const parsed = await organizationService.parseVetisLetter(text);
-            this._setIfPresent(this.NAMES.apiUser, parsed.login);
-            this._setIfPresent(this.NAMES.apiPassword, parsed.password);
-            this._setIfPresent(this.NAMES.apiKey, parsed.apiKey);
-            this._setIfPresent(this.NAMES.issuerId, parsed.issuerId);
-            const found = ["login", "password", "apiKey", "issuerId"].filter(name => parsed[name]);
-            if (!found.length) {
-                this._setLetterStatus("В письме нет Login, Password, APIKey и IssuerID.", true);
-                return;
-            }
-
-            this._setStatus("Заполнено из письма. Логин оператора в письме не приходит.", false);
-            this._closeLetter();
-        } catch (error) {
-            this._setLetterStatus(error.message || "Не удалось разобрать письмо", true);
-        }
-    }
-
-    _setLetterStatus(text, failed) {
-        const status = $$(this.NAMES.vetisLetterStatus);
-        if (!status)
-            return;
-
-        status.define("template", `<div style="color:${failed ? "#9b2335" : "#0f6b4c"};white-space:normal;">${this._escape(text)}</div>`);
-        status.show();
-        status.resize();
-    }
-
-    _setIfPresent(id, value) {
-        if (!value)
-            return;
-
-        const field = $$(id);
-        if (field)
-            field.setValue(value);
-    }
-
-    async _probe(action) {
-        this._setStatus("Запрос к Ветис...", false);
-        try {
-            const payload = this._vetisPayload();
-            const result = action === "enterprises"
-                ? await organizationService.listVetisEnterprises(this.elementId, payload)
-                : await organizationService.checkVetis(this.elementId, payload);
-            if (action === "enterprises" && result.ok) {
-                this._showEnterprises(result.enterprises || []);
-                const tabs = $$(this.NAMES.vetisTabs);
-                if (tabs)
-                    tabs.setValue(this.NAMES.vetisEnterprisesTab);
-            }
-
-            this._setStatus(result.message || "", !result.ok);
-        } catch (error) {
-            this._setStatus(this._errorText(error.message), true);
-        }
-    }
-
-    _vetisPayload() {
-        return {
-            apiKey: String($$(this.NAMES.apiKey)?.getValue() || ""),
-            basicLogin: String($$(this.NAMES.apiUser)?.getValue() || ""),
-            basicPassword: String($$(this.NAMES.apiPassword)?.getValue() || ""),
-            issuerId: String($$(this.NAMES.issuerId)?.getValue() || ""),
-            initiatorLogin: String($$(this.NAMES.operatorLogin)?.getValue() || "")
-        };
-    }
-
-    _showEnterprises(rows) {
-        const table = $$(this.NAMES.vetisEnterprises);
-        if (!table)
-            return;
-
-        table.clearAll();
-        table.parse((rows || []).map(row => ({
-            id: row.guid,
-            guid: row.guid || "",
-            name: row.name || "",
-            address: row.address || "",
-            presentation: row.presentation || "",
-            incomingFrom: this._toDate(row.incomingFrom),
-            loadedIncomingFrom: row.incomingFrom || "",
-            participates: !!row.participates
-        })));
-    }
-
-    _setEnterpriseSelection(selected) {
-        const table = $$(this.NAMES.vetisEnterprises);
-        if (!table)
-            return;
-
-        table.data.each(row => {
-            row.participates = selected;
-            if (selected && !row.incomingFrom) {
-                const general = $$(this.NAMES.vetisIncomingFrom)?.getValue();
-                if (general)
-                    row.incomingFrom = general;
-            }
-        });
-        table.refresh();
-    }
-
-    _fillEmptyDate(row, table) {
-        if (!row || row.incomingFrom)
-            return;
-
-        const general = $$(this.NAMES.vetisIncomingFrom)?.getValue();
-        if (!general)
-            return;
-
-        row.incomingFrom = general;
-        if (table && row.id)
-            table.updateItem(row.id, row);
-    }
-
-    async _copyGuid(guid) {
-        try {
-            await copyText(guid);
-            webix.message("GUID скопирован");
-        } catch (error) {
-            webix.message({ text: error.message || "Не удалось скопировать GUID", type: "error" });
-        }
-    }
-
-    _setStatus(text, failed) {
-        const status = $$(this.NAMES.vetisStatus);
-        if (!status)
-            return;
-
-        status.setHTML(`<div style="color:${failed ? "#9b2335" : "#0f6b4c"};white-space:normal;">${this._escape(text)}</div>`);
-    }
-
-    _escape(text) {
-        return String(text || "")
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;");
-    }
-
-    _errorText(raw) {
-        const text = String(raw || "").trim();
-        if (text.startsWith("\"") && text.endsWith("\"")) {
-            try {
-                return JSON.parse(text);
-            } catch {
-                return text;
-            }
-        }
-
-        return text;
-    }
-
-    _toDate(value) {
-        if (!value)
-            return "";
-
-        if (value instanceof Date)
-            return value;
-
-        const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})/);
-        if (!match)
-            return "";
-
-        return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
-    }
-
-    _fromDate(value) {
-        if (!value)
-            return "";
-
-        const date = value instanceof Date ? value : new Date(value);
-        if (Number.isNaN(date.getTime()))
-            return "";
-
-        const month = String(date.getMonth() + 1).padStart(2, "0");
-        const day = String(date.getDate()).padStart(2, "0");
-        return `${date.getFullYear()}-${month}-${day}`;
-    }
-
-    _etrnBody() {
-        const view = this;
-        return {
-            id: this.NAMES.etrnTab,
-            padding: 10,
-            rows: [
-                {
-                    cols: [
-                        { view: "button", value: this.LABELS.etrnAdd, width: 140, click: () => this._addEtrnConnection() },
-                        { view: "button", value: this.LABELS.etrnRemove, width: 140, click: () => this._removeSelectedEtrnConnection() },
-                        {
-                            view: "button",
-                            id: this.NAMES.etrnCheck,
-                            value: this.LABELS.etrnCheck,
-                            width: 220,
-                            click: () => this._checkEtrn()
-                        },
-                        {}
-                    ]
-                },
-                {
-                    view: "template",
-                    id: this.NAMES.etrnProbeStatus,
-                    height: 36,
-                    borderless: true,
-                    template: ""
-                },
-                {
-                    view: "datatable",
-                    id: this.NAMES.etrnConnections,
-                    gravity: 1,
-                    select: "row",
-                    editable: true,
-                    editaction: "click",
-                    columns: [
-                        {
-                            id: "enable",
-                            header: "",
-                            template: "{common.checkbox()}",
-                            width: 40,
-                            checkValue: true,
-                            uncheckValue: false
-                        },
-                        { id: "name", header: this.LABELS.etrnName, fillspace: 1, editor: "text" },
-                        {
-                            id: "type",
-                            header: this.LABELS.etrnType,
-                            width: 180,
-                            editor: "richselect",
-                            options: [
-                                { id: "saby", value: this.LABELS.etrnSaby },
-                                { id: "ofd", value: this.LABELS.etrnOfd }
-                            ]
-                        },
-                        {
-                            id: "incomingFrom",
-                            header: this.LABELS.etrnIncomingFrom,
-                            width: 140,
-                            editor: "date",
-                            format: webix.Date.dateToStr("%d.%m.%Y")
-                        },
-                        {
-                            id: "lastError",
-                            header: this.LABELS.etrnError,
-                            fillspace: 1.6,
-                            template: (row) => row.lastError
-                                ? `<span title="${this._escape(row.lastError)}">${this._escape(row.lastError)}</span>`
-                                : ""
-                        },
-                        {
-                            id: "remove",
-                            header: "",
-                            width: 40,
-                            template: "<span class='webix_icon wxi-trash' title='Удалить'></span>"
-                        }
-                    ],
-                    data: (this._loadedEtrn || []).map(connection => this._etrnRow(connection)),
-                    on: {
-                        onSelectChange() {
-                            view._showOfdFields();
-                            view._showEdoField();
-                        },
-                        onAfterEditStop(state, editor) {
-                            if (editor.column === "type") {
-                                view._showOfdFields();
-                                view._showEdoField();
-                            }
-                        },
-                        onItemClick(cell) {
-                            if (!cell || cell.column !== "remove")
-                                return;
-
-                            view._confirmRemoveEtrnConnection(cell.row);
-                        }
-                    }
-                },
-                this._etrnSabyForm(),
-                this._etrnOfdForm(),
-                {
-                    view: "template",
-                    autoheight: true,
-                    borderless: true,
-                    template: "Saby подписывает сертификатом с вкладки «Маркировка»."
-                }
-            ]
-        };
-    }
-
-    _showEtrnConnections(connections) {
-        const table = $$(this.NAMES.etrnConnections);
-        if (!table)
-            return;
-
-        table.clearAll();
-        table.parse((connections || []).map(connection => this._etrnRow(connection)));
-        this._showOfdFields();
-        this._showEdoField();
-    }
-
-    _etrnSabyForm() {
-        const view = this;
-        return {
-            id: this.NAMES.etrnSabyForm,
-            view: "form",
-            hidden: true,
-            elements: [
-                Text(this.LABELS.etrnEdoId, this.NAMES.etrnEdoId, "")
-            ],
-            on: {
-                onChange() {
-                    view._writeEdoField();
-                }
-            }
-        };
-    }
-
-    _showEdoField() {
-        const form = $$(this.NAMES.etrnSabyForm);
-        const table = $$(this.NAMES.etrnConnections);
-        if (!form || !table)
-            return;
-
-        const row = table.getSelectedItem();
-        if (!row || row.type === "ofd") {
-            form.hide();
-            return;
-        }
-
-        form.show();
-        this._edoSilent = true;
-        const field = $$(this.NAMES.etrnEdoId);
-        if (field)
-            field.setValue(row.edoId || "");
-        this._edoSilent = false;
-    }
-
-    _writeEdoField() {
-        if (this._edoSilent)
-            return;
-
-        const table = $$(this.NAMES.etrnConnections);
-        const row = table?.getSelectedItem();
-        if (!table || !row || row.type === "ofd")
-            return;
-
-        row.edoId = String($$(this.NAMES.etrnEdoId)?.getValue() || "");
-        table.updateItem(row.id, row);
-    }
-
-    _etrnOfdForm() {
-        const view = this;
-        const text = (label, name, placeholder) => Text(label, name, "", placeholder ? { placeholder } : {});
-        return {
-            id: this.NAMES.etrnOfdForm,
-            view: "form",
-            hidden: true,
-            elements: [
-                Text(this.LABELS.etrnSubscriber, this.NAMES.etrnOfdSubscriber, ""),
-                PasswordBox(this.LABELS.etrnApiKey, this.NAMES.etrnOfdApiKey),
-                Text("client_id", this.NAMES.etrnOfdClientId, ""),
-                PasswordBox("client_secret", this.NAMES.etrnOfdClientSecret),
-                text("Адрес Keycloak", this.NAMES.etrnOfdKeycloak, "https://oauth-test.platformaofd.ru"),
-                text("Область", this.NAMES.etrnOfdRealm, "playground"),
-                text("Адрес API", this.NAMES.etrnOfdApi, "https://api-test.platformaofd.ru"),
-                {
-                    view: "template",
-                    autoheight: true,
-                    borderless: true,
-                    template: "Пустые адрес и область — тестовый стенд. Пустые API-ключ и client_secret уже сохранённые не стирают."
-                }
-            ],
-            on: {
-                onChange() {
-                    view._writeOfdFields();
-                }
-            }
-        };
-    }
-
-    _showOfdFields() {
-        const form = $$(this.NAMES.etrnOfdForm);
-        const table = $$(this.NAMES.etrnConnections);
-        if (!form || !table)
-            return;
-
-        const row = table.getSelectedItem();
-        if (!row || row.type !== "ofd") {
-            form.hide();
-            return;
-        }
-
-        form.show();
-        this._ofdSilent = true;
-        this._setOfdField(this.NAMES.etrnOfdSubscriber, row.subscriberId);
-        this._setOfdField(this.NAMES.etrnOfdApiKey, row.apiKey);
-        this._setOfdField(this.NAMES.etrnOfdClientId, row.clientId);
-        this._setOfdField(this.NAMES.etrnOfdClientSecret, row.clientSecret);
-        this._setOfdField(this.NAMES.etrnOfdKeycloak, row.keycloakUrl);
-        this._setOfdField(this.NAMES.etrnOfdRealm, row.realm);
-        this._setOfdField(this.NAMES.etrnOfdApi, row.apiUrl);
-        this._ofdSilent = false;
-    }
-
-    _setOfdField(name, value) {
-        const field = $$(name);
-        if (field)
-            field.setValue(value || "");
-    }
-
-    _writeOfdFields() {
-        if (this._ofdSilent)
-            return;
-
-        const table = $$(this.NAMES.etrnConnections);
-        const row = table?.getSelectedItem();
-        if (!table || !row || row.type !== "ofd")
-            return;
-
-        row.subscriberId = this._ofdValue(this.NAMES.etrnOfdSubscriber);
-        row.apiKey = this._ofdValue(this.NAMES.etrnOfdApiKey);
-        row.clientId = this._ofdValue(this.NAMES.etrnOfdClientId);
-        row.clientSecret = this._ofdValue(this.NAMES.etrnOfdClientSecret);
-        row.keycloakUrl = this._ofdValue(this.NAMES.etrnOfdKeycloak);
-        row.realm = this._ofdValue(this.NAMES.etrnOfdRealm);
-        row.apiUrl = this._ofdValue(this.NAMES.etrnOfdApi);
-        table.updateItem(row.id, row);
-    }
-
-    _ofdValue(name) {
-        return String($$(name)?.getValue() || "");
-    }
-
-    async _checkEtrn() {
-        this._writeOfdFields();
-        this._writeEdoField();
-        const table = $$(this.NAMES.etrnConnections);
-        const row = table?.getSelectedItem();
-        if (!row) {
-            this._setEtrnStatus("Выберите подключение", true);
-            return;
-        }
-
-        const button = $$(this.NAMES.etrnCheck);
-        if (button)
-            button.disable();
-        this._setEtrnStatus("Проверка подключения...", false);
-        try {
-            const result = await organizationService.checkEtrn(this.elementId, {
-                id: row.id,
-                type: row.type,
-                name: row.name || "",
-                subscriberId: row.subscriberId || "",
-                apiKey: row.apiKey || "",
-                clientId: row.clientId || "",
-                clientSecret: row.clientSecret || "",
-                keycloakUrl: row.keycloakUrl || "",
-                realm: row.realm || "",
-                apiUrl: row.apiUrl || "",
-                certificateNumber: String($$(this.NAMES.digitalSignature)?.getValue() || ""),
-                certificatePassword: String($$(this.NAMES.password)?.getValue() || "")
-            });
-            this._setEtrnStatus(result.message || "", !result.ok);
-        } catch (error) {
-            this._setEtrnStatus(this._errorText(error.message), true);
-        } finally {
-            if (button)
-                button.enable();
-        }
-    }
-
-    _setEtrnStatus(text, failed) {
-        const status = $$(this.NAMES.etrnProbeStatus);
-        if (!status)
-            return;
-
-        status.setHTML(`<div style="color:${failed ? "#9b2335" : "#0f6b4c"};white-space:normal;">${this._escape(text)}</div>`);
-    }
-
-    _etrnRow(connection) {
-        const type = connection.type === "ofd" ? "ofd" : "saby";
-        return {
-            id: connection.id || newUuid(),
-            name: connection.name || "",
-            type,
-            enable: !!connection.enable,
-            subscriberId: type === "ofd" ? (connection.subscriberId || "") : "",
-            edoId: type === "saby" ? (connection.edoId || "") : "",
-            apiKey: type === "ofd" ? (connection.apiKey || "") : "",
-            clientId: type === "ofd" ? (connection.clientId || "") : "",
-            clientSecret: type === "ofd" ? (connection.clientSecret || "") : "",
-            keycloakUrl: type === "ofd" ? (connection.keycloakUrl || "") : "",
-            realm: type === "ofd" ? (connection.realm || "") : "",
-            apiUrl: type === "ofd" ? (connection.apiUrl || "") : "",
-            incomingFrom: this._toDate(connection.incomingFrom || ETRN_INCOMING_FROM),
-            lastError: ""
-        };
-    }
-
-    _addEtrnConnection() {
-        const table = $$(this.NAMES.etrnConnections);
-        if (!table)
-            return;
-
-        const id = newUuid();
-        table.add({
-            id,
-            name: "",
-            type: "saby",
-            enable: true,
-            edoId: "",
-            incomingFrom: this._toDate(ETRN_INCOMING_FROM),
-            lastError: ""
-        });
-        table.select(id);
-        table.editCell(id, "name");
-    }
-
-    _removeSelectedEtrnConnection() {
-        const table = $$(this.NAMES.etrnConnections);
-        const selected = table?.getSelectedId();
-        if (!selected) {
-            webix.message({ text: "Выберите подключение", type: "error" });
-            return;
-        }
-
-        this._confirmRemoveEtrnConnection(selected);
-    }
-
-    _confirmRemoveEtrnConnection(rowId) {
-        const table = $$(this.NAMES.etrnConnections);
-        if (!table || !table.exists(rowId))
-            return;
-
-        this._setOrganizationHotkeys(false);
-        webix.confirm({
-            title: "Вы уверены?",
-            text: "Удалить подключение ЭТрН?",
-            ok: "Да",
-            cancel: "Нет"
-        }).then(() => {
-            if (table.exists(rowId))
-                table.remove(rowId);
-        }).catch(() => {
-            // «Нет» отклоняет промис webix.confirm.
-        }).finally(() => {
-            this._setOrganizationHotkeys(true);
-        });
-    }
-
-    /**
-     * Ошибки опроса лежат отдельным документом и в карточку организации не приходят.
-     */
-    async _loadEtrnErrors() {
-        const table = $$(this.NAMES.etrnConnections);
-        if (!table)
-            return;
-
-        try {
-            const organizations = await etrnService.filters();
-            const organization = (organizations || []).find(item => item.id === this.elementId);
-            if (!organization)
-                return;
-
-            const errors = new Map((organization.connections || []).map(item => [item.id, item.lastError || ""]));
-            table.data.each(row => {
-                row.lastError = errors.get(row.id) || "";
-            });
-            table.refresh();
-        } catch {
-            // Подсказка не критична: карточка уже показывает таблицу подключений.
-        }
-    }
-
-    _etrnConnectionsFromTable() {
-        const table = $$(this.NAMES.etrnConnections);
-        if (!table)
-            return this._loadedEtrn || [];
-
-        this._writeOfdFields();
-        this._writeEdoField();
-        return table.serialize().map(row => {
-            const type = row.type === "ofd" ? "ofd" : "saby";
-            return {
-                id: row.id,
-                type,
-                name: String(row.name || "").trim(),
-                enable: !!row.enable,
-                subscriberId: type === "ofd" ? String(row.subscriberId || "").trim() : "",
-                edoId: type === "saby" ? String(row.edoId || "").trim() : "",
-                apiKey: type === "ofd" ? String(row.apiKey || "") : "",
-                clientId: type === "ofd" ? String(row.clientId || "").trim() : "",
-                clientSecret: type === "ofd" ? String(row.clientSecret || "") : "",
-                keycloakUrl: type === "ofd" ? String(row.keycloakUrl || "").trim() : "",
-                realm: type === "ofd" ? String(row.realm || "").trim() : "",
-                apiUrl: type === "ofd" ? String(row.apiUrl || "").trim() : "",
-                incomingFrom: this._fromDate(row.incomingFrom) || ETRN_INCOMING_FROM
-            };
-        });
-    }
-
-    _groupsTable(groups) {
-        return {
-            view: "datatable",
-            id: this.NAMES.gisMtGroupsTable,
-            select: "row",
-            columns: [
-                { id: "code", header: this.LABELS.gisMtGroupCode, width: 80, sort: "int" },
-                { id: "name", header: this.LABELS.gisMtGroupName, width: 160, sort: "string" },
-                { id: "groupName", header: this.LABELS.gisMtGroupTitle, fillspace: true, sort: "string" }
-            ],
-            data: (groups || []).map((item, index) => ({
-                id: item.name || item.code || index + 1,
-                code: item.code,
-                name: item.name || "",
-                groupName: item.groupName || ""
-            }))
-        };
     }
 
     _createButtons(onSuccess, onClose) {
@@ -1370,41 +381,16 @@ class OrganizationElementView {
                 password: $$(this.NAMES.password).getValue(),
                 digitalSignature: $$(this.NAMES.digitalSignature).getValue()
             },
-            etrnConnections: this._etrnConnectionsFromTable()
+            etrnConnections: etrnConnectionsFromTable(this)
         };
 
         if ($$(this.NAMES.apiKey))
-            data.vetisSettings = this._vetisSettings();
+            data.vetisSettings = vetisSettings(this);
         else if (this._loadedVetis)
             // Вкладка не построена — отдаём настройки, с которыми открыли карточку.
             data.vetisSettings = this._loadedVetis;
 
         return data;
-    }
-
-    _vetisSettings() {
-        const table = $$(this.NAMES.vetisEnterprises);
-        const enterprises = table ? table.serialize().map(row => ({
-            guid: row.guid || "",
-            name: row.name || "",
-            address: row.address || "",
-            presentation: String(row.presentation || "").trim(),
-            incomingFrom: incomingFromForSave(row.loadedIncomingFrom, this._fromDate(row.incomingFrom)),
-            participates: !!row.participates
-        })) : [];
-
-        return {
-            enable: !!$$(this.NAMES.vetisEnable)?.getValue(),
-            apiKey: String($$(this.NAMES.apiKey)?.getValue() || ""),
-            basicLogin: String($$(this.NAMES.apiUser)?.getValue() || ""),
-            basicPassword: String($$(this.NAMES.apiPassword)?.getValue() || ""),
-            issuerId: String($$(this.NAMES.issuerId)?.getValue() || ""),
-            initiatorLogin: String($$(this.NAMES.operatorLogin)?.getValue() || ""),
-            incomingFrom: this._fromDate($$(this.NAMES.vetisIncomingFrom)?.getValue()),
-            autoQuench: !!$$(this.NAMES.autoQuench)?.getValue(),
-            autoQuenchDelayHours: parseInt($$(this.NAMES.autoQuenchDelay)?.getValue(), 10),
-            enterprises
-        };
     }
 
     _validate(data) {

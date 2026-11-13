@@ -40,7 +40,7 @@ public sealed class EtrnProbeService
             return Result.Failure<EtrnProbeOutcome>("Оператор ЭТрН не подключён");
 
         var organization = await Find(organizationId);
-        var connection = Build(request, organization, type);
+        var connection = Build(request, type);
         var context = new EtrnOperatorContext
         {
             OrganizationId = organization?.Id ?? (organizationId ?? "").Trim(),
@@ -77,23 +77,21 @@ public sealed class EtrnProbeService
         return found.IsSuccess ? found.Value : null;
     }
 
-    private static EtrnConnection Build(EtrnProbeRequest request, OrganizationEntity? organization, string type)
+    private static EtrnConnection Build(EtrnProbeRequest request, string type)
     {
         var ofd = string.Equals(type, EtrnOperatorType.Ofd, StringComparison.OrdinalIgnoreCase);
         var id = (request.Id ?? "").Trim();
-        var previous = organization?.EtrnConnections?.FirstOrDefault(item =>
-            string.Equals(item.Id, id, StringComparison.OrdinalIgnoreCase));
         return new EtrnConnection
         {
             Id = id,
             Type = type,
             Name = (request.Name ?? "").Trim(),
             SubscriberId = ofd ? (request.SubscriberId ?? "").Trim() : "",
-            ApiKey = ofd ? Restore(request.ApiKey, previous?.ApiKey ?? "") : "",
+            ApiKey = "",
             ClientId = ofd ? (request.ClientId ?? "").Trim() : "",
-            ClientSecret = ofd ? Restore(request.ClientSecret, previous?.ClientSecret ?? "") : "",
-            KeycloakUrl = ofd ? TrimAddress(request.KeycloakUrl) : "",
-            Realm = ofd ? (request.Realm ?? "").Trim() : "",
+            ClientSecret = "",
+            KeycloakUrl = "",
+            Realm = "",
             ApiUrl = ofd ? TrimAddress(request.ApiUrl) : ""
         };
     }

@@ -1,5 +1,6 @@
 import { loadConfiguration, saveConfigurationSections } from "../../services/ConfigurationService.js";
 import { setVetisMenuVisible } from "../../services/VetisMenuService.js";
+import { setEtrnMenuVisible } from "../../services/EtrnMenuService.js";
 import { createServerTab, serverSettingsFormId } from "./serverTab.js";
 import { createVetisTab, vetisSettingsFormId } from "./vetisTab.js";
 import { createEtrnTab, etrnSettingsFormId } from "./etrnTab.js";
@@ -26,6 +27,9 @@ const fieldNames = [
     "vetisApplicationRetention",
     "vetisFailedApplicationRetention",
     "etrnIncomingInterval",
+    "etrnEnable",
+    "etrnRequestRetention",
+    "etrnFailedRequestRetention",
 ];
 
 const formIds = [serverSettingsFormId, vetisSettingsFormId, etrnSettingsFormId];
@@ -52,7 +56,7 @@ export function createServerSettingsRows(serverTab, vetisTab, etrnTab, onSave) {
     ];
 }
 
-export async function persistServerSettings({ endpointField, formsValid, readValues, saveSections, showMenu }) {
+export async function persistServerSettings({ endpointField, formsValid, readValues, saveSections, showMenu, showEtrnMenu }) {
     if (endpointField) {
         const endpoint = vetisEndpoint(endpointField.getValue());
         if (endpointField.getValue() !== endpoint)
@@ -68,6 +72,7 @@ export async function persistServerSettings({ endpointField, formsValid, readVal
         return { saved: false, error: saveResult.error };
 
     showMenu(!!values.vetisEnable);
+    showEtrnMenu?.(!!values.etrnEnable);
     return { saved: true };
 }
 
@@ -123,6 +128,7 @@ class SettingsView {
             readValues: () => readFieldValues(fieldNames),
             saveSections: saveConfigurationSections,
             showMenu: setVetisMenuVisible,
+            showEtrnMenu: setEtrnMenuVisible,
         });
 
         if (!result.saved && result.error) {

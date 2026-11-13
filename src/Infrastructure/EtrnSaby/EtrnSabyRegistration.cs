@@ -1,3 +1,4 @@
+using CertificateSigning;
 using Domain.Etrn;
 using EtrnSaby.Workers;
 using Microsoft.Extensions.DependencyInjection;
@@ -19,7 +20,7 @@ public static class EtrnSabyRegistration
 
         services.AddSingleton<SabySessionStore>();
         services.AddSingleton<SabyJsonRpc>();
-        services.AddSingleton<ISabyCertificateDirectory, SabyCertificateDirectory>();
+        services.AddOrganizationCertificates();
         services.AddSingleton<ISabyAuthenticator, SabyAuthenticator>();
         services.AddSingleton<IEtrnSignaturePort, EtrnSignatureService>();
         services.AddScoped<IEtrnOperator, EtrnSabyGateway>();

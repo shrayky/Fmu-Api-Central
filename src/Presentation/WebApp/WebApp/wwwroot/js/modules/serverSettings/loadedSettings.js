@@ -29,7 +29,10 @@ export function mapServerSettings(configuration) {
             requireVehicleForQuench: !!vetis.requireVehicleForQuench,
         },
         etrn: {
+            enable: etrn.enable === true,
             incomingFetchIntervalMinutes: etrn.incomingFetchIntervalMinutes ?? 5,
+            requestRetentionDays: etrn.requestRetentionDays ?? 1,
+            failedRequestRetentionDays: etrn.failedRequestRetentionDays ?? 7,
         }
     };
 }

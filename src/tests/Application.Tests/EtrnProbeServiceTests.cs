@@ -11,7 +11,7 @@ namespace Application.Tests;
 public class EtrnProbeServiceTests
 {
     [Fact]
-    public async Task Пустые_секреты_ОФД_берутся_у_того_же_подключения()
+    public async Task Секреты_площадки_не_восстанавливаются()
     {
         var world = new World();
         world.Organizations.Store["o1"] = Organization();
@@ -22,19 +22,19 @@ public class EtrnProbeServiceTests
             Type = EtrnOperatorType.Ofd,
             Name = " Склад ",
             SubscriberId = " 2775225 ",
-            ApiKey = "",
+            ApiKey = "new-secret",
             ClientId = " new-client ",
-            ClientSecret = SecretMask.Placeholder,
-            KeycloakUrl = "",
-            Realm = "",
+            ClientSecret = "new-client-secret",
+            KeycloakUrl = "https://new.example",
+            Realm = "new-realm",
             ApiUrl = " https://api.example/ "
         }, CancellationToken.None);
 
         Assert.True(result.IsSuccess, result.IsFailure ? result.Error : "");
         Assert.True(result.Value.Ok);
         var connection = world.Ofd.Last!.Connection;
-        Assert.Equal("ofd-secret", connection.ApiKey);
-        Assert.Equal("client-secret", connection.ClientSecret);
+        Assert.Equal("", connection.ApiKey);
+        Assert.Equal("", connection.ClientSecret);
         Assert.Equal("new-client", connection.ClientId);
         Assert.Equal("2775225", connection.SubscriberId);
         Assert.Equal("", connection.KeycloakUrl);
@@ -65,7 +65,7 @@ public class EtrnProbeServiceTests
     }
 
     [Fact]
-    public async Task Saby_берёт_сертификат_с_формы_и_не_хранит_секреты_ОФД()
+    public async Task Saby_берёт_сертификат_с_формы_и_не_хранит_секреты_площадки()
     {
         var world = new World();
         world.Organizations.Store["o1"] = Organization();
@@ -95,7 +95,7 @@ public class EtrnProbeServiceTests
         world.Ofd.Next = new EtrnProbeResult
         {
             Ok = false,
-            Message = "ОФД ответила 401",
+            Message = "Платформа ЭТрН ответила 401",
             Exchanges =
             [
                 new EtrnExchange { Method = EtrnMethods.AuthByCertificate, Completed = true, RequestBody = "секрет" },
@@ -113,7 +113,7 @@ public class EtrnProbeServiceTests
         }, CancellationToken.None);
 
         Assert.False(result.Value.Ok);
-        Assert.Equal("ОФД ответила 401", result.Value.Message);
+        Assert.Equal("Платформа ЭТрН ответила 401", result.Value.Message);
         var row = Assert.Single(world.Requests.Store.Values);
         Assert.Equal("Проверка подключения", row.Method);
         Assert.Equal("o1", row.OrganizationId);

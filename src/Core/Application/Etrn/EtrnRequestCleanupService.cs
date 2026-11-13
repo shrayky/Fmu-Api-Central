@@ -1,4 +1,5 @@
 using Domain.Attributes;
+using Domain.Configuration.Interfaces;
 using Domain.Etrn;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -11,29 +12,33 @@ public sealed class EtrnRequestCleanupService : IEtrnRequestCleaner
     private const int BatchSize = 200;
 
     private readonly IEtrnRequestRepository _requests;
+    private readonly IParametersService _parameters;
     private readonly ILogger<EtrnRequestCleanupService> _logger;
     private readonly TimeProvider _clock;
 
     public EtrnRequestCleanupService(
         IEtrnRequestRepository requests,
+        IParametersService parameters,
         ILogger<EtrnRequestCleanupService> logger,
         TimeProvider? clock = null)
     {
         _requests = requests;
+        _parameters = parameters;
         _logger = logger;
         _clock = clock ?? TimeProvider.System;
     }
 
     public async Task<int> CleanAsync(CancellationToken cancellationToken)
     {
+        var settings = (await _parameters.Current()).EtrnSettings ?? new EtrnSettings();
         var now = _clock.GetUtcNow();
         var deleted = await DeleteExpiredAsync(
             true,
-            (now - EtrnRequestRetention.Success).ToUnixTimeSeconds(),
+            (now - settings.CompletedRetention()).ToUnixTimeSeconds(),
             cancellationToken);
         deleted += await DeleteExpiredAsync(
             false,
-            (now - EtrnRequestRetention.Failure).ToUnixTimeSeconds(),
+            (now - settings.FailedRetention()).ToUnixTimeSeconds(),
             cancellationToken);
 
         if (deleted > 0)

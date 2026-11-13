@@ -59,6 +59,11 @@ public sealed class EtrnFetchedDocument
 
     public string Status { get; set; } = EtrnDocumentStatus.Waiting;
 
+    /// <summary>
+    /// Действие приёмки: «Получен», «Получен частично» или «Не принят».
+    /// </summary>
+    public string Action { get; set; } = "";
+
     public EtrnIncomingDocumentEntity ToEntity(EtrnOperatorContext context) => new()
     {
         Id = EtrnIncomingDocumentEntity.BuildId(context.OrganizationId, context.Connection.Id, OperatorDocumentId),
@@ -71,11 +76,26 @@ public sealed class EtrnFetchedDocument
         Uid = Uid,
         DeliveryAddress = DeliveryAddress,
         Status = Status,
+        Action = Action,
         Lines = Lines,
         RawXml = RawXml,
         LastError = Error,
         SortAt = EtrnIncomingDocumentEntity.SortDate(Date)
     };
+}
+
+public sealed class EtrnListedState
+{
+    public string OperatorDocumentId { get; init; } = "";
+
+    public string Status { get; init; } = "";
+
+    /// <summary>
+    /// Действие приёмки из списка. Статуса мало: частичная приёмка — это Accepted плюс «Получен частично».
+    /// </summary>
+    public string Action { get; init; } = "";
+
+    public string Error { get; init; } = "";
 }
 
 public sealed class EtrnFetchResult
@@ -88,6 +108,11 @@ public sealed class EtrnFetchResult
     /// Документы, у которых событие уже не на этапе приёмки: этап закрыт не нами.
     /// </summary>
     public List<string> ClosedDocumentIds { get; init; } = [];
+
+    /// <summary>
+    /// Состояние из списка изменений, без титула. Отдельный список: пустой документ затёр бы строки карточки.
+    /// </summary>
+    public List<EtrnListedState> ListedStates { get; init; } = [];
 
     public List<EtrnExchange> Exchanges { get; init; } = [];
 
@@ -179,6 +204,13 @@ public sealed class EtrnStageResult
     public bool CloseDocument { get; init; }
 
     public string StateName { get; init; } = "";
+
+    /// <summary>
+    /// Приёмка уже завершена в СБИС: Accepted или Rejected. Код состояния при этом может остаться 4.
+    /// </summary>
+    public string Status { get; init; } = "";
+
+    public string Action { get; init; } = "";
 
     public List<EtrnExchange> Exchanges { get; init; } = [];
 }
@@ -275,6 +307,11 @@ public interface IEtrnIncomingLoader
     /// Сколько разных входящих документов записано за проход.
     /// </summary>
     Task<int> LoadAsync(CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Карточка СБИС в ожидании больше не приходит в список: курсор ушёл вперёд. Состояние сверяем при открытии.
+    /// </summary>
+    Task SyncOpenAsync(string id, CancellationToken cancellationToken);
 }
 
 public interface IEtrnRequestCleaner

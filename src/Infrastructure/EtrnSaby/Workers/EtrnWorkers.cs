@@ -34,13 +34,22 @@ public sealed class EtrnIncomingWorker(
                 using var scope = scopeFactory.CreateScope();
                 var settings = (await scope.ServiceProvider.GetRequiredService<IParametersService>().Current())
                     .EtrnSettings ?? new EtrnSettings();
-                Report(EtrnJobPhase.Running, DateTimeOffset.Now, null, null, null);
-                var loader = scope.ServiceProvider.GetRequiredService<IEtrnIncomingLoader>();
-                var saved = await loader.LoadAsync(stoppingToken);
-                // Только после успешной загрузки: сбой оставляет короткий повтор, а не интервал.
-                delay = settings.IncomingInterval();
-                var finished = DateTimeOffset.Now;
-                Report(EtrnJobPhase.Waiting, finished, finished.Add(delay), saved, loader.LastError);
+                if (!settings.Enable)
+                {
+                    delay = settings.IncomingInterval();
+                    var paused = DateTimeOffset.Now;
+                    Report(EtrnJobPhase.Stopped, paused, paused.Add(delay), null, null);
+                }
+                else
+                {
+                    Report(EtrnJobPhase.Running, DateTimeOffset.Now, null, null, null);
+                    var loader = scope.ServiceProvider.GetRequiredService<IEtrnIncomingLoader>();
+                    var saved = await loader.LoadAsync(stoppingToken);
+                    // Только после успешной загрузки: сбой оставляет короткий повтор, а не интервал.
+                    delay = settings.IncomingInterval();
+                    var finished = DateTimeOffset.Now;
+                    Report(EtrnJobPhase.Waiting, finished, finished.Add(delay), saved, loader.LastError);
+                }
             }
             catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
             {
@@ -79,11 +88,13 @@ public sealed class EtrnIncomingWorker(
 
 /// <summary>
 /// Сроки хранения запросов задаются в сутках, поэтому чистка раз в час достаточно точна.
+/// Выключенная ЭТрН останавливает только загрузку: журнал чистится всегда, иначе записи копятся без предела.
 /// </summary>
 public sealed class EtrnRequestCleanupWorker(
     IServiceScopeFactory scopeFactory,
     IEtrnJobStatusStore jobs,
-    ILogger<EtrnRequestCleanupWorker> logger) : BackgroundService
+    ILogger<EtrnRequestCleanupWorker> logger,
+    TimeSpan? startDelay = null) : BackgroundService
 {
     private static readonly TimeSpan StartDelay = TimeSpan.FromMinutes(2);
 
@@ -92,8 +103,9 @@ public sealed class EtrnRequestCleanupWorker(
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         logger.LogInformation("Воркер очистки запросов ЭТрН запущен");
-        Report(EtrnJobPhase.Starting, DateTimeOffset.Now, DateTimeOffset.Now.Add(StartDelay), null, null);
-        await WaitAsync(StartDelay, stoppingToken);
+        var opening = startDelay ?? StartDelay;
+        Report(EtrnJobPhase.Starting, DateTimeOffset.Now, DateTimeOffset.Now.Add(opening), null, null);
+        await WaitAsync(opening, stoppingToken);
 
         while (!stoppingToken.IsCancellationRequested)
         {

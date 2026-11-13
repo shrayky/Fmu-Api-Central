@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text;
 using System.Text.Json;
+using CertificateSigning;
 using CSharpFunctionalExtensions;
 using Domain.Etrn;
 
@@ -180,10 +181,10 @@ internal sealed class FakeSabyAuthenticator : ISabyAuthenticator
     }
 }
 
-internal sealed class FakeSabyCertificates : ISabyCertificateDirectory
+internal sealed class FakeSabyCertificates : IOrganizationCertificateDirectory
 {
-    public Result<SabyCertificateInfo> Find(string? serialNumber) =>
-        Result.Success(new SabyCertificateInfo { Thumbprint = "THUMB-1" });
+    public Result<OrganizationCertificate> Find(string? serialNumber) =>
+        Result.Success(new OrganizationCertificate { Thumbprint = "THUMB-1" });
 }
 
 internal sealed class FakeSignaturePort : IEtrnSignaturePort

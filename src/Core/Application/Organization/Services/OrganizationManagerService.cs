@@ -194,20 +194,9 @@ public class OrganizationManagerService : IOrganizationManagerService
     private static string NormalizeInn(string? inn) => (inn ?? string.Empty).Trim();
 
     /// <summary>
-    /// Пустое поле и маска не стирают ключ: карточка не отличает «не меняли» от очистки, а выпустить ключ заново можно только в ОФД.
+    /// Адрес API хранится без хвостового слэша.
     /// </summary>
     private static string TrimAddress(string? value) => (value ?? "").Trim().TrimEnd('/');
-
-    /// <summary>
-    /// Пустое поле и маска «***» оставляют уже сохранённый секрет: пароль на карточке не присылает старое значение.
-    /// </summary>
-    private static string RestoreSecret(string? incoming, string stored)
-    {
-        var value = (incoming ?? "").Trim();
-        if (value.Length == 0 || SecretMask.IsPlaceholder(value))
-            return stored;
-        return value;
-    }
 
     /// <summary>
     /// Пустая дата раньше означала «30 дней», теперь это 1 сентября 2026. Такая запись сдвигает опрос.
@@ -253,13 +242,10 @@ public class OrganizationManagerService : IOrganizationManagerService
             OrganizationVetisScope.Apply(entity.VetisSettings ??= new(), data.VetisSettings);
         if (data.EtrnConnections != null)
         {
-            var stored = entity.EtrnConnections ?? [];
             entity.EtrnConnections = data.EtrnConnections
                 .Select(connection =>
                 {
                     var id = string.IsNullOrWhiteSpace(connection.Id) ? Guid.NewGuid().ToString() : connection.Id;
-                    var previous = stored.FirstOrDefault(item =>
-                        string.Equals(item.Id, id, StringComparison.OrdinalIgnoreCase));
                     var type = string.IsNullOrWhiteSpace(connection.Type) ? EtrnOperatorType.Saby : connection.Type.Trim();
                     var ofd = string.Equals(type, EtrnOperatorType.Ofd, StringComparison.OrdinalIgnoreCase);
                     return new EtrnConnection
@@ -270,11 +256,11 @@ public class OrganizationManagerService : IOrganizationManagerService
                         Enable = connection.Enable,
                         SubscriberId = ofd ? (connection.SubscriberId ?? "").Trim() : "",
                         EdoId = ofd ? "" : (connection.EdoId ?? "").Trim(),
-                        ApiKey = ofd ? RestoreSecret(connection.ApiKey, previous?.ApiKey ?? "") : "",
+                        ApiKey = "",
                         ClientId = ofd ? (connection.ClientId ?? "").Trim() : "",
-                        ClientSecret = ofd ? RestoreSecret(connection.ClientSecret, previous?.ClientSecret ?? "") : "",
-                        KeycloakUrl = ofd ? TrimAddress(connection.KeycloakUrl) : "",
-                        Realm = ofd ? (connection.Realm ?? "").Trim() : "",
+                        ClientSecret = "",
+                        KeycloakUrl = "",
+                        Realm = "",
                         ApiUrl = ofd ? TrimAddress(connection.ApiUrl) : "",
                         IncomingFrom = EtrnConnection.NormalizeIncomingFrom(connection.IncomingFrom)
                     };

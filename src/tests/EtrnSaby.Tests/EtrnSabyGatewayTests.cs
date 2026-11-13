@@ -519,6 +519,386 @@ public class EtrnSabyGatewayTests
     }
 
     [Fact]
+    public async Task Состояние_в_списке_не_читает_документ()
+    {
+        var world = new World();
+        world.Handler.Files["https://files.test/title.xml"] = File.ReadAllBytes(
+            Path.Combine(AppContext.BaseDirectory, "XmlSamples", "sender-simple.xml"));
+        world.Handler.Respond = (call, _) => call.Method == EtrnMethods.ChangesList
+            ? SabyHandler.Result("""
+                {
+                  "Документ": [{
+                    "Идентификатор": "d1",
+                    "Состояние": {"Код":"7","Название":"Выполнение завершено успешно"},
+                    "Событие": [{
+                      "Идентификатор": "e1",
+                      "ДатаВремя": "01.10.2026 10.00.00",
+                      "Вложение": [{
+                        "Подтип": "1110339",
+                        "Файл": {"Имя": "ON_TRNACLGROT_1.xml", "Ссылка": "https://files.test/title.xml"}
+                      }]
+                    }]
+                  }],
+                  "Навигация": {"ЕстьЕще": "Нет"}
+                }
+                """)
+            : SabyHandler.Result("true");
+
+        var result = await world.Gateway.FetchAsync(ContextEmpty, CancellationToken.None);
+
+        Assert.True(result.Value.Completed, result.Value.Error);
+        var document = Assert.Single(result.Value.Documents);
+        Assert.Equal(EtrnDocumentStatus.Closed, document.Status);
+        Assert.Equal("Выполнение завершено успешно", document.Error);
+        Assert.Empty(result.Value.ListedStates);
+        Assert.DoesNotContain(world.Handler.Calls, call => call.Method == EtrnMethods.ReadDocument);
+    }
+
+    [Fact]
+    public async Task Переход_получен_в_списке_ставит_получен_без_чтения()
+    {
+        var world = new World();
+        world.Handler.Files["https://files.test/title.xml"] = File.ReadAllBytes(
+            Path.Combine(AppContext.BaseDirectory, "XmlSamples", "sender-simple.xml"));
+        world.Handler.Respond = (call, _) => call.Method == EtrnMethods.ChangesList
+            ? SabyHandler.Result("""
+                {
+                  "Документ": [{
+                    "Идентификатор": "d1",
+                    "Состояние": {"Код":"4","Название":"Доставлен","Описание":"Ожидается утверждение"},
+                    "КодПеревозки": [
+                      {"ДатаВремя":"08.11.2026 10.00.00","НазваниеФазы":"Получение груза","НазваниеПерехода":"Принят"},
+                      {"ДатаВремя":"08.11.2026 12.00.00","НазваниеФазы":"Приемка груза","НазваниеПерехода":"Получен"}
+                    ],
+                    "Событие": [{
+                      "Идентификатор": "e1",
+                      "ДатаВремя": "08.11.2026 12.00.01",
+                      "Название": "Зарегистрировано в ГИС ЭПД",
+                      "Вложение": [{
+                        "Подтип": "1110339",
+                        "Файл": {"Имя": "ON_TRNACLGROT_1.xml", "Ссылка": "https://files.test/title.xml"}
+                      }]
+                    }]
+                  }],
+                  "Навигация": {"ЕстьЕще": "Нет"}
+                }
+                """)
+            : SabyHandler.Result("true");
+
+        var result = await world.Gateway.FetchAsync(ContextEmpty, CancellationToken.None);
+
+        Assert.True(result.Value.Completed, result.Value.Error);
+        var document = Assert.Single(result.Value.Documents);
+        Assert.Equal(EtrnDocumentStatus.Accepted, document.Status);
+        Assert.Equal(EtrnAcceptanceAction.Received, document.Action);
+        Assert.Equal("", document.Error);
+        Assert.DoesNotContain(world.Handler.Calls, call => call.Method == EtrnMethods.ReadDocument);
+    }
+
+    [Fact]
+    public async Task Переход_получен_частично_ставит_частичное_действие()
+    {
+        var world = new World();
+        world.Handler.Files["https://files.test/title.xml"] = File.ReadAllBytes(
+            Path.Combine(AppContext.BaseDirectory, "XmlSamples", "sender-simple.xml"));
+        world.Handler.Respond = (call, _) => call.Method == EtrnMethods.ChangesList
+            ? SabyHandler.Result("""
+                {
+                  "Документ": [{
+                    "Идентификатор": "d1",
+                    "Состояние": {"Код":"4","Название":"Доставлен","Описание":"Ожидается утверждение"},
+                    "КодПеревозки": [
+                      {"ДатаВремя":"08.11.2026 10.00.00","НазваниеФазы":"Получение груза","НазваниеПерехода":"Принят"},
+                      {"ДатаВремя":"08.11.2026 12.00.00","НазваниеФазы":"Приемка груза","НазваниеПерехода":"Получен частично"}
+                    ],
+                    "Событие": [{
+                      "Идентификатор": "e1",
+                      "ДатаВремя": "08.11.2026 12.00.01",
+                      "Название": "Зарегистрировано в ГИС ЭПД",
+                      "Вложение": [{
+                        "Подтип": "1110339",
+                        "Файл": {"Имя": "ON_TRNACLGROT_1.xml", "Ссылка": "https://files.test/title.xml"}
+                      }]
+                    }]
+                  }],
+                  "Навигация": {"ЕстьЕще": "Нет"}
+                }
+                """)
+            : SabyHandler.Result("true");
+
+        var result = await world.Gateway.FetchAsync(ContextEmpty, CancellationToken.None);
+
+        Assert.True(result.Value.Completed, result.Value.Error);
+        var document = Assert.Single(result.Value.Documents);
+        Assert.Equal(EtrnDocumentStatus.Accepted, document.Status);
+        Assert.Equal(EtrnAcceptanceAction.Partially, document.Action);
+        Assert.Equal("", document.Error);
+    }
+
+    [Fact]
+    public async Task Приемка_груза_с_действием_получен_ставит_получен_без_чтения()
+    {
+        var world = new World();
+        world.Handler.Files["https://files.test/title.xml"] = File.ReadAllBytes(
+            Path.Combine(AppContext.BaseDirectory, "XmlSamples", "sender-simple.xml"));
+        world.Handler.Respond = (call, _) => call.Method == EtrnMethods.ChangesList
+            ? SabyHandler.Result("""
+                {
+                  "Документ": [{
+                    "Идентификатор": "a6cf8567-37fb-4b2c-9781-afbdeddd9da8",
+                    "Состояние": {"Код":"4","Название":"Доставлен","Описание":"Ожидается утверждение"},
+                    "Событие": [{
+                      "Идентификатор": "f658dbbf-2083-4ec0-aa92-8e7057a86677",
+                      "ДатаВремя": "12.11.2026 17.51.51",
+                      "Название": "Приемка груза",
+                      "Действие": {"Название": "Получен"},
+                      "Состояние": {"Код":"4","Название":"Доставлен"},
+                      "Вложение": [{
+                        "Подтип": "1110339",
+                        "Файл": {"Имя": "ON_TRNACLGROT_1.xml", "Ссылка": "https://files.test/title.xml"}
+                      }]
+                    }]
+                  }],
+                  "Навигация": {"ЕстьЕще": "Нет"}
+                }
+                """)
+            : SabyHandler.Result("true");
+
+        var result = await world.Gateway.FetchAsync(ContextEmpty, CancellationToken.None);
+
+        Assert.True(result.Value.Completed, result.Value.Error);
+        var document = Assert.Single(result.Value.Documents);
+        Assert.Equal("a6cf8567-37fb-4b2c-9781-afbdeddd9da8", document.OperatorDocumentId);
+        Assert.Equal(EtrnDocumentStatus.Accepted, document.Status);
+        Assert.Equal(EtrnAcceptanceAction.Received, document.Action);
+        Assert.Equal("", document.Error);
+        Assert.DoesNotContain(world.Handler.Calls, call => call.Method == EtrnMethods.ReadDocument);
+    }
+
+    [Fact]
+    public async Task Приемка_груза_с_действием_получен_частично_ставит_частичное_действие()
+    {
+        var world = new World();
+        world.Handler.Files["https://files.test/title.xml"] = File.ReadAllBytes(
+            Path.Combine(AppContext.BaseDirectory, "XmlSamples", "sender-simple.xml"));
+        world.Handler.Respond = (call, _) => call.Method == EtrnMethods.ChangesList
+            ? SabyHandler.Result("""
+                {
+                  "Документ": [{
+                    "Идентификатор": "a6cf8567-37fb-4b2c-9781-afbdeddd9da8",
+                    "Состояние": {"Код":"4","Название":"Доставлен","Описание":"Ожидается утверждение"},
+                    "Событие": [{
+                      "Идентификатор": "f658dbbf-2083-4ec0-aa92-8e7057a86677",
+                      "ДатаВремя": "12.11.2026 17.51.51",
+                      "Название": "Приемка груза",
+                      "Действие": {"Название": "Получен частично"},
+                      "Состояние": {"Код":"4","Название":"Доставлен"},
+                      "Вложение": [{
+                        "Подтип": "1110339",
+                        "Файл": {"Имя": "ON_TRNACLGROT_1.xml", "Ссылка": "https://files.test/title.xml"}
+                      }]
+                    }]
+                  }],
+                  "Навигация": {"ЕстьЕще": "Нет"}
+                }
+                """)
+            : SabyHandler.Result("true");
+
+        var result = await world.Gateway.FetchAsync(ContextEmpty, CancellationToken.None);
+
+        Assert.True(result.Value.Completed, result.Value.Error);
+        var document = Assert.Single(result.Value.Documents);
+        Assert.Equal("a6cf8567-37fb-4b2c-9781-afbdeddd9da8", document.OperatorDocumentId);
+        Assert.Equal(EtrnDocumentStatus.Accepted, document.Status);
+        Assert.Equal(EtrnAcceptanceAction.Partially, document.Action);
+        Assert.Equal("", document.Error);
+    }
+
+    [Fact]
+    public async Task Событие_без_титула_со_состоянием_7_отдаёт_закрытие()
+    {
+        var world = new World();
+        world.Handler.Respond = (call, _) => call.Method == EtrnMethods.ChangesList
+            ? SabyHandler.Result("""
+                {
+                  "Документ": [{
+                    "Идентификатор": "d1",
+                    "Состояние": {"Код":"7","Название":"Выполнение завершено успешно"},
+                    "Событие": [{
+                      "Идентификатор": "e9",
+                      "ДатаВремя": "12.11.2026 20.03.00",
+                      "Название": "Уведомление"
+                    }]
+                  }],
+                  "Навигация": {"ЕстьЕще": "Нет"}
+                }
+                """)
+            : SabyHandler.Result("true");
+
+        var result = await world.Gateway.FetchAsync(ContextEmpty, CancellationToken.None);
+
+        Assert.True(result.Value.Completed, result.Value.Error);
+        Assert.Empty(result.Value.Documents);
+        var state = Assert.Single(result.Value.ListedStates);
+        Assert.Equal("d1", state.OperatorDocumentId);
+        Assert.Equal(EtrnDocumentStatus.Closed, state.Status);
+        Assert.Equal("Выполнение завершено успешно", state.Error);
+        Assert.Equal(new EtrnPollPosition("e9", "d1", "12.11.2026 20.03.00"), result.Value.Position);
+        Assert.Single(world.Handler.Calls, call => call.Method == EtrnMethods.ReadDocument);
+    }
+
+    [Fact]
+    public async Task ОжидаетПодписи_без_титула_ничего_не_пишет()
+    {
+        var world = new World();
+        world.Handler.Respond = (call, _) => call.Method == EtrnMethods.ChangesList
+            ? SabyHandler.Result("""
+                {
+                  "Документ": [{
+                    "Идентификатор": "049d3a1a-b55b-4b2c-9329-c2ec239387b94",
+                    "Состояние": {"Код":"10","Название":"ОжидаетПодписи"},
+                    "Событие": [{ "Идентификатор": "e1", "ДатаВремя": "12.11.2026 20.03.00" }]
+                  }]
+                }
+                """)
+            : SabyHandler.Result("true");
+
+        var result = await world.Gateway.FetchAsync(ContextEmpty, CancellationToken.None);
+
+        Assert.True(result.Value.Completed, result.Value.Error);
+        Assert.Empty(result.Value.Documents);
+        Assert.Empty(result.Value.ListedStates);
+        Assert.Single(world.Handler.Calls, call => call.Method == EtrnMethods.ReadDocument);
+    }
+
+    [Fact]
+    public async Task Чужой_этап_без_титула_отдаёт_заметку()
+    {
+        var world = new World();
+        world.Handler.Respond = (call, _) => call.Method == EtrnMethods.ChangesList
+            ? SabyHandler.Result("""
+                {
+                  "Документ": [{
+                    "Идентификатор": "d1",
+                    "Состояние": {"Код":"10","Название":"В обработке"},
+                    "Этап": {"Название":"Получение груза"},
+                    "Событие": [{ "Идентификатор": "e1", "ДатаВремя": "12.11.2026 20.03.00" }]
+                  }]
+                }
+                """)
+            : SabyHandler.Result("true");
+
+        var result = await world.Gateway.FetchAsync(ContextEmpty, CancellationToken.None);
+
+        Assert.True(result.Value.Completed, result.Value.Error);
+        Assert.Empty(result.Value.Documents);
+        var state = Assert.Single(result.Value.ListedStates);
+        Assert.Equal(EtrnDocumentStatus.Waiting, state.Status);
+        Assert.Equal(EtrnDocumentState.StageUnavailable("Получение груза"), state.Error);
+        Assert.Single(world.Handler.Calls, call => call.Method == EtrnMethods.ReadDocument);
+    }
+
+    [Fact]
+    public async Task Служебные_вложения_догружают_титул_чтением_и_фазу_из_кода_перевозки()
+    {
+        var world = new World();
+        world.Handler.Files["https://files.test/title.xml"] = File.ReadAllBytes(
+            Path.Combine(AppContext.BaseDirectory, "XmlSamples", "sender-simple.xml"));
+        world.Handler.Respond = (call, _) => call.Method switch
+        {
+            EtrnMethods.ChangesList => SabyHandler.Result("""
+                {
+                  "Документ": [
+                    {
+                      "Идентификатор": "bbd85eea-3f8a-4b55-8022-7e75e5c45417",
+                      "Состояние": {"Код":"4","Название":"Доставлен","Описание":"Ожидается утверждение"},
+                      "КодПеревозки": [
+                        {"ДатаВремя":"10.11.2026 13.12.44","Код":"1","НазваниеФазы":"Получение груза"},
+                        {"ДатаВремя":"12.11.2026 16.22.22","Код":"4","НазваниеПерехода":"Получен","НазваниеФазы":"Приемка груза"}
+                      ],
+                      "Событие": [{
+                        "Идентификатор": "01a1cfec-adf7-7ad5-a933-ef46c25344fd",
+                        "ДатаВремя": "12.11.2026 16.22.37",
+                        "Название": "Обработано в ГИС ЭПД",
+                        "Вложение": [{
+                          "Название": "Ответ от ГИС ЭПД.xml",
+                          "Файл": {"Имя": "Ответ от ГИС ЭПД.xml", "Ссылка": "https://files.test/gis.xml"}
+                        }]
+                      }]
+                    },
+                    {
+                      "Идентификатор": "bbd85eea-3f8a-4b55-8022-7e75e5c45417",
+                      "Состояние": {"Код":"4","Название":"Доставлен"},
+                      "КодПеревозки": [
+                        {"ДатаВремя":"12.11.2026 16.22.22","НазваниеФазы":"Приемка груза"}
+                      ],
+                      "Событие": [{
+                        "Идентификатор": "0270a547-772b-4830-914a-e5dda3eb63ba",
+                        "ДатаВремя": "12.11.2026 16.22.43",
+                        "Название": "Отправлено в роуминг",
+                        "Вложение": [{
+                          "Подтип": "ЛогическоеСообщение",
+                          "Файл": {"Имя": "receipts.xml", "Ссылка": "https://files.test/receipt.xml"}
+                        }]
+                      }]
+                    }
+                  ],
+                  "Навигация": {"ЕстьЕще": "Нет"}
+                }
+                """),
+            EtrnMethods.ReadDocument => SabyHandler.Result("""
+                {"Вложение":[{
+                  "Подтип":"1110339",
+                  "Файл":{"Имя":"ON_TRNACLGROT_1.xml","Ссылка":"https://files.test/title.xml"}
+                }]}
+                """),
+            _ => SabyHandler.Result("true")
+        };
+
+        var result = await world.Gateway.FetchAsync(ContextEmpty, CancellationToken.None);
+
+        Assert.True(result.Value.Completed, result.Value.Error);
+        var document = Assert.Single(result.Value.Documents);
+        Assert.Equal("bbd85eea-3f8a-4b55-8022-7e75e5c45417", document.OperatorDocumentId);
+        Assert.Equal("ТН-77", document.Number);
+        Assert.Equal(EtrnDocumentStatus.Accepted, document.Status);
+        Assert.Equal(EtrnAcceptanceAction.Received, document.Action);
+        Assert.Equal("", document.Error);
+        Assert.Empty(result.Value.ListedStates);
+        Assert.Equal(
+            new EtrnPollPosition("0270a547-772b-4830-914a-e5dda3eb63ba", "bbd85eea-3f8a-4b55-8022-7e75e5c45417", "12.11.2026 16.22.43"),
+            result.Value.Position);
+        var read = Assert.Single(world.Handler.Calls, call => call.Method == EtrnMethods.ReadDocument);
+        Assert.Equal("bbd85eea-3f8a-4b55-8022-7e75e5c45417", read.DocumentId());
+        Assert.Contains(world.Handler.Calls, call => call.Method == "GET" && call.Url.Contains("title.xml", StringComparison.Ordinal));
+        Assert.DoesNotContain(world.Handler.Calls, call => call.Method == "GET" && call.Url.Contains("gis.xml", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Доставлен_без_титула_это_получение_груза()
+    {
+        var world = new World();
+        world.Handler.Respond = (call, _) => call.Method == EtrnMethods.ChangesList
+            ? SabyHandler.Result("""
+                {
+                  "Документ": [{
+                    "Идентификатор": "d1",
+                    "Состояние": {"Код":"4","Название":"Доставлен"},
+                    "Событие": [{ "Идентификатор": "e1" }]
+                  }]
+                }
+                """)
+            : SabyHandler.Result("true");
+
+        var result = await world.Gateway.FetchAsync(ContextEmpty, CancellationToken.None);
+
+        Assert.True(result.Value.Completed, result.Value.Error);
+        var state = Assert.Single(result.Value.ListedStates);
+        Assert.Equal(EtrnDocumentStatus.Waiting, state.Status);
+        Assert.Equal(EtrnDocumentState.StageUnavailable("Получение груза"), state.Error);
+    }
+
+    [Fact]
     public async Task Страница_закрывает_накладную_если_состояние_уже_завершено()
     {
         var world = new World();
@@ -686,6 +1066,142 @@ public class EtrnSabyGatewayTests
         Assert.Equal("d1", Assert.Single(result.Value.Documents).OperatorDocumentId);
         Assert.Equal(new EtrnPollPosition("e2", "d2", "02.10.2026 11.00.00"), result.Value.Position);
         Assert.Single(world.Handler.Calls, call => call.Method == EtrnMethods.ChangesList);
+    }
+
+    [Fact]
+    public async Task Чтение_без_титула_с_действием_получен_отдаёт_статус()
+    {
+        var world = new World();
+        world.Handler.Respond = (call, _) => call.Method switch
+        {
+            EtrnMethods.ChangesList => SabyHandler.Result("""
+                {
+                  "Документ": [{
+                    "Идентификатор": "a6cf8567-37fb-4b2c-9781-afbdeddd9da8",
+                    "Состояние": {"Код":"4","Название":"Доставлен","Описание":"Ожидается утверждение"},
+                    "КодПеревозки": [
+                      {"ДатаВремя":"12.11.2026 17.51.51","НазваниеФазы":"Приемка груза"}
+                    ],
+                    "Событие": [{
+                      "Идентификатор": "e1",
+                      "ДатаВремя": "12.11.2026 17.52.11",
+                      "Название": "Отправлено в роуминг",
+                      "Вложение": [{
+                        "Подтип": "ЛогическоеСообщение",
+                        "Файл": {"Имя": "receipts.xml", "Ссылка": "https://files.test/receipt.xml"}
+                      }]
+                    }]
+                  }],
+                  "Навигация": {"ЕстьЕще": "Нет"}
+                }
+                """),
+            EtrnMethods.ReadDocument => SabyHandler.Result("""
+                {
+                  "Идентификатор": "a6cf8567-37fb-4b2c-9781-afbdeddd9da8",
+                  "Состояние": {"Код":"4","Название":"Доставлен","Описание":"Ожидается утверждение"},
+                  "Событие": [{
+                    "Название": "Приемка груза",
+                    "Действие": {"Название": "Получен"}
+                  }]
+                }
+                """),
+            _ => SabyHandler.Result("true")
+        };
+
+        var result = await world.Gateway.FetchAsync(ContextEmpty, CancellationToken.None);
+
+        Assert.True(result.Value.Completed, result.Value.Error);
+        Assert.Empty(result.Value.Documents);
+        var state = Assert.Single(result.Value.ListedStates);
+        Assert.Equal("a6cf8567-37fb-4b2c-9781-afbdeddd9da8", state.OperatorDocumentId);
+        Assert.Equal(EtrnDocumentStatus.Accepted, state.Status);
+        Assert.Equal(EtrnAcceptanceAction.Received, state.Action);
+        Assert.Equal("", state.Error);
+    }
+
+    [Fact]
+    public async Task Чтение_без_титула_с_действием_получен_частично_отдаёт_действие()
+    {
+        var world = new World();
+        world.Handler.Respond = (call, _) => call.Method switch
+        {
+            EtrnMethods.ChangesList => SabyHandler.Result("""
+                {
+                  "Документ": [{
+                    "Идентификатор": "d1",
+                    "Состояние": {"Код":"4","Название":"Доставлен","Описание":"Ожидается утверждение"},
+                    "Событие": [{"Идентификатор":"e1","ДатаВремя":"12.11.2026 17.52.11"}]
+                  }],
+                  "Навигация": {"ЕстьЕще": "Нет"}
+                }
+                """),
+            EtrnMethods.ReadDocument => SabyHandler.Result("""
+                {
+                  "Состояние": {"Код":"4","Название":"Доставлен"},
+                  "Событие": [{"Название": "Приемка груза", "Действие": {"Название": "Получен частично"}}]
+                }
+                """),
+            _ => SabyHandler.Result("true")
+        };
+
+        var result = await world.Gateway.FetchAsync(ContextEmpty, CancellationToken.None);
+
+        Assert.True(result.Value.Completed, result.Value.Error);
+        Assert.Empty(result.Value.Documents);
+        var state = Assert.Single(result.Value.ListedStates);
+        Assert.Equal(EtrnDocumentStatus.Accepted, state.Status);
+        Assert.Equal(EtrnAcceptanceAction.Partially, state.Action);
+        Assert.Equal("", state.Error);
+    }
+
+    [Fact]
+    public async Task Чтение_с_событием_приемка_получен_закрывает_карточку_принятой()
+    {
+        var world = new World();
+        world.Handler.Files["https://files.test/title.xml"] = File.ReadAllBytes(
+            Path.Combine(AppContext.BaseDirectory, "XmlSamples", "sender-simple.xml"));
+        world.Handler.Respond = (call, _) => call.Method switch
+        {
+            EtrnMethods.ChangesList => SabyHandler.Result("""
+                {
+                  "Документ": [{
+                    "Идентификатор": "fc311304-3b79-4105-9c3c-dac7d6566f8d",
+                    "Состояние": {"Код":"4","Название":"Доставлен","Описание":"Ожидается утверждение"},
+                    "Событие": [{
+                      "Идентификатор": "e1",
+                      "ДатаВремя": "12.11.2026 17.18.08",
+                      "Название": "Обработано в ГИС ЭПД",
+                      "Вложение": [{
+                        "Файл": {"Имя": "Ответ от ГИС ЭПД.xml", "Ссылка": "https://files.test/gis.xml"}
+                      }]
+                    }]
+                  }]
+                }
+                """),
+            EtrnMethods.ReadDocument => SabyHandler.Result("""
+                {
+                  "Состояние": {"Код":"4","Название":"Доставлен","Описание":"Ожидается утверждение"},
+                  "Вложение": [{
+                    "Подтип": "1110339",
+                    "Файл": {"Имя": "ON_TRNACLGROT_1.xml", "Ссылка": "https://files.test/title.xml"}
+                  }],
+                  "Событие": [
+                    {"Название": "Приемка груза", "Действие": {"Название": "Получен"}},
+                    {"Название": "Приемка груза.Получен"}
+                  ]
+                }
+                """),
+            _ => SabyHandler.Result("true")
+        };
+
+        var result = await world.Gateway.FetchAsync(ContextEmpty, CancellationToken.None);
+
+        Assert.True(result.Value.Completed, result.Value.Error);
+        var document = Assert.Single(result.Value.Documents);
+        Assert.Equal("fc311304-3b79-4105-9c3c-dac7d6566f8d", document.OperatorDocumentId);
+        Assert.Equal(EtrnDocumentStatus.Accepted, document.Status);
+        Assert.Equal(EtrnAcceptanceAction.Received, document.Action);
+        Assert.Equal("", document.Error);
     }
 
     [Fact]

@@ -1,3 +1,4 @@
+using CertificateSigning;
 using Domain.Etrn;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -15,8 +16,9 @@ public static class EtrnOfdRegistration
         {
             client.Timeout = TimeSpan.FromSeconds(30);
         });
+        services.AddOrganizationCertificates();
+        services.AddSingleton<IOfdAttachedSignature, OfdAttachedSignature>();
         services.AddSingleton<OfdTokenStore>();
-        services.AddSingleton<IOfdApiKeyHash, OfdGostApiKeyHash>();
         services.AddScoped<IEtrnOperator, OfdEtrnGateway>();
         return services;
     }

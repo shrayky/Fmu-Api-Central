@@ -119,10 +119,10 @@ public class ConfigurationApplicationServiceTests
     }
 
     /// <summary>
-    /// Учётка Платформы ОФД живёт на организации, в общих настройках её нет.
+    /// Учётка Платформы ЭТрН живёт на организации, в общих настройках её нет.
     /// </summary>
     [Fact]
-    public async Task Общие_настройки_ЭТрН_не_хранят_учётку_ОФД()
+    public async Task Общие_настройки_ЭТрН_не_хранят_учётку_площадки()
     {
         var parameters = new FakeParametersService { CurrentValue = new Parameters() };
         var sut = new ConfigurationApplicationService(parameters, NullLogger<ConfigurationApplicationService>.Instance);
@@ -132,6 +132,9 @@ public class ConfigurationApplicationServiceTests
 
         Assert.True(saved.IsSuccess, saved.IsFailure ? saved.Error : "");
         Assert.Equal(5, parameters.CurrentValue.EtrnSettings.IncomingFetchIntervalMinutes);
+        Assert.False(parameters.CurrentValue.EtrnSettings.Enable);
+        Assert.Equal(1, parameters.CurrentValue.EtrnSettings.RequestRetentionDays);
+        Assert.Equal(7, parameters.CurrentValue.EtrnSettings.FailedRequestRetentionDays);
         Assert.DoesNotContain("ofdClientId", current);
         Assert.DoesNotContain("ofdClientSecret", current);
     }

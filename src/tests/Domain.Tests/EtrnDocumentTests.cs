@@ -36,25 +36,33 @@ public class EtrnOperatorTests
     }
 
     [Fact]
-    public void Подпись_типа_для_площадки_ОФД()
+    public void Подпись_типа_для_Платформы_ЭТрН()
     {
-        Assert.Equal("Платформа ОФД", EtrnOperatorType.Label("ofd"));
-        Assert.Equal("Платформа ОФД", EtrnOperatorType.Label("OFD"));
+        Assert.Equal("Платформа ЭТрН", EtrnOperatorType.Label("ofd"));
+        Assert.Equal("Платформа ЭТрН", EtrnOperatorType.Label("OFD"));
     }
 
     [Fact]
-    public void Пустой_адрес_подключения_ОФД_это_тестовый_стенд()
+    public void Адрес_API_определяет_хост_токена_по_сертификату()
     {
-        var connection = new EtrnConnection
-        {
-            KeycloakUrl = "  ",
-            Realm = "",
-            ApiUrl = "https://api.example/"
-        };
+        var empty = new EtrnConnection();
+        Assert.Equal("", empty.ResolvedEdoUrl());
+        Assert.Equal("Не задан адрес API Платформы ЭТрН", empty.MissingOfdAddress());
 
-        Assert.Equal(EtrnConnection.DefaultKeycloakUrl, connection.ResolvedKeycloakUrl());
-        Assert.Equal(EtrnConnection.DefaultRealm, connection.ResolvedRealm());
-        Assert.Equal("https://api.example", connection.ResolvedApiUrl());
+        var unknown = new EtrnConnection { ApiUrl = "https://api.example/" };
+        Assert.Equal("https://api.example", unknown.ResolvedApiUrl());
+        Assert.Equal("", unknown.ResolvedEdoUrl());
+        Assert.Equal("Для этого адреса API нет хоста токена по сертификату", unknown.MissingOfdAddress());
+
+        Assert.Equal(
+            "",
+            new EtrnConnection { ApiUrl = "https://api-test.platformaofd.ru" }.ResolvedEdoUrl());
+        Assert.Equal(
+            "https://edo.platformaofd.ru",
+            new EtrnConnection { ApiUrl = "https://epd.platformaofd.ru/" }.ResolvedEdoUrl());
+        Assert.Equal(
+            "https://edo.platformaofd.ru",
+            new EtrnConnection { ApiUrl = "https://api.platformaofd.ru" }.ResolvedEdoUrl());
     }
 }
 

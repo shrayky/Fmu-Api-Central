@@ -17,8 +17,8 @@ public class ConsigneeTitleWriterTests
         Uid = "uid-1",
         Lines =
         [
-            new EtrnCargoLine { Index = 1, Places = 10, GrossWeight = "100" },
-            new EtrnCargoLine { Index = 2, Places = 5, GrossWeight = "50" }
+            new EtrnCargoLine { Index = 1, Name = "Сыр", Places = 10, GrossWeight = "100" },
+            new EtrnCargoLine { Index = 2, Name = "Масло", Places = 5, GrossWeight = "50" }
         ]
     };
 
@@ -28,7 +28,6 @@ public class ConsigneeTitleWriterTests
         var xml = ConsigneeTitleWriter.Build(Document, Partial(), SignedAt);
 
         Assert.Equal(Canonical(Sample("consignee-partial.xml")), Canonical(xml));
-        Assert.Equal(Encoding.UTF8.GetBytes(xml), ConsigneeTitleWriter.ToUtf8(xml));
     }
 
     [Fact]
@@ -42,8 +41,11 @@ public class ConsigneeTitleWriterTests
         Assert.Contains("ВерсФорм=\"5.01\"", xml);
         Assert.Contains("КНД=\"1110341\"", xml);
         Assert.Contains("СодОпПр=\"Получен\"", xml);
+        Assert.DoesNotContain("ПричОтк", xml);
         Assert.DoesNotContain("ПриемГруза", xml);
+        Assert.DoesNotContain("ПриемГрузГП", xml);
         Assert.DoesNotContain("МассаБрутто", xml);
+        Assert.DoesNotContain("ОтметГП", xml);
     }
 
     [Fact]
@@ -56,10 +58,23 @@ public class ConsigneeTitleWriterTests
             Lines = [new EtrnDecidedLine { Index = 1, FactPlaces = 0, FactWeight = "0", Comment = "не писать" }]
         }, SignedAt);
 
-        Assert.Contains("СодОпПр=\"Не принят\"", xml);
-        Assert.Contains("повреждён груз", xml);
+        Assert.DoesNotContain("СодОпПр", xml);
+        Assert.Contains("ПричОтк=\"повреждён груз\"", xml);
         Assert.DoesNotContain("ПриемГруза", xml);
+        Assert.DoesNotContain("ПриемГрузГП", xml);
+        Assert.DoesNotContain("ОтметГП", xml);
         Assert.DoesNotContain("не писать", xml);
+    }
+
+    [Fact]
+    public void Тело_для_платформы_в_windows_1251()
+    {
+        var xml = ConsigneeTitleWriter.Build(Document, Partial(), SignedAt);
+        var bytes = ConsigneeTitleWriter.ToWindows1251(xml);
+        var text = Encoding.GetEncoding("windows-1251").GetString(bytes);
+
+        Assert.StartsWith("<?xml version=\"1.0\" encoding=\"windows-1251\"?>", text, StringComparison.Ordinal);
+        Assert.Contains("СодОпПр", text, StringComparison.Ordinal);
     }
 
     [Theory]

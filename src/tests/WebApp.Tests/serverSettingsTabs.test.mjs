@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createServerTab } from "../../Presentation/WebApp/WebApp/wwwroot/js/modules/serverSettings/serverTab.js";
 import { createVetisTab } from "../../Presentation/WebApp/WebApp/wwwroot/js/modules/serverSettings/vetisTab.js";
+import { createEtrnTab } from "../../Presentation/WebApp/WebApp/wwwroot/js/modules/serverSettings/etrnTab.js";
 
 function outline(node, found = []) {
     if (!node || typeof node !== "object")
@@ -240,17 +241,86 @@ test("параметры Ветис требуют адрес http и числа
     assert.equal(quenchInterval.validate("15"), true);
 });
 
+test("без флага ЭТрН флажок выключен и сроки закрыты", () => {
+    const tab = createEtrnTab({});
+    const checkbox = find(tab.body, (node) => node.name === "etrnEnable");
+
+    assert.equal(checkbox.value, false);
+    for (const name of ["etrnIncomingInterval", "etrnRequestRetention", "etrnFailedRequestRetention"])
+        assert.equal(find(tab.body, (node) => node.name === name).disabled, true);
+});
+
+test("вкладка ЭТрН содержит флажок и сроки хранения запросов", () => {
+    const tab = createEtrnTab({
+        enable: false,
+        incomingFetchIntervalMinutes: 5,
+        requestRetentionDays: 1,
+        failedRequestRetentionDays: 7,
+    });
+
+    assert.equal(tab.header, "ЭТрН");
+    assert.deepEqual(
+        outline(tab.body).filter((item) => item[0] === "field"),
+        [
+            ["field", "etrnEnable", false],
+            ["field", "etrnIncomingInterval", 5],
+            ["field", "etrnRequestRetention", 1],
+            ["field", "etrnFailedRequestRetention", 7],
+        ]
+    );
+
+    for (const name of ["etrnIncomingInterval", "etrnRequestRetention", "etrnFailedRequestRetention"])
+        assert.equal(find(tab.body, (node) => node.name === name).disabled, true);
+
+    const hint = find(tab.body, (node) => node.view === "template");
+    assert.match(hint.template, /пункт меню «ЭТрН»/);
+    assert.match(hint.template, /вкладка «ЭТрН» в организации/);
+});
+
+test("флажок ЭТрН открывает интервал и сроки хранения", () => {
+    const tab = createEtrnTab({
+        enable: false,
+        incomingFetchIntervalMinutes: 5,
+        requestRetentionDays: 1,
+        failedRequestRetentionDays: 7,
+    });
+    const checkbox = find(tab.body, (node) => node.name === "etrnEnable");
+    const calls = [];
+    globalThis.$$ = (id) => ({
+        enable() { calls.push(["enable", id]); },
+        disable() { calls.push(["disable", id]); },
+    });
+
+    try {
+        checkbox.on.onChange(true);
+        checkbox.on.onChange(false);
+    }
+    finally {
+        delete globalThis.$$;
+    }
+
+    assert.deepEqual(calls, [
+        ["enable", "etrnIncomingInterval"],
+        ["enable", "etrnRequestRetention"],
+        ["enable", "etrnFailedRequestRetention"],
+        ["disable", "etrnIncomingInterval"],
+        ["disable", "etrnRequestRetention"],
+        ["disable", "etrnFailedRequestRetention"],
+    ]);
+});
+
 test("кнопка сохранения стоит над вкладками сервера и Ветис", async () => {
     const { createServerSettingsRows } = await import("../../Presentation/WebApp/WebApp/wwwroot/js/modules/serverSettings/serverSettingsView.js");
     const rows = createServerSettingsRows(
         { header: "Настройки сервера", body: {} },
-        { header: "Ветис", body: {} }
+        { header: "Ветис", body: {} },
+        { header: "ЭТрН", body: {} }
     );
 
     assert.equal(rows[0].cols[0].value, "Сохранить");
     assert.equal(rows[0].cols[0].css, "webix_primary");
     assert.equal(rows[1].view, "tabview");
-    assert.deepEqual(rows[1].cells.map((cell) => cell.header), ["Настройки сервера", "Ветис"]);
+    assert.deepEqual(rows[1].cells.map((cell) => cell.header), ["Настройки сервера", "Ветис", "ЭТрН"]);
 });
 
 test("кнопка сохранения вызывает переданный обработчик", async () => {
@@ -259,6 +329,7 @@ test("кнопка сохранения вызывает переданный о
     const rows = createServerSettingsRows(
         { header: "Настройки сервера", body: {} },
         { header: "Ветис", body: {} },
+        { header: "ЭТрН", body: {} },
         () => { called = true; }
     );
 
@@ -287,6 +358,10 @@ test("сохранение раскладывает значения по сек
         vetisRequireVehicle: 1,
         vetisApplicationRetention: "2",
         vetisFailedApplicationRetention: "8",
+        etrnEnable: 0,
+        etrnIncomingInterval: "12",
+        etrnRequestRetention: "3",
+        etrnFailedRequestRetention: "9",
     };
     const updaters = buildConfigurationUpdaters(values);
 
@@ -316,6 +391,13 @@ test("сохранение раскладывает значения по сек
         requireVehicleForQuench: true,
         applicationRetentionDays: 2,
         failedApplicationRetentionDays: 8,
+    });
+    assert.deepEqual(updaters.etrnSettings({ keep: true }), {
+        keep: true,
+        enable: false,
+        incomingFetchIntervalMinutes: 12,
+        requestRetentionDays: 3,
+        failedRequestRetentionDays: 9,
     });
 
     const kept = buildConfigurationUpdaters({
@@ -355,6 +437,10 @@ test("загрузка подставляет адрес Ветис и разр�
     assert.equal(mapped.vetis.autoQuenchIntervalMinutes, 15);
     assert.equal(mapped.vetis.autoQuenchBatchSize, 20);
     assert.equal(mapped.vetis.requireVehicleForQuench, false);
+    assert.equal(mapped.etrn.enable, false);
+    assert.equal(mapped.etrn.incomingFetchIntervalMinutes, 5);
+    assert.equal(mapped.etrn.requestRetentionDays, 1);
+    assert.equal(mapped.etrn.failedRequestRetentionDays, 7);
 
     const explicit = mapServerSettings({
         serverSettings: { apiIpPort: 1, corsOrigins: [], trustedProxies: [] },
@@ -442,6 +528,7 @@ test("невалидная форма не сохраняет настройки
 test("успешное сохранение показывает пункт меню Ветис", async () => {
     const { persistServerSettings } = await import("../../Presentation/WebApp/WebApp/wwwroot/js/modules/serverSettings/serverSettingsView.js");
     let menu = null;
+    let etrnMenu = null;
     const result = await persistServerSettings({
         endpointField: null,
         formsValid: () => true,
@@ -460,6 +547,7 @@ test("успешное сохранение показывает пункт ме
             vetisIncomingPageSize: "100",
             vetisApplicationRetention: "1",
             vetisFailedApplicationRetention: "7",
+            etrnEnable: false,
         }),
         saveSections: async (updaters) => {
             assert.equal(updaters.vetisSettings({}).enable, true);
@@ -467,10 +555,12 @@ test("успешное сохранение показывает пункт ме
             return { result: true };
         },
         showMenu(enabled) { menu = enabled; },
+        showEtrnMenu(enabled) { etrnMenu = enabled; },
     });
 
     assert.equal(result.saved, true);
     assert.equal(menu, true);
+    assert.equal(etrnMenu, false);
 });
 
 test("ошибка сохранения не меняет пункт меню Ветис", async () => {

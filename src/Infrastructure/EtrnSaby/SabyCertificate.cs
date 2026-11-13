@@ -1,9 +1,9 @@
-using System.Security;
 using System.Security.Cryptography;
 using System.Security.Cryptography.Pkcs;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.Json;
+using CertificateSigning;
 using CryptoPro.Security.Cryptography;
 using CryptoPro.Security.Cryptography.Pkcs;
 using CryptoPro.Security.Cryptography.X509Certificates;
@@ -13,66 +13,6 @@ using Microsoft.Extensions.Logging;
 
 namespace EtrnSaby;
 
-public sealed class SabyCertificateInfo
-{
-    public CpX509Certificate2 Certificate { get; init; } = null!;
-
-    public string Thumbprint { get; init; } = "";
-}
-
-public interface ISabyCertificateDirectory
-{
-    Result<SabyCertificateInfo> Find(string? serialNumber);
-}
-
-public sealed class SabyCertificateDirectory : ISabyCertificateDirectory
-{
-    public Result<SabyCertificateInfo> Find(string? serialNumber)
-    {
-        var serial = (serialNumber ?? "").Replace(" ", "").Trim();
-        if (serial.Length == 0)
-            return Result.Failure<SabyCertificateInfo>("Не выбран сертификат организации");
-
-        CpX509Store store;
-        try
-        {
-            store = new CpX509Store(StoreName.My, StoreLocation.CurrentUser);
-            store.Open(OpenFlags.ReadOnly);
-        }
-        catch (Exception ex)
-        {
-            return Result.Failure<SabyCertificateInfo>($"Хранилище сертификатов недоступно: {ex.Message}");
-        }
-
-        try
-        {
-            foreach (var certificate in store.Certificates)
-            {
-                if (certificate.NotAfter <= DateTime.Now || certificate.Issuer.Contains("DO_NOT_TRUST"))
-                    continue;
-
-                if (!string.Equals(
-                        certificate.GetSerialNumberString().Replace(" ", ""),
-                        serial,
-                        StringComparison.OrdinalIgnoreCase))
-                    continue;
-
-                return Result.Success(new SabyCertificateInfo
-                {
-                    Certificate = certificate,
-                    Thumbprint = certificate.GetCertHashString()
-                });
-            }
-        }
-        finally
-        {
-            store.Close();
-        }
-
-        return Result.Failure<SabyCertificateInfo>("Сертификат организации не найден в хранилище");
-    }
-}
-
 public interface ISabyAuthenticator
 {
     Task<Result<string>> LoginAsync(EtrnOperatorContext context, CancellationToken cancellationToken);
@@ -81,17 +21,28 @@ public interface ISabyAuthenticator
 public sealed class SabyAuthenticator : ISabyAuthenticator
 {
     private readonly SabyJsonRpc _rpc;
-    private readonly ISabyCertificateDirectory _certificates;
+    private readonly IOrganizationCertificateDirectory _certificates;
     private readonly ILogger<SabyAuthenticator> _logger;
+    private readonly Func<CpX509Certificate2, string?, AsymmetricAlgorithm?> _openKey;
 
     public SabyAuthenticator(
         SabyJsonRpc rpc,
-        ISabyCertificateDirectory certificates,
+        IOrganizationCertificateDirectory certificates,
         ILogger<SabyAuthenticator> logger)
+        : this(rpc, certificates, logger, GostPrivateKey.Open)
+    {
+    }
+
+    internal SabyAuthenticator(
+        SabyJsonRpc rpc,
+        IOrganizationCertificateDirectory certificates,
+        ILogger<SabyAuthenticator> logger,
+        Func<CpX509Certificate2, string?, AsymmetricAlgorithm?> openKey)
     {
         _rpc = rpc;
         _certificates = certificates;
         _logger = logger;
+        _openKey = openKey;
     }
 
     public async Task<Result<string>> LoginAsync(EtrnOperatorContext context, CancellationToken cancellationToken)
@@ -101,6 +52,21 @@ public sealed class SabyAuthenticator : ISabyAuthenticator
             return Result.Failure<string>(found.Error);
 
         var certificate = found.Value.Certificate;
+        try
+        {
+            return await OpenSessionAsync(context, certificate, cancellationToken);
+        }
+        finally
+        {
+            certificate.Dispose();
+        }
+    }
+
+    private async Task<Result<string>> OpenSessionAsync(
+        EtrnOperatorContext context,
+        CpX509Certificate2 certificate,
+        CancellationToken cancellationToken)
+    {
         var der = Convert.ToBase64String(certificate.Export(X509ContentType.Cert));
         var answer = await _rpc.SendAsync(
             SabyJsonRpc.AuthUrl,
@@ -112,6 +78,10 @@ public sealed class SabyAuthenticator : ISabyAuthenticator
 
         if (!answer.Ok)
             return Result.Failure<string>(answer.Error);
+
+        var privateKey = _openKey(certificate, context.CertificatePassword);
+        if (privateKey == null)
+            return Result.Failure<string>("Не удалось получить закрытый ключ ГОСТ из сертификата");
 
         try
         {
@@ -190,12 +160,12 @@ public sealed class EtrnSignatureService : IEtrnSignaturePort
 {
     public const string HttpClientName = "EtrnSignatureFile";
 
-    private readonly ISabyCertificateDirectory _certificates;
+    private readonly IOrganizationCertificateDirectory _certificates;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<EtrnSignatureService> _logger;
 
     public EtrnSignatureService(
-        ISabyCertificateDirectory certificates,
+        IOrganizationCertificateDirectory certificates,
         IHttpClientFactory httpClientFactory,
         ILogger<EtrnSignatureService> logger)
     {
@@ -210,6 +180,22 @@ public sealed class EtrnSignatureService : IEtrnSignaturePort
         if (found.IsFailure)
             return Result.Failure<string>(found.Error);
 
+        var certificate = found.Value.Certificate;
+        try
+        {
+            return await SignFoundAsync(certificate, request, cancellationToken);
+        }
+        finally
+        {
+            certificate.Dispose();
+        }
+    }
+
+    private async Task<Result<string>> SignFoundAsync(
+        CpX509Certificate2 certificate,
+        EtrnSignatureRequest request,
+        CancellationToken cancellationToken)
+    {
         (byte[] content, bool preparedHash) material;
         try
         {
@@ -222,8 +208,7 @@ public sealed class EtrnSignatureService : IEtrnSignaturePort
 
         try
         {
-            var certificate = found.Value.Certificate;
-            var privateKey = PrivateKey(certificate, request.CertificatePassword);
+            var privateKey = GostPrivateKey.Open(certificate, request.CertificatePassword);
             if (privateKey == null)
                 return Result.Failure<string>("Не удалось получить закрытый ключ ГОСТ из сертификата");
 
@@ -255,34 +240,5 @@ public sealed class EtrnSignatureService : IEtrnSignaturePort
 
         using var http = _httpClientFactory.CreateClient(HttpClientName);
         return (await http.GetByteArrayAsync(material.Value.FileUrl, cancellationToken), false);
-    }
-
-    private static AsymmetricAlgorithm? PrivateKey(CpX509Certificate2 certificate, string? password)
-    {
-        var privateKey = certificate.GetGost3410_2012_256PrivateKey()
-                         ?? certificate.GetGost3410_2012_512PrivateKey() as Gost3410Algorithm
-                         ?? certificate.GetGost3410PrivateKey();
-        if (privateKey == null || string.IsNullOrEmpty(password))
-            return privateKey;
-
-        var secure = new SecureString();
-        foreach (var character in password)
-            secure.AppendChar(character);
-        secure.MakeReadOnly();
-
-        switch (privateKey)
-        {
-            case Gost3410_2012_256CryptoServiceProvider csp256:
-                csp256.SetContainerPassword(secure);
-                break;
-            case Gost3410_2012_512CryptoServiceProvider csp512:
-                csp512.SetContainerPassword(secure);
-                break;
-            case Gost3410CryptoServiceProvider csp3410:
-                csp3410.SetContainerPassword(secure);
-                break;
-        }
-
-        return privateKey;
     }
 }

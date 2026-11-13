@@ -1,4 +1,5 @@
 using System.Net.Http.Headers;
+using System.Text;
 using System.Text.Json;
 using CSharpFunctionalExtensions;
 using Domain.Etrn;
@@ -8,130 +9,148 @@ namespace EtrnOfd;
 
 public sealed class OfdTokenClient
 {
+    public const string ClientIdHeader = "central";
+    public const string TokenPath = "/security/public/api/v3/oauth/token";
+
     private readonly HttpClient _http;
-    private readonly IOfdApiKeyHash _hash;
+    private readonly IOfdAttachedSignature _signer;
     private readonly OfdTokenStore _store;
     private readonly Func<DateTimeOffset> _now;
+    private readonly Func<string> _nonce;
 
     [ActivatorUtilitiesConstructor]
-    public OfdTokenClient(HttpClient http, IOfdApiKeyHash hash, OfdTokenStore store)
-        : this(http, hash, store, () => DateTimeOffset.Now)
+    public OfdTokenClient(HttpClient http, IOfdAttachedSignature signer, OfdTokenStore store)
+        : this(http, signer, store, () => DateTimeOffset.Now, () => Guid.NewGuid().ToString())
     {
     }
 
-    public OfdTokenClient(HttpClient http, IOfdApiKeyHash hash, OfdTokenStore store, Func<DateTimeOffset> clock)
+    public OfdTokenClient(
+        HttpClient http,
+        IOfdAttachedSignature signer,
+        OfdTokenStore store,
+        Func<DateTimeOffset> clock,
+        Func<string> nonce)
     {
         _http = http;
-        _hash = hash;
+        _signer = signer;
         _store = store;
         _now = clock;
+        _nonce = nonce;
     }
 
-    public Task<Result<string>> AccessTokenAsync(EtrnConnection connection, CancellationToken cancellationToken) =>
-        AccessTokenAsync(connection, fresh: false, cancellationToken);
+    public Task<Result<OfdAccess>> AccessTokenAsync(EtrnOperatorContext context, CancellationToken cancellationToken) =>
+        AccessTokenAsync(context, fresh: false, cancellationToken);
 
-    public async Task<Result<string>> AccessTokenAsync(
-        EtrnConnection connection,
+    public async Task<Result<OfdAccess>> AccessTokenAsync(
+        EtrnOperatorContext context,
         bool fresh,
         CancellationToken cancellationToken)
     {
+        var connection = context.Connection;
+        var missing = connection.MissingOfdAddress();
+        if (missing.Length > 0)
+            return Result.Failure<OfdAccess>(missing);
+        if (string.IsNullOrWhiteSpace(context.CertificateNumber))
+            return Result.Failure<OfdAccess>("Не задан сертификат организации");
+
         var connectionId = connection.Id ?? "";
         if (!fresh && _store.TryGet(connectionId, _now(), out var cached))
-            return Result.Success(cached);
+            return Result.Success(new OfdAccess(cached, 0));
 
         try
         {
-            var refresh = fresh ? "" : _store.RefreshToken(connectionId);
-            if (refresh.Length > 0)
-            {
-                var refreshed = await RequestAsync(connection, RefreshForm(connection, refresh), cancellationToken);
-                if (refreshed.IsSuccess)
-                {
-                    Remember(connectionId, refreshed.Value);
-                    return Result.Success(refreshed.Value.AccessToken);
-                }
-            }
+            var signed = await SignAsync(context, cancellationToken);
+            if (signed.IsFailure)
+                return Result.Failure<OfdAccess>(signed.Error);
 
-            var logged = await RequestAsync(connection, PasswordForm(connection), cancellationToken);
+            var logged = await RequestAsync(connection, signed.Value, cancellationToken);
             if (logged.IsFailure)
-                return Result.Failure<string>(logged.Error);
+                return Result.Failure<OfdAccess>(logged.Error);
 
             Remember(connectionId, logged.Value);
-            return Result.Success(logged.Value.AccessToken);
+            return Result.Success(new OfdAccess(logged.Value.AccessToken, logged.Value.ExpiresIn));
         }
         catch (Exception ex) when (ex is HttpRequestException or JsonException
                                    || (ex is OperationCanceledException && !cancellationToken.IsCancellationRequested))
         {
-            return Result.Failure<string>($"ОФД не выдала токен: {ex.Message}");
+            return Result.Failure<OfdAccess>($"Платформа ЭТрН не выдала токен: {ex.Message}");
         }
     }
 
+    /// <summary>
+    /// 1С пишет ts строкой: ЗаписатьЗначение от текста Unix-времени.
+    /// </summary>
+    public static string ChallengeJson(DateTimeOffset now, string nonce) =>
+        $"{{\"ts\":\"{now.ToUnixTimeSeconds()}\",\"nonce\":\"{nonce}\"}}";
+
+    private async Task<Result<string>> SignAsync(EtrnOperatorContext context, CancellationToken cancellationToken)
+    {
+        var json = ChallengeJson(_now(), _nonce());
+        return await _signer.SignAsync(
+            context.CertificateNumber,
+            context.CertificatePassword,
+            Encoding.UTF8.GetBytes(json),
+            cancellationToken);
+    }
+
     private void Remember(string connectionId, OfdTokenResponse response) =>
-        _store.Remember(connectionId, response.AccessToken, response.RefreshToken, response.ExpiresIn, _now());
+        _store.Remember(connectionId, response.AccessToken, "", response.ExpiresIn, _now());
 
     private async Task<Result<OfdTokenResponse>> RequestAsync(
         EtrnConnection connection,
-        IEnumerable<KeyValuePair<string, string>> form,
+        string signature,
         CancellationToken cancellationToken)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Post, TokenUrl(connection))
+        using var request = new HttpRequestMessage(HttpMethod.Post, connection.ResolvedEdoUrl() + TokenPath)
         {
-            Content = new FormUrlEncodedContent(form)
+            Content = new FormUrlEncodedContent(new Dictionary<string, string>
+            {
+                ["grant_type"] = "signature",
+                ["signature"] = signature
+            })
         };
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        request.Headers.TryAddWithoutValidation("x-client-id", ClientIdHeader);
 
         using var response = await _http.SendAsync(request, cancellationToken);
         if (!response.IsSuccessStatusCode)
-            return Result.Failure<OfdTokenResponse>($"ОФД не выдала токен: {(int)response.StatusCode}");
+        {
+            var failed = await response.Content.ReadAsStringAsync(cancellationToken);
+            return Result.Failure<OfdTokenResponse>($"Платформа ЭТрН не выдала токен: {TokenError(failed, (int)response.StatusCode)}");
+        }
 
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
         using var json = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
         var root = json.RootElement;
         var access = Text(root, "access_token");
         if (access.Length == 0)
-            return Result.Failure<OfdTokenResponse>("ОФД не вернула токен");
+            return Result.Failure<OfdTokenResponse>("Платформа ЭТрН не вернула токен");
 
         var expires = root.TryGetProperty("expires_in", out var expiresIn) && expiresIn.TryGetInt32(out var seconds)
             ? seconds
             : 0;
-        return Result.Success(new OfdTokenResponse(access, Text(root, "refresh_token"), expires));
+        return Result.Success(new OfdTokenResponse(access, expires));
     }
 
-    private List<KeyValuePair<string, string>> PasswordForm(EtrnConnection connection)
+    private static string TokenError(string body, int status)
     {
-        var form = BaseForm(connection);
-        form.Add(new KeyValuePair<string, string>("grant_type", "password"));
-        form.Add(new KeyValuePair<string, string>("api_key", _hash.Hex(connection.ApiKey)));
-        return form;
-    }
+        var plain = (body ?? "").Trim();
+        if (!plain.StartsWith('{'))
+            return plain.Length == 0 ? status.ToString() : plain;
 
-    private static List<KeyValuePair<string, string>> RefreshForm(EtrnConnection connection, string refreshToken)
-    {
-        var form = BaseForm(connection);
-        form.Add(new KeyValuePair<string, string>("grant_type", "refresh_token"));
-        form.Add(new KeyValuePair<string, string>("refresh_token", refreshToken));
-        return form;
+        using var json = JsonDocument.Parse(plain);
+        var text = Text(json.RootElement, "error_description");
+        if (text.Length == 0)
+            text = Text(json.RootElement, "error");
+        return text.Length == 0 ? status.ToString() : text;
     }
-
-    private static List<KeyValuePair<string, string>> BaseForm(EtrnConnection connection)
-    {
-        var form = new List<KeyValuePair<string, string>>
-        {
-            new("client_id", (connection.ClientId ?? "").Trim())
-        };
-        var secret = connection.ClientSecret ?? "";
-        if (!string.IsNullOrWhiteSpace(secret))
-            form.Add(new KeyValuePair<string, string>("client_secret", secret));
-        return form;
-    }
-
-    private static string TokenUrl(EtrnConnection connection) =>
-        $"{connection.ResolvedKeycloakUrl()}/realms/{connection.ResolvedRealm()}/protocol/openid-connect/token";
 
     private static string Text(JsonElement root, string name) =>
         root.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
             ? (value.GetString() ?? "").Trim()
             : "";
 
-    private sealed record OfdTokenResponse(string AccessToken, string RefreshToken, int ExpiresIn);
+    private sealed record OfdTokenResponse(string AccessToken, int ExpiresIn);
 }
+
+public sealed record OfdAccess(string Token, int ExpiresIn);

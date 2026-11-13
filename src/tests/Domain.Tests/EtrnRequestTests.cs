@@ -82,4 +82,49 @@ public class EtrnSettingsTests
     {
         Assert.NotNull(new Parameters().EtrnSettings);
     }
+
+    [Fact]
+    public void По_умолчанию_ЭТрН_выключена_со_сроками_сутки_и_неделя()
+    {
+        var settings = new EtrnSettings();
+        var stored = System.Text.Json.JsonSerializer.Deserialize<EtrnSettings>("{}");
+
+        Assert.False(settings.Enable);
+        Assert.False(stored!.Enable);
+        Assert.Equal(1, settings.RequestRetentionDays);
+        Assert.Equal(7, settings.FailedRequestRetentionDays);
+        Assert.Equal(TimeSpan.FromDays(1), settings.CompletedRetention());
+        Assert.Equal(TimeSpan.FromDays(7), settings.FailedRetention());
+    }
+
+    [Fact]
+    public void Ноль_в_сроке_выполненных_запросов_отвергается()
+    {
+        var settings = new EtrnSettings { RequestRetentionDays = 0 };
+
+        var result = settings.Check();
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("Хранить выполненные запросы: нужно целое число больше нуля", result.Error);
+    }
+
+    [Fact]
+    public void Ноль_в_сроке_запросов_с_ошибкой_отвергается()
+    {
+        var settings = new EtrnSettings { FailedRequestRetentionDays = 0 };
+
+        var result = settings.Check();
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("Хранить запросы с ошибкой или без ответа: нужно целое число больше нуля", result.Error);
+    }
+
+    [Fact]
+    public void Уже_записанный_ноль_срока_читается_как_значение_по_умолчанию()
+    {
+        var settings = new EtrnSettings { RequestRetentionDays = 0, FailedRequestRetentionDays = 0 };
+
+        Assert.Equal(TimeSpan.FromDays(1), settings.CompletedRetention());
+        Assert.Equal(TimeSpan.FromDays(7), settings.FailedRetention());
+    }
 }

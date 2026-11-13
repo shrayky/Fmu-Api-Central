@@ -1,5 +1,13 @@
-export function visibleMenuItems(menuItems, vetisEnabled) {
-    return Object.values(menuItems).filter((item) => vetisEnabled || !item.requiresVetis);
+export function visibleMenuItems(menuItems, vetisEnabled, etrnEnabled = false) {
+    return Object.values(menuItems).filter((item) => {
+        if (item.requiresVetis && !vetisEnabled)
+            return false;
+
+        if (item.requiresEtrn && !etrnEnabled)
+            return false;
+
+        return true;
+    });
 }
 
 /** Позиция среди уже показанных пунктов: считаем показанные пункты, стоящие в полном меню раньше нужного. */

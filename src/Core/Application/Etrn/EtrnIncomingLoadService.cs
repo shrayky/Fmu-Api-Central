@@ -13,8 +13,6 @@ public sealed class EtrnIncomingLoadService : IEtrnIncomingLoader
 {
     private const int ReconcileLimit = 50;
 
-    private const int WaitingReadLimit = 50;
-
     private static readonly TimeSpan SendingLimit = TimeSpan.FromMinutes(10);
 
     private readonly IReadOnlyList<IEtrnOperator> _operators;
@@ -44,6 +42,86 @@ public sealed class EtrnIncomingLoadService : IEtrnIncomingLoader
     }
 
     public string LastError { get; private set; } = "";
+
+    public async Task SyncOpenAsync(string id, CancellationToken cancellationToken)
+    {
+        var found = await _incoming.Find(id);
+        if (found.IsFailure || found.Value == null)
+            return;
+
+        var document = found.Value;
+        if (document.Status != EtrnDocumentStatus.Waiting)
+            return;
+        if (!string.Equals(document.Operator.Type, EtrnOperatorType.Saby, StringComparison.OrdinalIgnoreCase))
+            return;
+
+        var organization = await _organizations.GetById(document.OrganizationId);
+        if (organization.IsFailure)
+            return;
+
+        var connection = (organization.Value.EtrnConnections ?? []).FirstOrDefault(item =>
+            string.Equals(item.Id, document.Operator.ConnectionId, StringComparison.OrdinalIgnoreCase));
+        if (connection == null
+            || !string.Equals(connection.Type, EtrnOperatorType.Saby, StringComparison.OrdinalIgnoreCase))
+            return;
+        if (string.IsNullOrWhiteSpace(organization.Value.TrueApiIntegrationSettings?.DigitalSignature))
+            return;
+
+        var @operator = FindOperator(connection.Type);
+        if (@operator == null)
+            return;
+
+        var context = Context(organization.Value, connection, EtrnPollPosition.Empty);
+        Result<EtrnStageResult> stage;
+        try
+        {
+            stage = await @operator.ReadStageAsync(context, document.OperatorDocumentId, cancellationToken);
+        }
+        catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
+        {
+            _logger.LogWarning(ex, "Состояние ЭТрН {Id} при открытии не прочитано", document.Id);
+            return;
+        }
+
+        if (stage.IsFailure || !stage.Value.Completed)
+            return;
+
+        await _recorder.RecordAsync(stage.Value.Exchanges, document.OrganizationId, context.Operator);
+        if (stage.Value.Status is EtrnDocumentStatus.Accepted or EtrnDocumentStatus.Rejected)
+        {
+            document.Status = stage.Value.Status;
+            document.Action = stage.Value.Action.Length > 0
+                ? stage.Value.Action
+                : stage.Value.Status == EtrnDocumentStatus.Rejected
+                    ? EtrnAcceptanceAction.Rejected
+                    : EtrnAcceptanceAction.Received;
+            document.LastError = "";
+            document.SendingAt = null;
+            document.SendingAtUnix = 0;
+            await SaveWaitingAsync(document);
+            return;
+        }
+
+        if (stage.Value.CloseDocument)
+        {
+            var name = stage.Value.StateName.Length > 0 ? stage.Value.StateName : stage.Value.Error;
+            EtrnDocumentState.Finish(document, name);
+            await SaveWaitingAsync(document);
+            return;
+        }
+
+        if (stage.Value.Stage.Length == 0 || stage.Value.StillAcceptance)
+            return;
+        if (document.LastError.Length > 0 && !EtrnDocumentState.IsStageNote(document.LastError))
+            return;
+
+        var note = EtrnDocumentState.StageUnavailable(stage.Value.Stage);
+        if (document.LastError == note)
+            return;
+
+        document.LastError = note;
+        await SaveWaitingAsync(document);
+    }
 
     public async Task<int> LoadAsync(CancellationToken cancellationToken)
     {
@@ -143,7 +221,7 @@ public sealed class EtrnIncomingLoadService : IEtrnIncomingLoader
             saved.Add(entity.Id);
         }
 
-        await RefreshWaitingAsync(organization, connection, @operator, context, saved, cancellationToken);
+        await ApplyListedStatesAsync(organization, connection, batch.ListedStates, cancellationToken);
 
         foreach (var operatorDocumentId in (batch.ClosedDocumentIds ?? []).Distinct(StringComparer.Ordinal))
         {
@@ -187,83 +265,65 @@ public sealed class EtrnIncomingLoadService : IEtrnIncomingLoader
     }
 
     /// <summary>
-    /// Курсор к уже сохранённой накладной не возвращается. Пока она ждёт приёмки, состояние читаем отдельно:
-    /// код 7 или 9 закрывает карточку, чужой этап остаётся в ожидании с текстом.
+    /// Список уже принёс состояние. Карточки без титула здесь нет, поэтому правим только сохранённую накладную.
     /// </summary>
-    private async Task RefreshWaitingAsync(
+    private async Task ApplyListedStatesAsync(
         OrganizationEntity organization,
         EtrnConnection connection,
-        IEtrnOperator @operator,
-        EtrnOperatorContext context,
-        HashSet<string> savedThisPass,
+        IReadOnlyList<EtrnListedState>? states,
         CancellationToken cancellationToken)
     {
-        if (!string.Equals(connection.Type, EtrnOperatorType.Saby, StringComparison.OrdinalIgnoreCase))
-            return;
-
-        var waiting = await _incoming.List(
-            new EtrnIncomingFilter
-            {
-                OrganizationId = organization.Id,
-                ConnectionId = connection.Id,
-                Status = EtrnDocumentStatus.Waiting
-            },
-            0,
-            WaitingReadLimit);
-        if (waiting.IsFailure)
-        {
-            _logger.LogWarning("Ожидающие ЭТрН подключения {Connection} не прочитаны: {Error}", connection.Id, waiting.Error);
-            return;
-        }
-
-        foreach (var document in waiting.Value)
+        foreach (var update in states ?? [])
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (savedThisPass.Contains(document.Id))
+            if (update.OperatorDocumentId.Length == 0)
                 continue;
 
-            Result<EtrnStageResult> stage;
-            try
-            {
-                stage = await @operator.ReadStageAsync(context, document.OperatorDocumentId, cancellationToken);
-            }
-            catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
-            {
-                _logger.LogWarning(ex, "Состояние ЭТрН {Id} не прочитано", document.Id);
-                continue;
-            }
-
-            if (stage.IsFailure || !stage.Value.Completed)
+            var id = EtrnIncomingDocumentEntity.BuildId(organization.Id, connection.Id, update.OperatorDocumentId);
+            var existing = await _incoming.Find(id);
+            if (existing.IsFailure || existing.Value == null)
                 continue;
 
-            await _recorder.RecordAsync(stage.Value.Exchanges, organization.Id, context.Operator);
-            if (stage.Value.CloseDocument)
-            {
-                var name = stage.Value.StateName.Length > 0 ? stage.Value.StateName : stage.Value.Error;
-                EtrnDocumentState.Finish(document, name);
-                await SaveWaitingAsync(document);
+            var document = existing.Value;
+            if (document.Status is not (EtrnDocumentStatus.Waiting or EtrnDocumentStatus.Sending))
                 continue;
-            }
 
-            if (stage.Value.Stage.Length > 0 && !stage.Value.StillAcceptance)
+            if (update.Status is EtrnDocumentStatus.Accepted or EtrnDocumentStatus.Rejected)
             {
-                if (document.LastError.Length > 0 && !EtrnDocumentState.IsStageNote(document.LastError))
-                    continue;
-
-                var note = EtrnDocumentState.StageUnavailable(stage.Value.Stage);
-                if (document.LastError == note)
-                    continue;
-
-                document.LastError = note;
-                await SaveWaitingAsync(document);
-                continue;
-            }
-
-            if (stage.Value.StillAcceptance && EtrnDocumentState.IsStageNote(document.LastError))
-            {
+                document.Status = update.Status;
+                document.Action = update.Action.Length > 0
+                    ? update.Action
+                    : update.Status == EtrnDocumentStatus.Rejected
+                        ? EtrnAcceptanceAction.Rejected
+                        : EtrnAcceptanceAction.Received;
                 document.LastError = "";
+                document.SendingAt = null;
+                document.SendingAtUnix = 0;
                 await SaveWaitingAsync(document);
+                continue;
             }
+
+            if (update.Status == EtrnDocumentStatus.Closed)
+            {
+                EtrnDocumentState.Finish(document, update.Error);
+                await SaveWaitingAsync(document);
+                continue;
+            }
+
+            if (update.Status != EtrnDocumentStatus.Waiting || update.Error.Length == 0)
+                continue;
+
+            if (document.Status != EtrnDocumentStatus.Waiting)
+                continue;
+
+            if (document.LastError.Length > 0 && !EtrnDocumentState.IsStageNote(document.LastError))
+                continue;
+
+            if (document.LastError == update.Error)
+                continue;
+
+            document.LastError = update.Error;
+            await SaveWaitingAsync(document);
         }
     }
 

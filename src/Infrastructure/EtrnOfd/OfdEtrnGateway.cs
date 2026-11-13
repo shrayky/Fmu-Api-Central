@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
@@ -14,12 +15,17 @@ public sealed class OfdEtrnGateway : IEtrnOperator
     public const string OnTheWay = "CARGO_ON_WAY";
 
     private const string ShipperKnd = "1110339";
+    private const string ConsigneeKnd = "1110341";
     private const string ConsigneeType = "1110341v5.01";
+    private const int PageSize = 30;
+    private const int PageCap = 100;
+    private const int ConsigneeListReads = 5;
 
     private readonly IHttpClientFactory _http;
     private readonly OfdTokenClient _tokens;
     private readonly IEtrnSignaturePort _signer;
     private readonly Func<DateTimeOffset> _now;
+    private readonly Func<CancellationToken, Task> _pause;
 
     [ActivatorUtilitiesConstructor]
     public OfdEtrnGateway(
@@ -34,12 +40,14 @@ public sealed class OfdEtrnGateway : IEtrnOperator
         IHttpClientFactory http,
         OfdTokenClient tokens,
         IEtrnSignaturePort signer,
-        Func<DateTimeOffset> clock)
+        Func<DateTimeOffset> clock,
+        Func<CancellationToken, Task>? pause = null)
     {
         _http = http;
         _tokens = tokens;
         _signer = signer;
         _now = clock;
+        _pause = pause ?? (cancellationToken => Task.Delay(TimeSpan.FromMilliseconds(1500), cancellationToken));
     }
 
     public string Type => EtrnOperatorType.Ofd;
@@ -55,36 +63,36 @@ public sealed class OfdEtrnGateway : IEtrnOperator
             if (ready.IsFailure)
                 return Result.Success(ProbeStopped(ready.Error, exchanges));
 
-            if (string.IsNullOrWhiteSpace(context.Connection.ClientId))
-                return Result.Success(ProbeStopped("Не задан client_id Платформы ОФД", exchanges));
-
-            var token = await _tokens.AccessTokenAsync(context.Connection, fresh: true, cancellationToken);
+            var token = await _tokens.AccessTokenAsync(context, fresh: true, cancellationToken);
             if (token.IsFailure)
                 return Result.Success(ProbeStopped(token.Error, exchanges));
 
-            var subscriber = context.Connection.SubscriberId.Trim();
-            var listUrl = $"{context.Connection.ResolvedApiUrl()}/transedm/public/api/v1/etrns?subscriber-id={Uri.EscapeDataString(subscriber)}";
+            var subscriber = await SubscriberIdAsync(context, token.Value.Token, exchanges, cancellationToken);
+            if (subscriber.IsFailure)
+                return Result.Success(ProbeStopped(subscriber.Error, exchanges));
+
+            var listUrl = ListUrl(context.Connection.ResolvedApiUrl(), subscriber.Value, null);
             var list = await CallAsync(
                 HttpMethod.Get,
                 listUrl,
-                token.Value,
+                token.Value.Token,
                 null,
                 null,
                 null,
                 EtrnMethods.Probe,
-                subscriber,
-                "",
+                subscriber.Value,
+                TokenNote(token.Value.ExpiresIn),
                 exchanges,
                 cancellationToken);
             if (!list.Ok)
                 return Result.Success(ProbeStopped(list.Error, exchanges));
             if (!TryCards(list.Text, out _))
-                return Result.Success(ProbeStopped("ОФД вернула не список ЭТрН", exchanges));
+                return Result.Success(ProbeStopped("Платформа ЭТрН вернула не список ЭТрН", exchanges));
 
             return Result.Success(new EtrnProbeResult
             {
                 Ok = true,
-                Message = "Платформа ОФД приняла подключение",
+                Message = "Платформа ЭТрН приняла подключение",
                 Exchanges = exchanges
             });
         }
@@ -105,49 +113,89 @@ public sealed class OfdEtrnGateway : IEtrnOperator
             if (ready.IsFailure)
                 return Result.Success(Stopped(context.Position, exchanges, ready.Error));
 
-            var token = await _tokens.AccessTokenAsync(context.Connection, cancellationToken);
+            var token = await _tokens.AccessTokenAsync(context, cancellationToken);
             if (token.IsFailure)
                 return Result.Success(Stopped(context.Position, exchanges, token.Error));
 
             var api = context.Connection.ResolvedApiUrl();
-            var subscriber = context.Connection.SubscriberId.Trim();
-            var listUrl = $"{api}/transedm/public/api/v1/etrns?subscriber-id={Uri.EscapeDataString(subscriber)}";
-            var list = await CallAsync(
-                HttpMethod.Get,
-                listUrl,
-                token.Value,
-                null,
-                null,
-                null,
-                "Список ЭТрН",
-                subscriber,
-                listUrl,
-                exchanges,
-                cancellationToken);
-            if (!list.Ok)
-                return Result.Success(Stopped(context.Position, exchanges, list.Error));
-            if (!TryCards(list.Text, out var cards))
-                return Result.Success(Stopped(context.Position, exchanges, "ОФД вернула не список ЭТрН"));
+            var subscriber = await SubscriberIdAsync(context, token.Value.Token, exchanges, cancellationToken);
+            if (subscriber.IsFailure)
+                return Result.Success(Stopped(context.Position, exchanges, subscriber.Error));
 
             var documents = new List<EtrnFetchedDocument>();
             var closed = new List<string>();
-            foreach (var card in cards)
+            string? fromId = null;
+            HashSet<string>? previousIds = null;
+            for (var pageNumber = 1; ; pageNumber++)
             {
-                cancellationToken.ThrowIfCancellationRequested();
-                if (!card.OnTheWay)
+                var listUrl = ListUrl(api, subscriber.Value, fromId);
+                var list = await CallAsync(
+                    HttpMethod.Get,
+                    listUrl,
+                    token.Value.Token,
+                    null,
+                    null,
+                    null,
+                    "Список ЭТрН",
+                    subscriber.Value,
+                    listUrl,
+                    exchanges,
+                    cancellationToken);
+                if (!list.Ok)
+                    return Result.Success(Stopped(context.Position, exchanges, list.Error));
+                if (!TryCards(list.Text, out var cards))
+                    return Result.Success(Stopped(context.Position, exchanges, "Платформа ЭТрН вернула не список ЭТрН"));
+
+                var ids = new HashSet<string>(
+                    cards.Select(card => card.Id).Where(id => id.Length > 0),
+                    StringComparer.Ordinal);
+                var repeated = previousIds != null && ids.SetEquals(previousIds);
+                var cursor = MinId(cards);
+                var backedUp = fromId == null
+                    || (long.TryParse(cursor, NumberStyles.None, CultureInfo.InvariantCulture, out var minimum)
+                        && long.TryParse(fromId, NumberStyles.None, CultureInfo.InvariantCulture, out var current)
+                        && minimum < current);
+
+                // Повтор страницы и страница, которая не сдвинула id назад, уже не продолжение списка.
+                var process = !repeated && (cards.Count < PageSize || backedUp);
+                if (process)
                 {
-                    if (card.Id.Length > 0)
-                        closed.Add(card.Id);
-                    continue;
+                    foreach (var card in cards)
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+                        if (!card.OnTheWay)
+                        {
+                            if (card.Id.Length > 0)
+                                closed.Add(card.Id);
+                            continue;
+                        }
+
+                        var title = await ReadShipperAsync(api, token.Value.Token, card, exchanges, cancellationToken);
+                        if (title.IsFailure)
+                        {
+                            return Result.Success(new EtrnFetchResult
+                            {
+                                Completed = false,
+                                Error = title.Error,
+                                Position = context.Position,
+                                Documents = documents,
+                                ClosedDocumentIds = closed,
+                                Exchanges = exchanges
+                            });
+                        }
+
+                        documents.Add(title.Value);
+                    }
                 }
 
-                var title = await ReadShipperAsync(api, token.Value, card, exchanges, cancellationToken);
-                if (title.IsFailure)
+                // Страницы идут назад по минимальному id. Конец — короткая страница, пустой ответ,
+                // повтор набора id или id, который не стал меньше курсора.
+                if (pageNumber > PageCap)
                 {
                     return Result.Success(new EtrnFetchResult
                     {
                         Completed = false,
-                        Error = title.Error,
+                        Error = "Платформа ЭТрН не отдала конец списка",
                         Position = context.Position,
                         Documents = documents,
                         ClosedDocumentIds = closed,
@@ -155,7 +203,11 @@ public sealed class OfdEtrnGateway : IEtrnOperator
                     });
                 }
 
-                documents.Add(title.Value);
+                if (cards.Count < PageSize || !process || cursor.Length == 0)
+                    break;
+
+                previousIds = ids;
+                fromId = cursor;
             }
 
             return Result.Success(new EtrnFetchResult
@@ -185,18 +237,26 @@ public sealed class OfdEtrnGateway : IEtrnOperator
             if (ready.IsFailure)
                 return Result.Success(new EtrnExecuteResult { Error = ready.Error, Exchanges = exchanges });
 
-            var token = await _tokens.AccessTokenAsync(context.Connection, cancellationToken);
+            var token = await _tokens.AccessTokenAsync(context, cancellationToken);
             if (token.IsFailure)
                 return Result.Success(new EtrnExecuteResult { Error = token.Error, Exchanges = exchanges });
 
             var xml = ConsigneeTitleWriter.Build(command.Document, command.Decision, _now());
-            var bytes = ConsigneeTitleWriter.ToUtf8(xml);
+            var bytes = ConsigneeTitleWriter.ToWindows1251(xml);
             var id = (command.Document.OperatorDocumentId ?? "").Trim();
-            var documentUrl = $"{context.Connection.ResolvedApiUrl()}/transedm/public/api/v1/etrns/{Uri.EscapeDataString(id)}/documents/{ConsigneeType}";
+            var api = context.Connection.ResolvedApiUrl();
+
+            // Старый титул грузополучателя уже мог лежать на накладной. Запоминаем его id,
+            // чтобы после PUT подписать только новый документ.
+            var known = await ConsigneeIdsAsync(api, token.Value.Token, id, exchanges, cancellationToken);
+            if (known.IsFailure)
+                return Result.Success(new EtrnExecuteResult { Error = known.Error, Exchanges = exchanges });
+
+            var documentUrl = $"{api}/transedm/public/api/v1/etrns/{Uri.EscapeDataString(id)}/documents/{ConsigneeType}";
             var written = await CallAsync(
                 HttpMethod.Put,
                 documentUrl,
-                token.Value,
+                token.Value.Token,
                 bytes,
                 "application/xml",
                 null,
@@ -208,21 +268,28 @@ public sealed class OfdEtrnGateway : IEtrnOperator
             if (!written.Ok)
                 return Result.Success(new EtrnExecuteResult { Error = written.Error, Exchanges = exchanges });
 
+            // Платформа принимает PUT, но хранит свой документ. Подписывается сохранённый content, а не отправленные байты.
+            var stored = await ConsigneeContentAsync(
+                api,
+                token.Value.Token,
+                id,
+                known.Value,
+                exchanges,
+                cancellationToken);
+            if (!stored.Ok)
+                return Result.Success(new EtrnExecuteResult { Error = stored.Error, Exchanges = exchanges });
+
             var signed = await _signer.SignAsync(new EtrnSignatureRequest
             {
                 CertificateNumber = context.CertificateNumber,
                 CertificatePassword = context.CertificatePassword,
-                Content = bytes
+                Content = stored.Bytes
             }, cancellationToken);
             if (signed.IsFailure)
                 return Result.Success(new EtrnExecuteResult { Error = signed.Error, Exchanges = exchanges });
 
-            byte[] signature;
-            try
-            {
-                signature = Convert.FromBase64String(signed.Value);
-            }
-            catch (FormatException)
+            var signature = new byte[signed.Value.Length];
+            if (!Convert.TryFromBase64String(signed.Value, signature, out var writtenBytes))
             {
                 return Result.Success(new EtrnExecuteResult
                 {
@@ -231,10 +298,12 @@ public sealed class OfdEtrnGateway : IEtrnOperator
                 });
             }
 
+            signature = signature[..writtenBytes];
+
             var signedCall = await CallAsync(
                 HttpMethod.Put,
                 documentUrl + "/signature",
-                token.Value,
+                token.Value.Token,
                 signature,
                 "application/octet-stream",
                 null,
@@ -266,7 +335,7 @@ public sealed class OfdEtrnGateway : IEtrnOperator
             if (ready.IsFailure)
                 return Result.Success(new EtrnStageResult { Error = ready.Error, Exchanges = exchanges });
 
-            var token = await _tokens.AccessTokenAsync(context.Connection, cancellationToken);
+            var token = await _tokens.AccessTokenAsync(context, cancellationToken);
             if (token.IsFailure)
                 return Result.Success(new EtrnStageResult { Error = token.Error, Exchanges = exchanges });
 
@@ -275,7 +344,7 @@ public sealed class OfdEtrnGateway : IEtrnOperator
             var card = await CallAsync(
                 HttpMethod.Get,
                 url,
-                token.Value,
+                token.Value.Token,
                 null,
                 null,
                 null,
@@ -292,7 +361,7 @@ public sealed class OfdEtrnGateway : IEtrnOperator
             {
                 return Result.Success(new EtrnStageResult
                 {
-                    Error = "ОФД не вернула статус ЭТрН",
+                    Error = "Платформа ЭТрН не вернула статус ЭТрН",
                     Exchanges = exchanges
                 });
             }
@@ -360,6 +429,105 @@ public sealed class OfdEtrnGateway : IEtrnOperator
         return Result.Success(Overlay(title.Value, card));
     }
 
+    /// <summary>
+    /// Id титулов грузополучателя, уже лежащих на накладной до PUT.
+    /// </summary>
+    private async Task<Result<IReadOnlyCollection<string>>> ConsigneeIdsAsync(
+        string api,
+        string token,
+        string etrnId,
+        List<EtrnExchange> exchanges,
+        CancellationToken cancellationToken)
+    {
+        var documentsUrl = ConsigneeDocumentsUrl(api, etrnId);
+        var documents = await CallAsync(
+            HttpMethod.Get,
+            documentsUrl,
+            token,
+            null,
+            null,
+            null,
+            "Титулы ЭТрН",
+            etrnId,
+            documentsUrl,
+            exchanges,
+            cancellationToken);
+        if (!documents.Ok)
+            return Result.Failure<IReadOnlyCollection<string>>(documents.Error);
+
+        if (!TryConsigneeDocuments(documents.Text, out var documentIds))
+            return Result.Failure<IReadOnlyCollection<string>>("Платформа ЭТрН вернула не список титулов");
+
+        return Result.Success<IReadOnlyCollection<string>>(documentIds);
+    }
+
+    /// <summary>
+    /// После PUT титул появляется в списке документов не сразу. До пяти чтений списка, затем content
+    /// только нового титула: старый документ уже подписан и его content подписывать нельзя.
+    /// </summary>
+    private async Task<OfdResponse> ConsigneeContentAsync(
+        string api,
+        string token,
+        string etrnId,
+        IReadOnlyCollection<string> knownDocumentIds,
+        List<EtrnExchange> exchanges,
+        CancellationToken cancellationToken)
+    {
+        var documentsUrl = ConsigneeDocumentsUrl(api, etrnId);
+        for (var attempt = 1; attempt <= ConsigneeListReads; attempt++)
+        {
+            var documents = await CallAsync(
+                HttpMethod.Get,
+                documentsUrl,
+                token,
+                null,
+                null,
+                null,
+                "Титулы ЭТрН",
+                etrnId,
+                documentsUrl,
+                exchanges,
+                cancellationToken);
+            if (!documents.Ok)
+                return documents;
+
+            if (TryConsigneeDocuments(documents.Text, out var documentIds))
+            {
+                var documentId = documentIds.FirstOrDefault(id => !knownDocumentIds.Contains(id));
+                if (documentId != null)
+                {
+                    var contentUrl = $"{api}/transedm/public/api/v1/documents/{Uri.EscapeDataString(documentId)}/content";
+                    var content = await CallAsync(
+                        HttpMethod.Get,
+                        contentUrl,
+                        token,
+                        null,
+                        null,
+                        "application/xml",
+                        "Титул грузополучателя",
+                        etrnId,
+                        contentUrl,
+                        exchanges,
+                        cancellationToken);
+                    if (!content.Ok)
+                        return content;
+                    if (content.Bytes.Length == 0)
+                        return new OfdResponse(false, "Платформа ЭТрН вернула пустой титул грузополучателя", [], "");
+
+                    return content;
+                }
+            }
+
+            if (attempt < ConsigneeListReads)
+                await _pause(cancellationToken);
+        }
+
+        return new OfdResponse(false, "Новый титул грузополучателя не найден в Платформе ЭТрН", [], "");
+    }
+
+    private static string ConsigneeDocumentsUrl(string api, string etrnId) =>
+        $"{api}/transedm/public/api/v1/etrns/{Uri.EscapeDataString(etrnId)}/documents";
+
     private async Task<OfdResponse> CallAsync(
         HttpMethod method,
         string url,
@@ -397,15 +565,99 @@ public sealed class OfdEtrnGateway : IEtrnOperator
             Completed = ok,
             Error = ok ? "" : ((int)response.StatusCode).ToString()
         });
-        return new OfdResponse(ok, ok ? "" : $"ОФД ответила {(int)response.StatusCode}", bytes, text);
+        return new OfdResponse(ok, ok ? "" : $"Платформа ЭТрН ответила {(int)response.StatusCode}", bytes, text);
     }
+
+    private async Task<Result<string>> SubscriberIdAsync(
+        EtrnOperatorContext context,
+        string token,
+        List<EtrnExchange> exchanges,
+        CancellationToken cancellationToken)
+    {
+        var raw = context.Connection.SubscriberId.Trim();
+        if (long.TryParse(raw, out _))
+            return Result.Success(raw);
+
+        var inn = (context.Inn ?? "").Trim();
+        if (inn.Length == 0)
+            return Result.Failure<string>("Не задан ИНН организации");
+
+        var url = $"{context.Connection.ResolvedApiUrl()}/edm-subscriber/public/api/v3/subscribers?inn={Uri.EscapeDataString(inn)}";
+        var answer = await CallAsync(
+            HttpMethod.Get,
+            url,
+            token,
+            null,
+            null,
+            null,
+            "Абонент ЭДО",
+            raw,
+            url,
+            exchanges,
+            cancellationToken);
+        if (!answer.Ok)
+            return Result.Failure<string>(answer.Error);
+        if (!TrySubscriberId(answer.Text, raw, out var id))
+            return Result.Failure<string>("Абонент ЭДО не найден");
+        return Result.Success(id);
+    }
+
+    private static bool TrySubscriberId(string json, string gid, out string id)
+    {
+        id = "";
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            if (!SubscriberItems(document.RootElement, out var items))
+                return false;
+
+            foreach (var item in items)
+            {
+                if (!string.Equals(Text(item, "gid"), gid, StringComparison.OrdinalIgnoreCase))
+                    continue;
+                id = Id(item);
+                return long.TryParse(id, out _);
+            }
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+
+        return false;
+    }
+
+    private static bool SubscriberItems(JsonElement root, out JsonElement[] items)
+    {
+        if (root.ValueKind == JsonValueKind.Array)
+        {
+            items = root.EnumerateArray().ToArray();
+            return true;
+        }
+
+        if (root.ValueKind == JsonValueKind.Object
+            && root.TryGetProperty("content", out var content)
+            && content.ValueKind == JsonValueKind.Array)
+        {
+            items = content.EnumerateArray().ToArray();
+            return true;
+        }
+
+        items = [];
+        return false;
+    }
+
+    private static string TokenNote(int expiresIn) => $"Токен получен, действует {expiresIn} с";
 
     private static Result Ready(EtrnOperatorContext context)
     {
         if (string.IsNullOrWhiteSpace(context.Connection.SubscriberId))
             return Result.Failure("Не указан абонент ЭДО");
-        if (string.IsNullOrWhiteSpace(context.Connection.ApiKey))
-            return Result.Failure("Не задан API-ключ Платформы ОФД");
+        if (string.IsNullOrWhiteSpace(context.CertificateNumber))
+            return Result.Failure("Не задан сертификат организации");
+        var missing = context.Connection.MissingOfdAddress();
+        if (missing.Length > 0)
+            return Result.Failure(missing);
         return Result.Success();
     }
 
@@ -415,6 +667,36 @@ public sealed class OfdEtrnGateway : IEtrnOperator
         Message = error,
         Exchanges = exchanges
     };
+
+    /// <summary>
+    /// number — размер страницы, а не номер накладной. Следующая страница идёт назад от минимального id.
+    /// </summary>
+    private static string ListUrl(string api, string subscriber, string? fromId)
+    {
+        var url = $"{api}/transedm/public/api/v1/etrns?subscriber-id={Uri.EscapeDataString(subscriber)}&number=-{PageSize}";
+        if (!string.IsNullOrEmpty(fromId))
+            url += "&from-id=" + Uri.EscapeDataString(fromId);
+        return url;
+    }
+
+    private static string MinId(IReadOnlyList<OfdCard> cards)
+    {
+        long? minimum = null;
+        var text = "";
+        foreach (var card in cards)
+        {
+            if (!long.TryParse(card.Id, NumberStyles.None, CultureInfo.InvariantCulture, out var id))
+                continue;
+
+            if (minimum == null || id < minimum)
+            {
+                minimum = id;
+                text = id.ToString(CultureInfo.InvariantCulture);
+            }
+        }
+
+        return text;
+    }
 
     private static EtrnFetchResult Stopped(EtrnPollPosition position, List<EtrnExchange> exchanges, string error) => new()
     {
@@ -478,6 +760,38 @@ public sealed class OfdEtrnGateway : IEtrnOperator
             .Select(name => Text(address, name))
             .Where(part => part.Length > 0);
         return string.Join(", ", parts);
+    }
+
+    private static bool TryConsigneeDocuments(string json, out List<string> documentIds)
+    {
+        documentIds = [];
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            var root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Array
+                && !(root.ValueKind == JsonValueKind.Object
+                     && (root.TryGetProperty("content", out _) || root.TryGetProperty("knd", out _))))
+            {
+                return false;
+            }
+
+            foreach (var item in Documents(root))
+            {
+                if (!Text(item, "knd").Contains(ConsigneeKnd, StringComparison.Ordinal))
+                    continue;
+
+                var documentId = Id(item);
+                if (documentId.Length > 0)
+                    documentIds.Add(documentId);
+            }
+
+            return true;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
     }
 
     private static bool TryShipperDocument(string json, out string documentId)

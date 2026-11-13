@@ -23,7 +23,8 @@ export const MENU_ITEMS = {
     ETRN: {
         id: "etrn",
         value: "ЭТрН",
-        icon: "mdi mdi-truck"
+        icon: "mdi mdi-truck",
+        requiresEtrn: true
     },
     INSTANCE_GROUPS: {
         id: "instanceGroups",

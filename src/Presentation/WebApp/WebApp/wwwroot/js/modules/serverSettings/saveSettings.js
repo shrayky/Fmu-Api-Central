@@ -55,7 +55,11 @@ export function buildConfigurationUpdaters(values) {
             failedApplicationRetentionDays: parseInt(values.vetisFailedApplicationRetention)
         }),
         etrnSettings: prev => ({
-            incomingFetchIntervalMinutes: parseInt(values.etrnIncomingInterval)
+            ...prev,
+            enable: !!values.etrnEnable,
+            incomingFetchIntervalMinutes: parseInt(values.etrnIncomingInterval),
+            requestRetentionDays: parseInt(values.etrnRequestRetention),
+            failedRequestRetentionDays: parseInt(values.etrnFailedRequestRetention)
         })
     };
 }

@@ -6,12 +6,15 @@ using Domain.Configuration.Constants;
 namespace Domain.Etrn.Xml;
 
 /// <summary>
-/// Код СодОпПр в документах ОФД не задан, поэтому в атрибут пишется действие приёмки. Стенд поправит образец, если схема другая.
-/// Подписанта и идентификатор участника ЭДО нет: подпись уходит отдельным методом.
+/// Отказ пишется атрибутом ПричОтк, приём — атрибутом СодОпПр. Факты частичной приёмки идут узлами
+/// СодИнфГП/ПриемГрузГП/СвПринПоНаим, уникальные комментарии — отдельными ОтметГП/@ОбстОтмет.
+/// Подписанта и идентификатора участника ЭДО нет: подпись уходит отдельным методом.
 /// </summary>
 public static class ConsigneeTitleWriter
 {
     public const string Knd = "1110341";
+
+    private static readonly Encoding Windows1251 = CreateWindows1251();
 
     public static string Build(EtrnIncomingDocumentEntity document, EtrnDecision decision) =>
         Build(document, decision, DateTimeOffset.Now);
@@ -25,16 +28,20 @@ public static class ConsigneeTitleWriter
         var date = WaybillDate(document.Date);
         if (date.Length > 0)
             body.Add(new XAttribute("ДатаДок", date));
-        body.Add(new XAttribute("СодОпПр", decision.Action ?? ""));
+
+        if (decision.Action == EtrnAcceptanceAction.Rejected)
+        {
+            Add(body, "ПричОтк", decision.GeneralComment);
+        }
+        else
+        {
+            body.Add(new XAttribute("СодОпПр", decision.Action ?? ""));
+        }
 
         if (decision.Action == EtrnAcceptanceAction.Partially)
         {
-            foreach (var line in decision.Lines)
-                body.Add(Line(line));
-        }
-        else if (decision.Action == EtrnAcceptanceAction.Rejected && decision.GeneralComment.Length > 0)
-        {
-            body.Add(new XElement("Комментарий", decision.GeneralComment));
+            AddFacts(body, document, decision);
+            AddComments(body, decision);
         }
 
         var title = new XElement(
@@ -54,20 +61,51 @@ public static class ConsigneeTitleWriter
         return new XDocument(file).ToString(SaveOptions.DisableFormatting);
     }
 
-    public static byte[] ToUtf8(string xml) => Encoding.UTF8.GetBytes(xml);
+    /// <summary>
+    /// Платформа ЭТрН принимает титул в windows-1251 с объявлением кодировки.
+    /// </summary>
+    public static byte[] ToWindows1251(string xml) =>
+        Windows1251.GetBytes("<?xml version=\"1.0\" encoding=\"windows-1251\"?>" + xml);
 
-    private static XElement Line(EtrnDecidedLine line)
+    private static Encoding CreateWindows1251()
     {
-        var element = new XElement(
-            "ПриемГруза",
-            new XAttribute("НомСтр", line.Index.ToString(CultureInfo.InvariantCulture)));
-        if (line.FactPlaces is int places)
-            element.Add(new XAttribute("КолМест", places.ToString(CultureInfo.InvariantCulture)));
-        if (!string.IsNullOrWhiteSpace(line.FactWeight))
-            element.Add(new XAttribute("МассаБрутто", line.FactWeight.Trim()));
-        if (!string.IsNullOrWhiteSpace(line.Comment))
-            element.Add(new XAttribute("Комментарий", line.Comment.Trim()));
-        return element;
+        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+        return Encoding.GetEncoding("windows-1251");
+    }
+
+    private static void AddFacts(XElement body, EtrnIncomingDocumentEntity document, EtrnDecision decision)
+    {
+        var names = (document.Lines ?? [])
+            .GroupBy(line => line.Index)
+            .ToDictionary(group => group.Key, group => group.Last().Name);
+
+        var facts = new XElement("ПриемГрузГП");
+        foreach (var line in decision.Lines)
+        {
+            var fact = new XElement("СвПринПоНаим");
+            if (names.TryGetValue(line.Index, out var name) && !string.IsNullOrWhiteSpace(name))
+                fact.Add(new XAttribute("НаимГруз", name.Trim()));
+            if (line.FactPlaces is int places)
+                fact.Add(new XAttribute("КолМестГр", places.ToString(CultureInfo.InvariantCulture)));
+            if (!string.IsNullOrWhiteSpace(line.FactWeight))
+                fact.Add(new XAttribute("МасБрутЗнач", line.FactWeight.Trim()));
+            facts.Add(fact);
+        }
+
+        body.Add(facts);
+    }
+
+    private static void AddComments(XElement body, EtrnDecision decision)
+    {
+        var written = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var line in decision.Lines)
+        {
+            var comment = (line.Comment ?? "").Trim();
+            if (comment.Length == 0 || !written.Add(comment))
+                continue;
+
+            body.Add(new XElement("ОтметГП", new XAttribute("ОбстОтмет", comment)));
+        }
     }
 
     private static void Add(XElement element, string name, string? value)

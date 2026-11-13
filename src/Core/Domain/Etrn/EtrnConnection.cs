@@ -9,7 +9,7 @@ public static class EtrnOperatorType
     public const string Ofd = "ofd";
 
     private const string SabyLabel = "Saby";
-    private const string OfdLabel = "Платформа ОФД";
+    private const string OfdLabel = "Платформа ЭТрН";
 
     public static string Label(string? type)
     {
@@ -71,15 +71,37 @@ public sealed class EtrnConnection
     /// </summary>
     public const string DefaultIncomingFrom = "2026-09-01";
 
-    public const string DefaultKeycloakUrl = "https://oauth-test.platformaofd.ru";
-    public const string DefaultRealm = "playground";
-    public const string DefaultApiUrl = "https://api-test.platformaofd.ru";
+    /// <summary>
+    /// Пустой адрес не подменяется стендом: контур задаётся в карточке.
+    /// </summary>
+    public string ResolvedKeycloakUrl() => TrimAddress(KeycloakUrl);
 
-    public string ResolvedKeycloakUrl() => AddressOr(KeycloakUrl, DefaultKeycloakUrl);
+    public string ResolvedRealm() => (Realm ?? "").Trim();
 
-    public string ResolvedRealm() => string.IsNullOrWhiteSpace(Realm) ? DefaultRealm : Realm.Trim();
+    public string ResolvedApiUrl() => TrimAddress(ApiUrl);
 
-    public string ResolvedApiUrl() => AddressOr(ApiUrl, DefaultApiUrl);
+    /// <summary>
+    /// Токен по сертификату запрашивается на боевом хосте ЭДО, не на хосте списка ЭТрН.
+    /// </summary>
+    public string ResolvedEdoUrl()
+    {
+        if (!Uri.TryCreate(ResolvedApiUrl(), UriKind.Absolute, out var api))
+            return "";
+
+        if (api.Host.Equals("api.platformaofd.ru", StringComparison.OrdinalIgnoreCase)
+            || api.Host.Equals("epd.platformaofd.ru", StringComparison.OrdinalIgnoreCase))
+            return "https://edo.platformaofd.ru";
+        return "";
+    }
+
+    public string MissingOfdAddress()
+    {
+        if (ResolvedApiUrl().Length == 0)
+            return "Не задан адрес API Платформы ЭТрН";
+        if (ResolvedEdoUrl().Length == 0)
+            return "Для этого адреса API нет хоста токена по сертификату";
+        return "";
+    }
 
     public static string NormalizeIncomingFrom(string? value)
     {
@@ -95,11 +117,7 @@ public sealed class EtrnConnection
 
     public string ResolvedIncomingFrom() => NormalizeIncomingFrom(IncomingFrom);
 
-    private static string AddressOr(string? value, string fallback)
-    {
-        var text = (value ?? "").Trim().TrimEnd('/');
-        return text.Length == 0 ? fallback : text;
-    }
+    private static string TrimAddress(string? value) => (value ?? "").Trim().TrimEnd('/');
 }
 
 public sealed class EtrnOperator

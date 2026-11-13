@@ -229,31 +229,107 @@ public class EtrnIncomingLoadServiceTests
     }
 
     [Fact]
-    public async Task Load_закрывает_ожидающую_накладную_по_состоянию_СБИС()
+    public async Task Load_не_читает_ожидающие_накладные()
+    {
+        var world = new World();
+        world.Organizations.Store["o1"] = Organization(connection: Connection());
+        var waiting = Stored("d-1", EtrnDocumentStatus.Waiting);
+        world.Incoming.Store[waiting.Id] = waiting;
+
+        await world.Loader.LoadAsync(CancellationToken.None);
+
+        Assert.Equal(0, world.Operator.StageCalls);
+        Assert.Equal(EtrnDocumentStatus.Waiting, world.Incoming.Store[waiting.Id].Status);
+        Assert.Equal(1, Assert.Single(world.Incoming.Store[waiting.Id].Lines).Places);
+    }
+
+    [Fact]
+    public async Task Load_закрывает_ожидающую_накладную_по_состоянию_из_списка()
     {
         var world = new World();
         world.Organizations.Store["o1"] = Organization(connection: Connection());
         var waiting = Stored("d-1", EtrnDocumentStatus.Waiting);
         var accepted = Stored("d-2", EtrnDocumentStatus.Accepted);
+        var sending = Stored("d-3", EtrnDocumentStatus.Sending);
         world.Incoming.Store[waiting.Id] = waiting;
         world.Incoming.Store[accepted.Id] = accepted;
-        world.Operator.EnqueueStage(new EtrnStageResult
+        world.Incoming.Store[sending.Id] = sending;
+        world.Operator.EnqueueFetch(new EtrnFetchResult
         {
             Completed = true,
-            CloseDocument = true,
-            StateName = "Выполнение завершено успешно"
+            Position = new EtrnPollPosition("e1", "d-1"),
+            ListedStates =
+            [
+                new EtrnListedState
+                {
+                    OperatorDocumentId = "d-1",
+                    Status = EtrnDocumentStatus.Closed,
+                    Error = "Выполнение завершено успешно"
+                },
+                new EtrnListedState
+                {
+                    OperatorDocumentId = "d-3",
+                    Status = EtrnDocumentStatus.Closed,
+                    Error = "Выполнение завершено успешно"
+                },
+                new EtrnListedState
+                {
+                    OperatorDocumentId = "нет-в-базе",
+                    Status = EtrnDocumentStatus.Closed,
+                    Error = "Выполнение завершено успешно"
+                }
+            ]
         });
 
         await world.Loader.LoadAsync(CancellationToken.None);
 
         Assert.Equal(EtrnDocumentStatus.Closed, world.Incoming.Store[waiting.Id].Status);
         Assert.Equal("Выполнение завершено успешно", world.Incoming.Store[waiting.Id].LastError);
+        Assert.Equal(1, Assert.Single(world.Incoming.Store[waiting.Id].Lines).Places);
+        Assert.Equal(EtrnDocumentStatus.Closed, world.Incoming.Store[sending.Id].Status);
         Assert.Equal(EtrnDocumentStatus.Accepted, world.Incoming.Store[accepted.Id].Status);
-        Assert.Equal(1, world.Operator.StageCalls);
+        Assert.Equal(0, world.Operator.StageCalls);
+        Assert.False(world.Incoming.Store.ContainsKey(EtrnIncomingDocumentEntity.BuildId("o1", "c1", "нет-в-базе")));
     }
 
     [Fact]
-    public async Task Load_чужой_этап_ожидающей_накладной_остаётся_в_ожидании()
+    public async Task Load_сохраняет_частичное_действие_накладной()
+    {
+        var world = new World();
+        world.Organizations.Store["o1"] = Organization(connection: Connection());
+        var fromTitle = Stored("d-1", EtrnDocumentStatus.Waiting);
+        var fromList = Stored("d-2", EtrnDocumentStatus.Waiting);
+        world.Incoming.Store[fromTitle.Id] = fromTitle;
+        world.Incoming.Store[fromList.Id] = fromList;
+        var fetched = ScriptedEtrnOperator.Document("d-1");
+        fetched.Status = EtrnDocumentStatus.Accepted;
+        fetched.Action = EtrnAcceptanceAction.Partially;
+        world.Operator.EnqueueFetch(new EtrnFetchResult
+        {
+            Completed = true,
+            Position = new EtrnPollPosition("e1", "d-1"),
+            Documents = [fetched],
+            ListedStates =
+            [
+                new EtrnListedState
+                {
+                    OperatorDocumentId = "d-2",
+                    Status = EtrnDocumentStatus.Accepted,
+                    Action = EtrnAcceptanceAction.Partially
+                }
+            ]
+        });
+
+        await world.Loader.LoadAsync(CancellationToken.None);
+
+        Assert.Equal(EtrnDocumentStatus.Accepted, world.Incoming.Store[fromTitle.Id].Status);
+        Assert.Equal(EtrnAcceptanceAction.Partially, world.Incoming.Store[fromTitle.Id].Action);
+        Assert.Equal(EtrnDocumentStatus.Accepted, world.Incoming.Store[fromList.Id].Status);
+        Assert.Equal(EtrnAcceptanceAction.Partially, world.Incoming.Store[fromList.Id].Action);
+    }
+
+    [Fact]
+    public async Task Open_сохраняет_частичное_действие()
     {
         var world = new World();
         world.Organizations.Store["o1"] = Organization(connection: Connection());
@@ -262,8 +338,35 @@ public class EtrnIncomingLoadServiceTests
         world.Operator.EnqueueStage(new EtrnStageResult
         {
             Completed = true,
-            Stage = "Получение груза",
-            StillAcceptance = false
+            Status = EtrnDocumentStatus.Accepted,
+            Action = EtrnAcceptanceAction.Partially
+        });
+
+        await world.Loader.SyncOpenAsync(waiting.Id, CancellationToken.None);
+
+        Assert.Equal(EtrnDocumentStatus.Accepted, world.Incoming.Store[waiting.Id].Status);
+        Assert.Equal(EtrnAcceptanceAction.Partially, world.Incoming.Store[waiting.Id].Action);
+    }
+
+    [Fact]
+    public async Task Load_чужой_этап_из_списка_оставляет_ожидание()
+    {
+        var world = new World();
+        world.Organizations.Store["o1"] = Organization(connection: Connection());
+        var waiting = Stored("d-1", EtrnDocumentStatus.Waiting);
+        world.Incoming.Store[waiting.Id] = waiting;
+        world.Operator.EnqueueFetch(new EtrnFetchResult
+        {
+            Completed = true,
+            ListedStates =
+            [
+                new EtrnListedState
+                {
+                    OperatorDocumentId = "d-1",
+                    Status = EtrnDocumentStatus.Waiting,
+                    Error = EtrnDocumentState.StageUnavailable("Получение груза")
+                }
+            ]
         });
 
         await world.Loader.LoadAsync(CancellationToken.None);
@@ -271,6 +374,7 @@ public class EtrnIncomingLoadServiceTests
         var stored = world.Incoming.Store[waiting.Id];
         Assert.Equal(EtrnDocumentStatus.Waiting, stored.Status);
         Assert.Equal(EtrnDocumentState.StageUnavailable("Получение груза"), stored.LastError);
+        Assert.Equal(0, world.Operator.StageCalls);
     }
 
     [Fact]
@@ -288,6 +392,47 @@ public class EtrnIncomingLoadServiceTests
         var stored = world.Incoming.Store[document.Id];
         Assert.Equal(EtrnDocumentStatus.Foreign, stored.Status);
         Assert.Equal(EtrnDocumentState.ForeignNote("2PS-potok"), stored.LastError);
+    }
+
+    [Fact]
+    public async Task Open_ожидающую_СБИС_закрывает_если_приёмка_уже_получена()
+    {
+        var world = new World();
+        world.Organizations.Store["o1"] = Organization(connection: Connection());
+        var waiting = Stored("d-1", EtrnDocumentStatus.Waiting);
+        world.Incoming.Store[waiting.Id] = waiting;
+        world.Operator.EnqueueStage(new EtrnStageResult
+        {
+            Completed = true,
+            Status = EtrnDocumentStatus.Accepted
+        });
+
+        await world.Loader.SyncOpenAsync(waiting.Id, CancellationToken.None);
+
+        var stored = world.Incoming.Store[waiting.Id];
+        Assert.Equal(EtrnDocumentStatus.Accepted, stored.Status);
+        Assert.Equal("", stored.LastError);
+        Assert.Equal(1, Assert.Single(stored.Lines).Places);
+        Assert.Equal(1, world.Operator.StageCalls);
+    }
+
+    [Fact]
+    public async Task Open_не_читает_принятую_и_чужого_оператора()
+    {
+        var world = new World();
+        world.Organizations.Store["o1"] = Organization(connection: Connection());
+        var accepted = Stored("d-1", EtrnDocumentStatus.Accepted);
+        var ofd = Stored("d-2", EtrnDocumentStatus.Waiting);
+        ofd.Operator = EtrnOperator.For(new EtrnConnection { Id = "c1", Type = EtrnOperatorType.Ofd, Name = "Платформа ЭТрН" });
+        world.Incoming.Store[accepted.Id] = accepted;
+        world.Incoming.Store[ofd.Id] = ofd;
+
+        await world.Loader.SyncOpenAsync(accepted.Id, CancellationToken.None);
+        await world.Loader.SyncOpenAsync(ofd.Id, CancellationToken.None);
+
+        Assert.Equal(0, world.Operator.StageCalls);
+        Assert.Equal(EtrnDocumentStatus.Accepted, world.Incoming.Store[accepted.Id].Status);
+        Assert.Equal(EtrnDocumentStatus.Waiting, world.Incoming.Store[ofd.Id].Status);
     }
 
     [Fact]

@@ -13,17 +13,20 @@ public class EtrnController : ControllerBase
     private readonly EtrnIncomingQueryService _incoming;
     private readonly EtrnAcceptanceService _acceptance;
     private readonly EtrnRequestQueryService _requests;
+    private readonly IEtrnIncomingLoader _loader;
     private readonly IEtrnJobStatusStore _jobs;
 
     public EtrnController(
         EtrnIncomingQueryService incoming,
         EtrnAcceptanceService acceptance,
         EtrnRequestQueryService requests,
+        IEtrnIncomingLoader loader,
         IEtrnJobStatusStore jobs)
     {
         _incoming = incoming;
         _acceptance = acceptance;
         _requests = requests;
+        _loader = loader;
         _jobs = jobs;
     }
 
@@ -55,8 +58,9 @@ public class EtrnController : ControllerBase
     }
 
     [HttpGet("incoming/{id}")]
-    public async Task<IActionResult> IncomingDocument(string id)
+    public async Task<IActionResult> IncomingDocument(string id, CancellationToken cancellationToken)
     {
+        await _loader.SyncOpenAsync(id, cancellationToken);
         var result = await _incoming.GetAsync(id);
         return result.IsSuccess ? Ok(result.Value) : BadRequest(result.Error);
     }
