@@ -98,7 +98,7 @@ public sealed class EtrnIncomingLoadService : IEtrnIncomingLoader
             document.LastError = "";
             document.SendingAt = null;
             document.SendingAtUnix = 0;
-            await SaveWaitingAsync(document);
+            await SaveWaitingAsync(organization.Value, document);
             return;
         }
 
@@ -106,7 +106,7 @@ public sealed class EtrnIncomingLoadService : IEtrnIncomingLoader
         {
             var name = stage.Value.StateName.Length > 0 ? stage.Value.StateName : stage.Value.Error;
             EtrnDocumentState.Finish(document, name);
-            await SaveWaitingAsync(document);
+            await SaveWaitingAsync(organization.Value, document);
             return;
         }
 
@@ -120,7 +120,7 @@ public sealed class EtrnIncomingLoadService : IEtrnIncomingLoader
             return;
 
         document.LastError = note;
-        await SaveWaitingAsync(document);
+        await SaveWaitingAsync(organization.Value, document);
     }
 
     public async Task<int> LoadAsync(CancellationToken cancellationToken)
@@ -205,11 +205,20 @@ public sealed class EtrnIncomingLoadService : IEtrnIncomingLoader
                 if (EtrnDocumentStatus.IsFinal(previous.Status)
                     || previous.Status == EtrnDocumentStatus.Sending
                     || previous.Status == EtrnDocumentStatus.Foreign)
+                {
+                    // Тело накладной не трогаем, но пустую точку пишем: иначе она не попадёт в отбор.
+                    await KeepSalePointAsync(organization, previous);
                     continue;
+                }
 
                 // Снимок оператора не обновляется: переименование подключения уже записанный объект не меняет.
                 entity.Operator = previous.Operator;
+                // Ручной выбор и подобранная точка переживают повторный опрос.
+                entity.SalePointUid = previous.SalePointUid;
             }
+
+            if (entity.SalePointUid.Length == 0)
+                entity.SalePointUid = SalePointMatch.Find(organization.SalePoints, entity.DeliveryAddress);
 
             var written = await _incoming.Save(entity);
             if (written.IsFailure)
@@ -238,6 +247,7 @@ public sealed class EtrnIncomingLoadService : IEtrnIncomingLoader
                 continue;
 
             EtrnDocumentState.Close(existing.Value);
+            AssignSalePointIfEmpty(organization, existing.Value);
             var written = await _incoming.Save(existing.Value);
             if (written.IsFailure)
                 _logger.LogWarning("Закрытый документ ЭТрН {Id} не сохранён: {Error}", closedId, written.Error);
@@ -299,14 +309,14 @@ public sealed class EtrnIncomingLoadService : IEtrnIncomingLoader
                 document.LastError = "";
                 document.SendingAt = null;
                 document.SendingAtUnix = 0;
-                await SaveWaitingAsync(document);
+                await SaveWaitingAsync(organization, document);
                 continue;
             }
 
             if (update.Status == EtrnDocumentStatus.Closed)
             {
                 EtrnDocumentState.Finish(document, update.Error);
-                await SaveWaitingAsync(document);
+                await SaveWaitingAsync(organization, document);
                 continue;
             }
 
@@ -323,12 +333,36 @@ public sealed class EtrnIncomingLoadService : IEtrnIncomingLoader
                 continue;
 
             document.LastError = update.Error;
-            await SaveWaitingAsync(document);
+            await SaveWaitingAsync(organization, document);
         }
     }
 
-    private async Task SaveWaitingAsync(EtrnIncomingDocumentEntity document)
+    /// <summary>
+    /// Пустое поле заполняется и у накладной, которую опрос больше не переписывает.
+    /// Уже выбранный uid не меняется. Совпадение ищется по адресу, который уже лежит в документе.
+    /// </summary>
+    private async Task KeepSalePointAsync(OrganizationEntity organization, EtrnIncomingDocumentEntity document)
     {
+        if (document.SalePointUid.Length > 0)
+            return;
+
+        AssignSalePointIfEmpty(organization, document);
+        var written = await _incoming.Save(document);
+        if (written.IsFailure)
+            _logger.LogWarning("Точка ЭТрН {Id} не сохранена: {Error}", document.Id, written.Error);
+    }
+
+    private static void AssignSalePointIfEmpty(OrganizationEntity organization, EtrnIncomingDocumentEntity document)
+    {
+        if (document.SalePointUid.Length > 0)
+            return;
+
+        document.SalePointUid = SalePointMatch.Find(organization.SalePoints, document.DeliveryAddress);
+    }
+
+    private async Task SaveWaitingAsync(OrganizationEntity organization, EtrnIncomingDocumentEntity document)
+    {
+        AssignSalePointIfEmpty(organization, document);
         var written = await _incoming.Save(document);
         if (written.IsFailure)
             _logger.LogWarning("Состояние ЭТрН {Id} не сохранено: {Error}", document.Id, written.Error);

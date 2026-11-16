@@ -12,7 +12,7 @@ public static class VetisIncomingQuery
     private static readonly string[] ListFields =
     [
         "_id", "_rev", "data.id", "data.organizationId", "data.enterpriseGuid", "data.number", "data.date",
-        "data.type", "data.loose", "data.consignor", "data.status", "data.sortAt", "data.receivedAt",
+        "data.type", "data.loose", "data.consignor", "data.salePointUid", "data.status", "data.sortAt", "data.receivedAt",
         "data.quenchedBy", "data.quenchedAt", "data.vsdCount", "data.acceptedCount"
     ];
 
@@ -28,10 +28,51 @@ public static class VetisIncomingQuery
         }
     }
 
+    /// <summary>
+    /// Отбор точки идёт только вместе с организацией, поэтому salePointUid не входит в FilterFields:
+    /// общий перебор дал бы индексы без организации.
+    /// </summary>
+    public static IEnumerable<(string Name, string[] Fields)> SalePointIndexes()
+    {
+        yield return SalePointIndex(["organizationId", "salePointUid"]);
+        yield return SalePointIndex(["organizationId", "salePointUid", "enterpriseGuid"]);
+        yield return SalePointIndex(["organizationId", "salePointUid", "status"]);
+        yield return SalePointIndex(["organizationId", "salePointUid", "enterpriseGuid", "status"]);
+    }
+
+    /// <summary>
+    /// Есть ли хоть один документ с этой точкой: проверка перед удалением точки из справочника.
+    /// </summary>
+    public static Dictionary<string, object> AnyBySalePoint(string organizationId, string salePointUid) => new()
+    {
+        ["selector"] = new Dictionary<string, object>
+        {
+            ["data.organizationId"] = organizationId,
+            ["data.salePointUid"] = salePointUid,
+            // Без условия на поле сортировки CouchDB не берёт индекс по нему.
+            ["data.sortAt"] = new Dictionary<string, object> { ["$gte"] = 0L }
+        },
+        ["sort"] = new[]
+        {
+            new Dictionary<string, string> { ["data.organizationId"] = "desc" },
+            new Dictionary<string, string> { ["data.salePointUid"] = "desc" },
+            new Dictionary<string, string> { ["data.sortAt"] = "desc" }
+        },
+        ["fields"] = new[] { "data.id" },
+        ["use_index"] = new[] { DesignDoc, SalePointIndex(["organizationId", "salePointUid"]).Name },
+        ["limit"] = 1
+    };
+
+    private static (string Name, string[] Fields) SalePointIndex(string[] fields) =>
+        (IndexName(fields), fields.Select(field => "data." + field).Append("data.sortAt").ToArray());
+
     public static Dictionary<string, object> List(VetisIncomingFilter filter, int skip, int limit)
     {
         if (filter.VsdUuid.Length > 0)
-            return ByVsdUuid(filter.VsdUuid, skip, limit);
+            return ByVsdUuid(filter, skip, limit);
+
+        if (filter.SalePointUid.Length > 0 || filter.OnlyWithoutSalePoint)
+            return BySalePoint(filter, skip, limit);
 
         // Без условия на поле сортировки CouchDB не берёт индекс по нему.
         var selector = new Dictionary<string, object>
@@ -61,24 +102,80 @@ public static class VetisIncomingQuery
     }
 
     /// <summary>
+    /// Отбор точки: равенства идут в порядке индекса, организация первая, иначе CouchDB ответит no_usable_index.
+    /// </summary>
+    private static Dictionary<string, object> BySalePoint(VetisIncomingFilter filter, int skip, int limit)
+    {
+        var selector = new Dictionary<string, object>
+        {
+            ["data.organizationId"] = filter.OrganizationId,
+            ["data.salePointUid"] = filter.OnlyWithoutSalePoint ? "" : filter.SalePointUid,
+            ["data.sortAt"] = new Dictionary<string, object> { ["$gte"] = 0L }
+        };
+        var fields = new List<string> { "organizationId", "salePointUid" };
+        var sort = new List<Dictionary<string, string>>
+        {
+            new() { ["data.organizationId"] = "desc" },
+            new() { ["data.salePointUid"] = "desc" }
+        };
+
+        if (filter.EnterpriseGuid.Length > 0)
+        {
+            selector["data.enterpriseGuid"] = filter.EnterpriseGuid;
+            sort.Add(new Dictionary<string, string> { ["data.enterpriseGuid"] = "desc" });
+            fields.Add("enterpriseGuid");
+        }
+
+        if (filter.Status.Length > 0)
+        {
+            selector["data.status"] = filter.Status;
+            sort.Add(new Dictionary<string, string> { ["data.status"] = "desc" });
+            fields.Add("status");
+        }
+
+        sort.Add(new Dictionary<string, string> { ["data.sortAt"] = "desc" });
+
+        return new Dictionary<string, object>
+        {
+            ["selector"] = selector,
+            ["sort"] = sort.ToArray(),
+            ["fields"] = ListFields,
+            ["use_index"] = new[] { DesignDoc, IndexName(fields) },
+            ["skip"] = skip,
+            ["limit"] = limit
+        };
+    }
+
+    /// <summary>
     /// JSON-индекс не видит uuid внутри массива объектов, равенство data.vsds.uuid даёт пустую страницу.
     /// $elemMatch читает сами документы. Статус сюда не входит: погашенный документ иначе скрыт фильтром «Не принят».
+    /// Точка, если она выбрана, режется тем же обходом: отдельный индекс равенств uuid не видит.
     /// </summary>
-    private static Dictionary<string, object> ByVsdUuid(string uuid, int skip, int limit) =>
-        new()
+    private static Dictionary<string, object> ByVsdUuid(VetisIncomingFilter filter, int skip, int limit)
+    {
+        var selector = new Dictionary<string, object>
         {
-            ["selector"] = new Dictionary<string, object>
+            ["data.vsds"] = new Dictionary<string, object>
             {
-                ["data.vsds"] = new Dictionary<string, object>
-                {
-                    ["$elemMatch"] = new Dictionary<string, object> { ["uuid"] = uuid }
-                }
-            },
+                ["$elemMatch"] = new Dictionary<string, object> { ["uuid"] = filter.VsdUuid }
+            }
+        };
+
+        if (filter.SalePointUid.Length > 0 || filter.OnlyWithoutSalePoint)
+        {
+            selector["data.organizationId"] = filter.OrganizationId;
+            selector["data.salePointUid"] = filter.OnlyWithoutSalePoint ? "" : filter.SalePointUid;
+        }
+
+        return new Dictionary<string, object>
+        {
+            ["selector"] = selector,
             ["fields"] = ListFields,
             ["use_index"] = "_all_docs",
             ["skip"] = skip,
             ["limit"] = limit
         };
+    }
 
     /// <summary>
     /// Только id: XML площадки на этом проходе не нужен, а sortAt до конца чтения не меняется.

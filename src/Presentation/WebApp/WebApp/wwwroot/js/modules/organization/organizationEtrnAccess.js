@@ -1,5 +1,6 @@
-export function organizationTabCells(marking, vetis, etrn, vetisOn, etrnOn) {
+export function organizationTabCells(salePoints, marking, vetis, etrn, vetisOn, etrnOn) {
     return [
+        salePoints,
         marking,
         ...(vetisOn ? [vetis] : []),
         ...(etrnOn ? [etrn] : [])

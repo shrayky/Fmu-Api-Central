@@ -15,8 +15,8 @@ public static class EtrnIncomingQuery
     private static readonly string[] ListFields =
     [
         "_id", "_rev", "data.id", "data.organizationId", "data.operatorDocumentId", "data.operator",
-        "data.number", "data.date", "data.consignor", "data.uid", "data.deliveryAddress", "data.status",
-        "data.action", "data.lastError", "data.sortAt"
+        "data.number", "data.date", "data.consignor", "data.uid", "data.deliveryAddress", "data.salePointUid",
+        "data.status", "data.action", "data.lastError", "data.sortAt"
     ];
 
     private static readonly string[] FullFields = [.. ListFields, "data.lines", "data.generalComment", "data.signedAt", "data.sendingAt", "data.sendingAtUnix"];
@@ -33,8 +33,49 @@ public static class EtrnIncomingQuery
         }
     }
 
+    /// <summary>
+    /// Отбор точки идёт только вместе с организацией, поэтому salePointUid не входит в FilterFields:
+    /// общий перебор дал бы индексы без организации.
+    /// </summary>
+    public static IEnumerable<(string Name, string[] Fields)> SalePointIndexes()
+    {
+        yield return SalePointIndex(["organizationId", "salePointUid"]);
+        yield return SalePointIndex(["organizationId", "salePointUid", "operator.connectionId"]);
+        yield return SalePointIndex(["organizationId", "salePointUid", "status"]);
+        yield return SalePointIndex(["organizationId", "salePointUid", "operator.connectionId", "status"]);
+    }
+
+    /// <summary>
+    /// Есть ли хоть один документ с этой точкой: проверка перед удалением точки из справочника.
+    /// </summary>
+    public static Dictionary<string, object> AnyBySalePoint(string organizationId, string salePointUid) => new()
+    {
+        ["selector"] = new Dictionary<string, object>
+        {
+            ["data.organizationId"] = organizationId,
+            ["data.salePointUid"] = salePointUid,
+            // Без условия на поле сортировки CouchDB не берёт индекс по нему.
+            ["data.sortAt"] = new Dictionary<string, object> { ["$gte"] = 0L }
+        },
+        ["sort"] = new[]
+        {
+            new Dictionary<string, string> { ["data.organizationId"] = "desc" },
+            new Dictionary<string, string> { ["data.salePointUid"] = "desc" },
+            new Dictionary<string, string> { ["data.sortAt"] = "desc" }
+        },
+        ["fields"] = new[] { "data.id" },
+        ["use_index"] = new[] { DesignDoc, SalePointIndex(["organizationId", "salePointUid"]).Name },
+        ["limit"] = 1
+    };
+
+    private static (string Name, string[] Fields) SalePointIndex(string[] fields) =>
+        (IndexName(fields), fields.Select(Field).Append("data.sortAt").ToArray());
+
     public static Dictionary<string, object> List(EtrnIncomingFilter filter, int skip, int limit)
     {
+        if (filter.SalePointUid.Length > 0 || filter.OnlyWithoutSalePoint)
+            return BySalePoint(filter, skip, limit);
+
         var selector = new Dictionary<string, object>
         {
             ["data.sortAt"] = new Dictionary<string, object> { ["$gte"] = 0L }
@@ -62,6 +103,54 @@ public static class EtrnIncomingQuery
             query["use_index"] = new[] { DesignDoc, IndexName(filtered) };
 
         return query;
+    }
+
+    /// <summary>
+    /// Отбор точки: равенства идут в порядке индекса, организация первая, иначе CouchDB ответит no_usable_index.
+    /// </summary>
+    private static Dictionary<string, object> BySalePoint(EtrnIncomingFilter filter, int skip, int limit)
+    {
+        var selector = new Dictionary<string, object>
+        {
+            ["data.organizationId"] = filter.OrganizationId,
+            ["data.salePointUid"] = filter.OnlyWithoutSalePoint ? "" : filter.SalePointUid,
+            ["data.sortAt"] = new Dictionary<string, object> { ["$gte"] = 0L }
+        };
+        var fields = new List<string> { "organizationId", "salePointUid" };
+        var sort = new List<Dictionary<string, string>>
+        {
+            new() { ["data.organizationId"] = "desc" },
+            new() { ["data.salePointUid"] = "desc" }
+        };
+
+        if (filter.ConnectionId.Length > 0)
+        {
+            selector[ConnectionField] = filter.ConnectionId;
+            sort.Add(new Dictionary<string, string> { [ConnectionField] = "desc" });
+            fields.Add("operator.connectionId");
+        }
+
+        if (filter.Status.Length > 0)
+        {
+            selector["data.status"] = filter.Status;
+            sort.Add(new Dictionary<string, string> { ["data.status"] = "desc" });
+            fields.Add("status");
+        }
+
+        sort.Add(new Dictionary<string, string> { ["data.sortAt"] = "desc" });
+        // Подстрока не входит в индекс равенств: иначе CouchDB отвечает no_usable_index.
+        AddContains(selector, "number", filter.Number);
+        AddContains(selector, "consignor", filter.Consignor);
+
+        return new Dictionary<string, object>
+        {
+            ["selector"] = selector,
+            ["sort"] = sort.ToArray(),
+            ["fields"] = ListFields,
+            ["use_index"] = new[] { DesignDoc, IndexName(fields) },
+            ["skip"] = skip,
+            ["limit"] = limit
+        };
     }
 
     public static Dictionary<string, object> ById(string id) => new()

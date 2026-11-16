@@ -32,6 +32,8 @@ public class DatabaseIndexes
             new("id-idx", new(["data.id"]), EtrnIncomingQuery.DesignDoc),
             new("sort-at-idx", new(["data.sortAt"]), EtrnIncomingQuery.DesignDoc),
             new(EtrnIncomingQuery.StaleIndex().Name, new(EtrnIncomingQuery.StaleIndex().Fields), EtrnIncomingQuery.DesignDoc),
+            ..EtrnIncomingQuery.SalePointIndexes().Select(index =>
+                new CouchDbIndexDefinition(index.Name, new(index.Fields), EtrnIncomingQuery.DesignDoc)),
             ..EtrnIncomingQuery.FilterIndexes().Select(index =>
                 new CouchDbIndexDefinition(index.Name, new(index.Fields), EtrnIncomingQuery.DesignDoc))
         ];
@@ -50,6 +52,8 @@ public class DatabaseIndexes
             new("status-id-idx", new(["data.status", "data.id"]), VetisIncomingQuery.DesignDoc),
             new("id-idx", new(["data.id"]), VetisIncomingQuery.DesignDoc),
             new(VetisIncomingQuery.OldestIndex().Name, new(VetisIncomingQuery.OldestIndex().Fields), VetisIncomingQuery.DesignDoc),
+            ..VetisIncomingQuery.SalePointIndexes().Select(index =>
+                new CouchDbIndexDefinition(index.Name, new(index.Fields), VetisIncomingQuery.DesignDoc)),
             ..VetisIncomingQuery.FilterIndexes().Select(index =>
                 new CouchDbIndexDefinition(index.Name, new(index.Fields), VetisIncomingQuery.DesignDoc))
         ];

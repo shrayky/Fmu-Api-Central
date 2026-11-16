@@ -2,6 +2,7 @@ import vetisService from '../../services/vetisService.js';
 import { copyText } from '../../utils/copyText.js';
 import { canQuenchRows, editedActualVolume, formatIsoMoment, incomingStatusLine, incomingWindowClosable, quenchLockedByProgress, quenchStageText, quenchSummary, sameIncomingDocument, vsdErrorIcon, vsdStatusLabel, vsdXmlFileName } from '../../utils/vetisFormat.js';
 import { openVetisWindow } from './vetisWindow.js';
+import { salePointBar } from '../organization/salePointPicker.js';
 
 const WINDOW_ID = "vetisIncomingWindow";
 const TABLE_ID = "vetisIncomingVsds";
@@ -11,10 +12,20 @@ const QUENCH_BUTTON_ID = "vetisIncomingQuench";
 let openedId = null;
 let busyId = null;
 
-export async function openIncomingWindow(row, { onQuenched } = {}) {
+export async function openIncomingWindow(row, { onQuenched, onSalePointChanged } = {}) {
     let incoming;
+    let matched = false;
     try {
         incoming = await vetisService.incomingDocument(row.id);
+        // Пустое поле пробуем заполнить по адресу площадки: ошибка подбора карточку не блокирует.
+        if (!incoming.salePointUid) {
+            try {
+                incoming = await vetisService.matchSalePoint(incoming.id);
+                matched = !!incoming.salePointUid;
+            } catch {
+                // Ручной выбор остаётся доступен.
+            }
+        }
     } catch (error) {
         webix.message({ text: error.message, type: "error" });
         return;
@@ -35,6 +46,13 @@ export async function openIncomingWindow(row, { onQuenched } = {}) {
         body: {
             rows: [
                 { view: "template", id: INFO_ID, borderless: true, height: 110, template: infoHtml(incoming) },
+                salePointBar({
+                    prefix: "vetisIncoming",
+                    document: incoming,
+                    assign: (uid) => vetisService.assignSalePoint(incoming.id, uid),
+                    addAlias: (id) => vetisService.addSalePointAlias(id),
+                    onChanged: onSalePointChanged
+                }),
                 {
                     view: "toolbar",
                     elements: [
@@ -117,6 +135,9 @@ export async function openIncomingWindow(row, { onQuenched } = {}) {
             ],
         },
     });
+    if (matched && onSalePointChanged)
+        onSalePointChanged();
+
     watchForeignQuench(dialog, incoming.id);
 }
 

@@ -40,6 +40,8 @@ internal sealed class MemoryOrganizationRepository : IOrganizationRepository
 
     public int Updates { get; private set; }
 
+    public string? UpdateError { get; set; }
+
     public Task<Result> Create(OrganizationEntity entity)
     {
         Store[entity.Id] = Clone(entity);
@@ -49,6 +51,9 @@ internal sealed class MemoryOrganizationRepository : IOrganizationRepository
     public Task<Result> Update(OrganizationEntity entity)
     {
         Updates++;
+        if (UpdateError != null)
+            return Task.FromResult(Result.Failure(UpdateError));
+
         Store[entity.Id] = Clone(entity);
         return Task.FromResult(Result.Success());
     }
@@ -179,12 +184,24 @@ internal sealed class MemoryVetisIncoming : IVetisIncomingRepository
             .Where(item => filter.Status.Length == 0 || item.Status == filter.Status)
             .Where(item => filter.VsdUuid.Length == 0
                 || item.Vsds.Any(vsd => string.Equals(vsd.Uuid, filter.VsdUuid, StringComparison.OrdinalIgnoreCase)))
+            .Where(item => !filter.OnlyWithoutSalePoint || item.SalePointUid.Length == 0)
+            .Where(item => filter.OnlyWithoutSalePoint
+                || filter.SalePointUid.Length == 0
+                || string.Equals(item.SalePointUid, filter.SalePointUid, StringComparison.OrdinalIgnoreCase))
             .OrderByDescending(item => item.SortAt)
             .Skip(skip)
             .Take(limit)
             .Select(Clone)
             .ToList();
         return Task.FromResult(Result.Success(rows));
+    }
+
+    public Task<Result<bool>> AnyBySalePoint(string organizationId, string salePointUid)
+    {
+        var found = Store.Values.Any(item =>
+            string.Equals(item.OrganizationId, organizationId, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(item.SalePointUid, salePointUid, StringComparison.OrdinalIgnoreCase));
+        return Task.FromResult(Result.Success(found));
     }
 
     public string? NotAcceptedError { get; set; }

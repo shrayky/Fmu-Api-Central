@@ -1,4 +1,4 @@
-﻿using Application.Tests.Fakes;
+using Application.Tests.Fakes;
 using Application.Vetis;
 using Domain.Entitys.Organization;
 using Domain.Vetis;
@@ -368,6 +368,66 @@ public class VetisIncomingLoadServiceTests
         Assert.Equal("issuer-o1", call.IssuerId);
         Assert.Equal("operator-o1", call.InitiatorLogin);
         Assert.Equal(Domain.Vetis.VetisEndpoints.ProductionApplicationManagement, call.Endpoint);
+    }
+
+    [Fact]
+    public async Task Load_подбирает_точку_по_адресу_площадки()
+    {
+        var world = new World();
+        world.SkipEnterprise("e2");
+        var organization = world.Organizations.Store["o1"];
+        organization.VetisSettings.Enterprises[0].Address = "Москва, Ленина, 1";
+        organization.SalePoints =
+        [
+            new SalePoint { Uid = "p1", Name = "Склад", Address = "Москва, Ленина, 1" }
+        ];
+        world.Gateway.Enqueue(ScriptedVetisGateway.Page(1, Vsd("v1", "CONFIRMED", "ТТН-1")));
+
+        await world.Sut.LoadAsync(CancellationToken.None);
+
+        var document = Assert.Single(world.Incoming.Store.Values);
+        Assert.Equal("p1", document.SalePointUid);
+    }
+
+    /// <summary>
+    /// Выбранная вручную точка не сбрасывается, даже если адрес площадки указывает на другую.
+    /// </summary>
+    [Fact]
+    public async Task Load_не_меняет_выбранную_точку()
+    {
+        var world = new World();
+        world.SkipEnterprise("e2");
+        var organization = world.Organizations.Store["o1"];
+        organization.VetisSettings.Enterprises[0].Address = "Москва, Ленина, 1";
+        organization.SalePoints =
+        [
+            new SalePoint { Uid = "p1", Name = "Склад", Address = "Москва, Ленина, 1" },
+            new SalePoint { Uid = "p2", Name = "Магазин", Address = "Москва, Мира, 2" }
+        ];
+        var stored = VetisIncomingDocumentEntity.Group("o1", "e1", [Vsd("v1", "CONFIRMED", "ТТН-1")]).Single();
+        stored.SalePointUid = "p2";
+        world.Incoming.Store[stored.Id] = stored;
+        world.Gateway.Enqueue(ScriptedVetisGateway.Page(1, Vsd("v1", "CONFIRMED", "ТТН-1")));
+
+        await world.Sut.LoadAsync(CancellationToken.None);
+
+        Assert.Equal("p2", Assert.Single(world.Incoming.Store.Values).SalePointUid);
+    }
+
+    [Fact]
+    public async Task Load_без_адреса_площадки_оставляет_точку_пустой()
+    {
+        var world = new World();
+        world.SkipEnterprise("e2");
+        world.Organizations.Store["o1"].SalePoints =
+        [
+            new SalePoint { Uid = "p1", Name = "Склад", Address = "Москва, Ленина, 1" }
+        ];
+        world.Gateway.Enqueue(ScriptedVetisGateway.Page(1, Vsd("v1", "CONFIRMED", "ТТН-1")));
+
+        await world.Sut.LoadAsync(CancellationToken.None);
+
+        Assert.Equal("", Assert.Single(world.Incoming.Store.Values).SalePointUid);
     }
 
     private static DateTimeOffset ParseCursor(string value)

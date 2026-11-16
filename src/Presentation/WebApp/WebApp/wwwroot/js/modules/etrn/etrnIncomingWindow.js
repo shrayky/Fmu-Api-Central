@@ -2,6 +2,7 @@ import etrnService from '../../services/etrnService.js';
 import { etrnOperatorLabel, etrnStatusLabel, formatIsoMoment } from '../../utils/etrnFormat.js';
 import { incomingWindowClosable } from '../../utils/vetisFormat.js';
 import { infoTemplate, openVetisWindow } from '../vetis/vetisWindow.js';
+import { salePointBar } from '../organization/salePointPicker.js';
 
 const WINDOW_ID = "etrnIncomingWindow";
 const TABLE_ID = "etrnIncomingLines";
@@ -14,10 +15,20 @@ const REJECT_ID = "etrnIncomingReject";
 let openedId = null;
 let busyId = null;
 
-export async function openEtrnIncomingWindow(row, { onAccepted } = {}) {
+export async function openEtrnIncomingWindow(row, { onAccepted, onSalePointChanged } = {}) {
     let document;
+    let matched = false;
     try {
         document = await etrnService.incomingDocument(row.id);
+        // Пустое поле пробуем заполнить по адресу выгрузки: ошибка подбора карточку не блокирует.
+        if (!document.salePointUid) {
+            try {
+                document = await etrnService.matchSalePoint(document.id);
+                matched = !!document.salePointUid;
+            } catch {
+                // Ручной выбор остаётся доступен.
+            }
+        }
     } catch (error) {
         webix.message({ text: error.message, type: "error" });
         return;
@@ -34,6 +45,13 @@ export async function openEtrnIncomingWindow(row, { onAccepted } = {}) {
         body: {
             rows: [
                 { view: "template", id: INFO_ID, borderless: true, height: 200, template: infoHtml(document) },
+                salePointBar({
+                    prefix: "etrnIncoming",
+                    document,
+                    assign: (uid) => etrnService.assignSalePoint(document.id, uid),
+                    addAlias: (id) => etrnService.addSalePointAlias(id),
+                    onChanged: onSalePointChanged
+                }),
                 {
                     view: "toolbar",
                     elements: [
@@ -106,6 +124,9 @@ export async function openEtrnIncomingWindow(row, { onAccepted } = {}) {
             ],
         },
     });
+
+    if (matched && onSalePointChanged)
+        onSalePointChanged();
 
     if (!document.canDecide)
         setError(document.lastError);

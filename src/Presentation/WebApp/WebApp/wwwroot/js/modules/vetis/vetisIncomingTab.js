@@ -1,5 +1,6 @@
 import vetisService from '../../services/vetisService.js';
 import { formatIsoMoment, incomingDocumentLabel, incomingStatusCss, incomingStatusLabel, vsdCountText } from '../../utils/vetisFormat.js';
+import { salePointLabel } from '../../utils/salePointFormat.js';
 import { VetisFilterBar } from './vetisFilterBar.js';
 import { VetisPagedTable } from './vetisPagedTable.js';
 import { openIncomingWindow } from './vetisIncomingWindow.js';
@@ -11,12 +12,16 @@ export class VetisIncomingTab {
             organizations,
             withStatus: true,
             withVsd: true,
+            withSalePoint: true,
             onChange: () => this.refresh(),
         });
         this.table = new VetisPagedTable({
             id: "vetisIncomingTable",
             fetchPage: (filters, skip, limit) => vetisService.incoming(filters, skip, limit),
-            onOpen: (row) => openIncomingWindow(row, { onQuenched: () => this.refresh() }),
+            onOpen: (row) => openIncomingWindow(row, {
+                onQuenched: () => this.refresh(),
+                onSalePointChanged: () => this.refresh()
+            }),
         });
     }
 
@@ -30,6 +35,12 @@ export class VetisIncomingTab {
                     { id: "consignor", header: "Поставщик", fillspace: true },
                     { id: "organizationName", header: "Организация", width: 240 },
                     { id: "enterpriseName", header: "Предприятие", width: 240 },
+                    {
+                        id: "salePointName",
+                        header: "Торговая точка",
+                        width: 220,
+                        template: (row) => webix.template.escape(salePointLabel(row))
+                    },
                     { id: "vsd", header: "ВСД", width: 90, template: (row) => vsdCountText(row) },
                     { id: "status", header: "Статус", width: 170, template: (row) => this._statusBadge(row.status) },
                     { id: "quenchedBy", header: "Автор", width: 160 },

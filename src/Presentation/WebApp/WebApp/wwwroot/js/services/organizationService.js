@@ -121,6 +121,18 @@ class OrganizationService {
         return this._vetis(id, "enterprises", payload);
     }
 
+    async salePointUsage(id, uid) {
+        const data = await this.authService.makeAuthenticatedRequest(
+            `${this.apiEndpoint}/${encodeURIComponent(id)}/sale-points/${encodeURIComponent(uid)}/usage`
+        );
+
+        if (!data.result) {
+            throw new Error(data.error);
+        }
+
+        return data.value;
+    }
+
     async parseVetisLetter(text) {
         const data = await this.authService.makeAuthenticatedRequest(`${this.apiEndpoint}/vetis/letter`, {
             method: "POST",

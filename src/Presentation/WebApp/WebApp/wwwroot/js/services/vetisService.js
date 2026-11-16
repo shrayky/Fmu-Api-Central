@@ -34,6 +34,18 @@ class VetisService {
         return this._get(`incoming/${encodeURIComponent(id)}/quench`);
     }
 
+    assignSalePoint(id, uid) {
+        return this._send(`incoming/${encodeURIComponent(id)}/sale-point`, { salePointUid: uid });
+    }
+
+    matchSalePoint(id) {
+        return this._send(`incoming/${encodeURIComponent(id)}/sale-point/match`, {});
+    }
+
+    addSalePointAlias(id) {
+        return this._send(`incoming/${encodeURIComponent(id)}/sale-point/alias`, {});
+    }
+
     applications(filters, skip, limit) {
         return this._get("applications", { ...filters, skip, limit });
     }

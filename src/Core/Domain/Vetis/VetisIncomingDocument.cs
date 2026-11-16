@@ -86,6 +86,12 @@ public sealed class VetisIncomingDocumentEntity : IHaveStringId
     [JsonPropertyName("consignor")]
     public string Consignor { get; set; } = "";
 
+    /// <summary>
+    /// Ссылка на торговую точку организации. Имя и «закрыта» на документ не копируются: их подставляет чтение.
+    /// </summary>
+    [JsonPropertyName("salePointUid")]
+    public string SalePointUid { get; set; } = "";
+
     [JsonPropertyName("status")]
     public string Status { get; set; } = "";
 

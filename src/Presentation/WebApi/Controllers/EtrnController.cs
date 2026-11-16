@@ -1,5 +1,7 @@
 using Application.Etrn;
+using Application.SalePoints;
 using Domain.Etrn;
+using Domain.Entitys.Organization.Dto;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -15,19 +17,22 @@ public class EtrnController : ControllerBase
     private readonly EtrnRequestQueryService _requests;
     private readonly IEtrnIncomingLoader _loader;
     private readonly IEtrnJobStatusStore _jobs;
+    private readonly SalePointService _salePoints;
 
     public EtrnController(
         EtrnIncomingQueryService incoming,
         EtrnAcceptanceService acceptance,
         EtrnRequestQueryService requests,
         IEtrnIncomingLoader loader,
-        IEtrnJobStatusStore jobs)
+        IEtrnJobStatusStore jobs,
+        SalePointService salePoints)
     {
         _incoming = incoming;
         _acceptance = acceptance;
         _requests = requests;
         _loader = loader;
         _jobs = jobs;
+        _salePoints = salePoints;
     }
 
     [HttpGet("jobs")]
@@ -43,6 +48,7 @@ public class EtrnController : ControllerBase
         [FromQuery] string? status,
         [FromQuery] string? number,
         [FromQuery] string? consignor,
+        [FromQuery] string? salePoint,
         [FromQuery] int skip = 0,
         [FromQuery] int limit = 0)
     {
@@ -53,7 +59,8 @@ public class EtrnController : ControllerBase
             number ?? "",
             consignor ?? "",
             skip,
-            limit);
+            limit,
+            salePoint ?? "");
         return result.IsSuccess ? Ok(result.Value) : BadRequest(result.Error);
     }
 
@@ -72,6 +79,36 @@ public class EtrnController : ControllerBase
         CancellationToken cancellationToken)
     {
         var result = await _acceptance.AcceptAsync(id, command, cancellationToken);
+        return result.IsSuccess ? Ok(result.Value) : BadRequest(result.Error);
+    }
+
+    /// <summary>
+    /// Сопоставление торговой точки вручную. Пустая строка очищает поле.
+    /// </summary>
+    [HttpPost("incoming/{id}/sale-point")]
+    public async Task<IActionResult> AssignSalePoint(string id, [FromBody] SalePointCommand? command)
+    {
+        var result = await _salePoints.AssignEtrnAsync(id, command?.SalePointUid ?? "");
+        return result.IsSuccess ? Ok(result.Value) : BadRequest(result.Error);
+    }
+
+    /// <summary>
+    /// Подбор точки по адресу выгрузки: поле заполняется, только если оно пустое.
+    /// </summary>
+    [HttpPost("incoming/{id}/sale-point/match")]
+    public async Task<IActionResult> MatchSalePoint(string id)
+    {
+        var result = await _salePoints.MatchEtrnAsync(id);
+        return result.IsSuccess ? Ok(result.Value) : BadRequest(result.Error);
+    }
+
+    /// <summary>
+    /// Подтверждённое добавление адреса документа в синонимы выбранной точки.
+    /// </summary>
+    [HttpPost("incoming/{id}/sale-point/alias")]
+    public async Task<IActionResult> RememberSalePointAlias(string id)
+    {
+        var result = await _salePoints.RememberEtrnAliasAsync(id);
         return result.IsSuccess ? Ok(result.Value) : BadRequest(result.Error);
     }
 

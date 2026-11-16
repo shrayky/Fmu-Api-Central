@@ -1,6 +1,7 @@
 using System.Text.Json.Serialization;
 using CSharpFunctionalExtensions;
 using Domain.Entitys.Interfaces;
+using Domain.Entitys.Organization;
 
 namespace Domain.Etrn;
 
@@ -15,6 +16,13 @@ public sealed class EtrnIncomingFilter
     public string Number { get; set; } = "";
 
     public string Consignor { get; set; } = "";
+
+    /// <summary>
+    /// Точка в отборе. Пусто — отбора нет; пустая строка документа — только при OnlyWithoutSalePoint.
+    /// </summary>
+    public string SalePointUid { get; set; } = "";
+
+    public bool OnlyWithoutSalePoint { get; set; }
 }
 
 public sealed class EtrnSyncState : IHaveStringId
@@ -82,6 +90,12 @@ public class EtrnIncomingRow
 
     public string DeliveryAddress { get; set; } = "";
 
+    public string SalePointUid { get; set; } = "";
+
+    public string SalePointName { get; set; } = "";
+
+    public bool SalePointClosed { get; set; }
+
     public string OrganizationId { get; set; } = "";
 
     public string OrganizationName { get; set; } = "";
@@ -112,6 +126,11 @@ public sealed class EtrnIncomingView : EtrnIncomingRow
     public List<EtrnLineView> Lines { get; set; } = [];
 
     public bool CanDecide { get; set; }
+
+    /// <summary>
+    /// Открытые точки организации документа: из них выбирается точка в карточке.
+    /// </summary>
+    public List<SalePointOption> SalePoints { get; set; } = [];
 }
 
 public sealed class EtrnRowsPage<T>
@@ -143,6 +162,8 @@ public sealed class EtrnFilterOrganization
     public string Name { get; set; } = "";
 
     public List<EtrnFilterConnection> Connections { get; set; } = [];
+
+    public List<SalePointOption> SalePoints { get; set; } = [];
 }
 
 public interface IEtrnIncomingRepository
@@ -152,6 +173,11 @@ public interface IEtrnIncomingRepository
     Task<Result> Save(EtrnIncomingDocumentEntity document);
 
     Task<Result<List<EtrnIncomingDocumentEntity>>> List(EtrnIncomingFilter filter, int skip, int limit);
+
+    /// <summary>
+    /// Есть ли документ с этой точкой: проверка перед удалением точки из справочника.
+    /// </summary>
+    Task<Result<bool>> AnyBySalePoint(string organizationId, string salePointUid);
 
     /// <summary>
     /// Документы, зависшие в Sending настолько, что опрос должен сверить этап.

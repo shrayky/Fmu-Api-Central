@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Domain.Entitys.Organization;
 
 namespace Domain.Vetis;
 
@@ -31,6 +32,15 @@ public class VetisIncomingRow
     [JsonPropertyName("enterpriseName")]
     public string EnterpriseName { get; set; } = "";
 
+    [JsonPropertyName("salePointUid")]
+    public string SalePointUid { get; set; } = "";
+
+    [JsonPropertyName("salePointName")]
+    public string SalePointName { get; set; } = "";
+
+    [JsonPropertyName("salePointClosed")]
+    public bool SalePointClosed { get; set; }
+
     [JsonPropertyName("status")]
     public string Status { get; set; } = "";
 
@@ -57,6 +67,12 @@ public sealed class VetisIncomingView : VetisIncomingRow
 {
     [JsonPropertyName("vsds")]
     public List<VetisVsdView> Vsds { get; set; } = [];
+
+    /// <summary>
+    /// Открытые точки организации документа: из них выбирается точка в карточке.
+    /// </summary>
+    [JsonPropertyName("salePoints")]
+    public List<SalePointOption> SalePoints { get; set; } = [];
 }
 
 public sealed class VetisVsdView
@@ -186,4 +202,7 @@ public sealed class VetisFilterOrganization
 
     [JsonPropertyName("enterprises")]
     public List<VetisFilterEnterprise> Enterprises { get; set; } = [];
+
+    [JsonPropertyName("salePoints")]
+    public List<SalePointOption> SalePoints { get; set; } = [];
 }

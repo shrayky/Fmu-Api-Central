@@ -26,6 +26,18 @@ class EtrnService {
         return this._send(`incoming/${encodeURIComponent(id)}/accept`, payload);
     }
 
+    assignSalePoint(id, uid) {
+        return this._send(`incoming/${encodeURIComponent(id)}/sale-point`, { salePointUid: uid });
+    }
+
+    matchSalePoint(id) {
+        return this._send(`incoming/${encodeURIComponent(id)}/sale-point/match`, {});
+    }
+
+    addSalePointAlias(id) {
+        return this._send(`incoming/${encodeURIComponent(id)}/sale-point/alias`, {});
+    }
+
     requests(filters, skip, limit) {
         return this._get("requests", { ...filters, skip, limit });
     }

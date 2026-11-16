@@ -28,25 +28,27 @@ test("выбранный сертификат оставляет ЭТрН дос
 test("выключенная ЭТрН убирает вкладку организации", async () => {
     const { organizationTabCells } = await import("./organizationEtrnAccess.js");
     const cells = organizationTabCells(
+        { header: "Торговые точки" },
         { header: "Маркировка" },
         { header: "Ветис" },
         { header: "ЭТрН" },
         true,
         false
     );
-    assert.deepEqual(cells.map((cell) => cell.header), ["Маркировка", "Ветис"]);
+    assert.deepEqual(cells.map((cell) => cell.header), ["Торговые точки", "Маркировка", "Ветис"]);
 });
 
 test("включённая ЭТрН оставляет вкладку организации", async () => {
     const { organizationTabCells } = await import("./organizationEtrnAccess.js");
     const cells = organizationTabCells(
+        { header: "Торговые точки" },
         { header: "Маркировка" },
         { header: "Ветис" },
         { header: "ЭТрН" },
         false,
         true
     );
-    assert.deepEqual(cells.map((cell) => cell.header), ["Маркировка", "ЭТрН"]);
+    assert.deepEqual(cells.map((cell) => cell.header), ["Торговые точки", "Маркировка", "ЭТрН"]);
 });
 
 test("на маркировке блок True API и группы, без сертификата", () => {

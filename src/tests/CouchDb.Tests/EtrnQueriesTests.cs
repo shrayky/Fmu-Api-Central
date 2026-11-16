@@ -112,11 +112,102 @@ public class EtrnQueriesTests
     }
 
     [Fact]
+    public void Список_входящих_отбирает_по_торговой_точке()
+    {
+        var query = EtrnIncomingQuery.List(
+            new EtrnIncomingFilter
+            {
+                OrganizationId = "o1",
+                SalePointUid = "p1",
+                Status = EtrnDocumentStatus.Waiting
+            },
+            0,
+            50);
+
+        var selector = Assert.IsType<Dictionary<string, object>>(query["selector"]);
+        Assert.Equal("o1", selector["data.organizationId"]);
+        Assert.Equal("p1", selector["data.salePointUid"]);
+        Assert.Equal(EtrnDocumentStatus.Waiting, selector["data.status"]);
+        var sort = Assert.IsType<Dictionary<string, string>[]>(query["sort"]);
+        Assert.Equal(
+            ["data.organizationId", "data.salePointUid", "data.status", "data.sortAt"],
+            sort.Select(item => item.Keys.Single()));
+        Assert.Equal("organizationId-salePointUid-status-sort-at-idx", Assert.IsType<string[]>(query["use_index"])[1]);
+        Assert.Contains("data.salePointUid", Assert.IsType<string[]>(query["fields"]));
+    }
+
+    [Fact]
+    public void Список_входящих_отбирает_без_точки()
+    {
+        var query = EtrnIncomingQuery.List(
+            new EtrnIncomingFilter { OrganizationId = "o1", OnlyWithoutSalePoint = true },
+            0,
+            50);
+
+        var selector = Assert.IsType<Dictionary<string, object>>(query["selector"]);
+        Assert.Equal("", selector["data.salePointUid"]);
+        Assert.False(selector.ContainsKey("data.status"));
+        Assert.Equal("organizationId-salePointUid-sort-at-idx", Assert.IsType<string[]>(query["use_index"])[1]);
+    }
+
+    [Fact]
+    public void Список_входящих_без_точки_идёт_прежним_индексом()
+    {
+        var query = EtrnIncomingQuery.List(new EtrnIncomingFilter { OrganizationId = "o1" }, 0, 50);
+
+        Assert.Equal("organizationId-sort-at-idx", Assert.IsType<string[]>(query["use_index"])[1]);
+        Assert.False(Assert.IsType<Dictionary<string, object>>(query["selector"]).ContainsKey("data.salePointUid"));
+    }
+
+    [Fact]
     public void Обе_базы_ЭТрН_исключены_из_дампа()
     {
         Assert.Contains(DatabaseNames.EtrnIncoming, DatabaseNames.All());
         Assert.Contains(DatabaseNames.EtrnRequests, DatabaseNames.All());
         Assert.Contains(DatabaseNames.EtrnIncoming, DatabaseNames.ExcludedFromExport());
         Assert.Contains(DatabaseNames.EtrnRequests, DatabaseNames.ExcludedFromExport());
+    }
+
+    /// <summary>
+    /// Точка всегда отбирается вместе с организацией, поэтому индексов без организации быть не должно.
+    /// </summary>
+    [Fact]
+    public void Схема_содержит_индексы_торговой_точки_ЭТрН()
+    {
+        var schema = DatabaseIndexes.DatabaseIndexSchema();
+        var names = schema[DatabaseNames.EtrnIncoming].Select(index => index.Name).ToList();
+
+        Assert.Contains("organizationId-salePointUid-sort-at-idx", names);
+        Assert.Contains("organizationId-salePointUid-operator-connectionId-sort-at-idx", names);
+        Assert.Contains("organizationId-salePointUid-status-sort-at-idx", names);
+        Assert.Contains("organizationId-salePointUid-operator-connectionId-status-sort-at-idx", names);
+        Assert.DoesNotContain(names, name => name.StartsWith("salePointUid-"));
+    }
+
+    [Fact]
+    public void Индекс_торговой_точки_ставит_организацию_первой()
+    {
+        var indexes = EtrnIncomingQuery.SalePointIndexes().ToList();
+
+        var baseIndex = Assert.Single(indexes, index => index.Name == "organizationId-salePointUid-sort-at-idx");
+        Assert.Equal(["data.organizationId", "data.salePointUid", "data.sortAt"], baseIndex.Fields);
+        Assert.All(indexes, index => Assert.Equal("data.organizationId", index.Fields[0]));
+    }
+
+    [Fact]
+    public void Проверка_удаления_идёт_по_индексу_торговой_точки()
+    {
+        var query = EtrnIncomingQuery.AnyBySalePoint("o1", "p1");
+
+        var selector = Assert.IsType<Dictionary<string, object>>(query["selector"]);
+        Assert.Equal("o1", selector["data.organizationId"]);
+        Assert.Equal("p1", selector["data.salePointUid"]);
+        var anchor = Assert.IsType<Dictionary<string, object>>(selector["data.sortAt"]);
+        Assert.Equal(0L, anchor["$gte"]);
+        Assert.Equal(1, query["limit"]);
+        Assert.Equal(["data.id"], Assert.IsType<string[]>(query["fields"]));
+        var index = Assert.IsType<string[]>(query["use_index"]);
+        Assert.Equal("etrn-incoming", index[0]);
+        Assert.Equal("organizationId-salePointUid-sort-at-idx", index[1]);
     }
 }

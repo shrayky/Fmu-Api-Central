@@ -1,4 +1,5 @@
 using Application.Etrn;
+using Application.SalePoints;
 using Application.Vetis;
 using Domain.Etrn;
 using Domain.Entitys.Organization.Dto;
@@ -20,17 +21,20 @@ public class OrganizationController : ControllerBase
     private readonly IGisMtExchangeService _gisMtExchange;
     private readonly VetisProbeService _vetis;
     private readonly EtrnProbeService _etrn;
+    private readonly ISalePointUsage _salePoints;
 
     public OrganizationController(
         IOrganizationManagerService manager,
         IGisMtExchangeService gisMtExchange,
         VetisProbeService vetis,
-        EtrnProbeService etrn)
+        EtrnProbeService etrn,
+        ISalePointUsage salePoints)
     {
         _manager = manager;
         _gisMtExchange = gisMtExchange;
         _vetis = vetis;
         _etrn = etrn;
+        _salePoints = salePoints;
     }
 
     [HttpGet]
@@ -89,6 +93,18 @@ public class OrganizationController : ControllerBase
     {
         var result = await _gisMtExchange.ManualOperation(id, kind, cancellationToken);
         return result.IsSuccess ? Ok() : BadRequest(result.Error);
+    }
+
+    /// <summary>
+    /// Ссылаются ли входящие документы на точку: по этому ответу кнопка удаления предлагает закрыть точку.
+    /// </summary>
+    [HttpGet("{id}/sale-points/{uid}/usage")]
+    public async Task<IActionResult> SalePointUsage(string id, string uid)
+    {
+        var result = await _salePoints.UsedAsync(id, uid);
+        return result.IsSuccess
+            ? Ok(new SalePointUsageView { Used = result.Value })
+            : BadRequest(result.Error);
     }
 
     /// <summary>

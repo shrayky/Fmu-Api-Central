@@ -361,7 +361,8 @@ public class OrganizationManagerServiceTests
             new SessionTrueApiAuthService(new TrueApiSession("123e4567-e89b-12d3-a456-426655440000", liveUntil)),
             state,
             new FakeGroupRepository(),
-            new FakeEtrnSync());
+            new FakeEtrnSync(),
+            new FakeSalePointUsage());
 
         var result = await sut.Token("7700000000");
 
@@ -370,6 +371,253 @@ public class OrganizationManagerServiceTests
         Assert.Equal(liveUntil, result.Value.Expired);
         Assert.Equal("123e4567-e89b-12d3-a456-426655440000", state.SavedToken);
         Assert.Equal(liveUntil, state.SavedUntil);
+    }
+
+    /// <summary>
+    /// Пустой uid выдаёт сервер, поля обрезаются, пустой синоним не сохраняется.
+    /// </summary>
+    [Fact]
+    public async Task Update_сохраняет_торговые_точки_и_выдаёт_uid()
+    {
+        var repository = new FakeOrganizationRepository();
+        repository.Store["o1"] = new OrganizationEntity { Id = "o1", Name = "Орг", Inn = "1234567890" };
+        var sut = CreateSut(repository);
+
+        var result = await sut.Update(new OrganizationView
+        {
+            Id = "o1",
+            Name = "Орг",
+            Inn = "1234567890",
+            SalePoints =
+            [
+                new SalePoint
+                {
+                    Name = " Склад ",
+                    Address = " Москва, Ленина, 1 ",
+                    FiasId = " fias-1 ",
+                    Aliases =
+                    [
+                        new SalePointAlias { Address = " Мск, Ленинский 1 " },
+                        new SalePointAlias { Address = "   " }
+                    ]
+                }
+            ]
+        });
+
+        Assert.True(result.IsSuccess, result.IsFailure ? result.Error : "");
+        var point = Assert.Single(repository.Store["o1"].SalePoints);
+        Assert.Equal("Склад", point.Name);
+        Assert.Equal("Москва, Ленина, 1", point.Address);
+        Assert.Equal("fias-1", point.FiasId);
+        Assert.False(point.Closed);
+        Assert.Equal(36, point.Uid.Length);
+        var alias = Assert.Single(point.Aliases);
+        Assert.Equal("Мск, Ленинский 1", alias.Address);
+        Assert.Equal(36, alias.Uid.Length);
+    }
+
+    /// <summary>
+    /// Сохранение без вкладки не присылает salePoints. Пустой список из разбора не должен стирать справочник.
+    /// </summary>
+    [Fact]
+    public async Task Update_без_salePoints_в_json_не_стирает_справочник()
+    {
+        var repository = new FakeOrganizationRepository();
+        repository.Store["o1"] = new OrganizationEntity
+        {
+            Id = "o1",
+            Name = "Орг",
+            Inn = "1234567890",
+            SalePoints = [new SalePoint { Uid = "p1", Name = "Склад", Address = "Москва, Ленина, 1" }]
+        };
+        var sut = CreateSut(repository);
+        var view = JsonSerializer.Deserialize<OrganizationView>(
+            """{"id":"o1","name":"Орг","inn":"1234567890"}""",
+            new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
+
+        var result = await sut.Update(view);
+
+        Assert.True(result.IsSuccess, result.IsFailure ? result.Error : "");
+        Assert.Equal("p1", Assert.Single(repository.Store["o1"].SalePoints).Uid);
+    }
+
+    [Fact]
+    public async Task Update_не_принимает_совпавший_адрес_открытых_точек()
+    {
+        var repository = new FakeOrganizationRepository();
+        repository.Store["o1"] = new OrganizationEntity { Id = "o1", Name = "Орг", Inn = "1234567890" };
+        var sut = CreateSut(repository);
+
+        var result = await sut.Update(new OrganizationView
+        {
+            Id = "o1",
+            Name = "Орг",
+            Inn = "1234567890",
+            SalePoints =
+            [
+                new SalePoint { Name = "Склад", Address = "Москва, Ленина, 1" },
+                new SalePoint { Name = "Магазин", Address = " москва, ленина, 1 " }
+            ]
+        });
+
+        Assert.True(result.IsFailure);
+        Assert.Contains("уже указан у открытой точки", result.Error);
+        Assert.Empty(repository.Store["o1"].SalePoints);
+    }
+
+    [Fact]
+    public async Task Update_разрешает_совпадение_с_закрытой_точкой()
+    {
+        var repository = new FakeOrganizationRepository();
+        repository.Store["o1"] = new OrganizationEntity { Id = "o1", Name = "Орг", Inn = "1234567890" };
+        var sut = CreateSut(repository);
+
+        var result = await sut.Update(new OrganizationView
+        {
+            Id = "o1",
+            Name = "Орг",
+            Inn = "1234567890",
+            SalePoints =
+            [
+                new SalePoint { Name = "Старый", Address = "Москва, Ленина, 1", Closed = true },
+                new SalePoint { Name = "Новый", Address = "Москва, Ленина, 1" }
+            ]
+        });
+
+        Assert.True(result.IsSuccess, result.IsFailure ? result.Error : "");
+        Assert.Equal(2, repository.Store["o1"].SalePoints.Count);
+    }
+
+    [Fact]
+    public async Task Update_не_сохраняет_точку_без_названия()
+    {
+        var repository = new FakeOrganizationRepository();
+        repository.Store["o1"] = new OrganizationEntity { Id = "o1", Name = "Орг", Inn = "1234567890" };
+        var sut = CreateSut(repository);
+
+        var result = await sut.Update(new OrganizationView
+        {
+            Id = "o1",
+            Name = "Орг",
+            Inn = "1234567890",
+            SalePoints = [new SalePoint { Name = "  ", Address = "Москва, Ленина, 1" }]
+        });
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("Укажите название торговой точки", result.Error);
+    }
+
+    [Fact]
+    public async Task List_отдаёт_закрытую_точку_с_признаком()
+    {
+        var repository = new FakeOrganizationRepository();
+        repository.Store["o1"] = new OrganizationEntity
+        {
+            Id = "o1",
+            Name = "Орг",
+            Inn = "1234567890",
+            SalePoints = [new SalePoint { Uid = "p1", Name = "Старый", Address = "Москва, Ленина, 1", Closed = true }]
+        };
+        var sut = CreateSut(repository);
+
+        var listed = await sut.List(1, 50);
+
+        var point = Assert.Single(Assert.Single(listed.Content).SalePoints!);
+        Assert.True(point.Closed);
+        Assert.Equal("p1", point.Uid);
+    }
+
+    /// <summary>
+    /// Синоним сохраняется и возвращается в карточке: по нему подбирается точка у поставщика.
+    /// </summary>
+    [Fact]
+    public async Task Update_возвращает_синоним_точки_в_карточке()
+    {
+        var repository = new FakeOrganizationRepository();
+        repository.Store["o1"] = new OrganizationEntity { Id = "o1", Name = "Орг", Inn = "1234567890" };
+        var sut = CreateSut(repository);
+
+        var saved = await sut.Update(new OrganizationView
+        {
+            Id = "o1",
+            Name = "Орг",
+            Inn = "1234567890",
+            SalePoints =
+            [
+                new SalePoint
+                {
+                    Name = "Склад",
+                    Address = "Москва, Ленина, 1",
+                    Aliases = [new SalePointAlias { Address = "Мск, Ленинский 1" }]
+                }
+            ]
+        });
+        var listed = await sut.List(1, 50);
+
+        Assert.True(saved.IsSuccess, saved.IsFailure ? saved.Error : "");
+        var point = Assert.Single(Assert.Single(listed.Content).SalePoints!);
+        Assert.Equal("Мск, Ленинский 1", Assert.Single(point.Aliases).Address);
+    }
+
+    [Fact]
+    public async Task Update_не_удаляет_точку_с_документами()
+    {
+        var repository = new FakeOrganizationRepository();
+        repository.Store["o1"] = new OrganizationEntity
+        {
+            Id = "o1",
+            Name = "Орг",
+            Inn = "1234567890",
+            SalePoints = [new SalePoint { Uid = "p1", Name = "Склад", Address = "Москва, Ленина, 1" }]
+        };
+        var usage = new FakeSalePointUsage();
+        usage.Used.Add(("o1", "p1"));
+        var sut = CreateSut(repository, usage: usage);
+
+        var result = await sut.Update(new OrganizationView
+        {
+            Id = "o1",
+            Name = "Орг",
+            Inn = "1234567890",
+            SalePoints = []
+        });
+
+        Assert.True(result.IsFailure);
+        Assert.Contains("используют входящие документы", result.Error);
+        Assert.Single(repository.Store["o1"].SalePoints);
+    }
+
+    [Fact]
+    public async Task Update_удаляет_неиспользованную_точку()
+    {
+        var repository = new FakeOrganizationRepository();
+        repository.Store["o1"] = new OrganizationEntity
+        {
+            Id = "o1",
+            Name = "Орг",
+            Inn = "1234567890",
+            SalePoints = [new SalePoint { Uid = "p1", Name = "Склад", Address = "Москва, Ленина, 1" }]
+        };
+        var sut = CreateSut(repository);
+
+        var result = await sut.Update(new OrganizationView
+        {
+            Id = "o1",
+            Name = "Орг",
+            Inn = "1234567890",
+            SalePoints = []
+        });
+
+        Assert.True(result.IsSuccess, result.IsFailure ? result.Error : "");
+        Assert.Empty(repository.Store["o1"].SalePoints);
+    }
+
+    private sealed class FakeSalePointUsage : ISalePointUsage
+    {
+        public HashSet<(string OrganizationId, string Uid)> Used { get; } = [];
+
+        public Task<Result<bool>> UsedAsync(string organizationId, string salePointUid) =>
+            Task.FromResult(Result.Success(Used.Contains((organizationId, salePointUid))));
     }
 
     private sealed class FakeOrganizationRepository : IOrganizationRepository
@@ -683,13 +931,15 @@ public class OrganizationManagerServiceTests
     private static OrganizationManagerService CreateSut(
         FakeOrganizationRepository repository,
         FakeGroupRepository? groups = null,
-        FakeEtrnSync? sync = null)
+        FakeEtrnSync? sync = null,
+        FakeSalePointUsage? usage = null)
         => new(
             repository,
             new FakeTrueApiAuthService(),
             new FakeApplicationState(),
             groups ?? new FakeGroupRepository(),
-            sync ?? new FakeEtrnSync());
+            sync ?? new FakeEtrnSync(),
+            usage ?? new FakeSalePointUsage());
 
     private sealed class FakeGroupRepository : IInstanceGroupRepository
     {

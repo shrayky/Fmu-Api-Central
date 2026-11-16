@@ -182,6 +182,89 @@ public class VetisIncomingQueryServiceTests
         Assert.Equal(1, organization.Enterprises.Single(item => item.Guid == "e2").NotAcceptedCount);
     }
 
+    [Fact]
+    public async Task List_подставляет_имя_точки_и_признак_закрытой()
+    {
+        var world = new World();
+        world.AddDocument("d1", "o1", "e1", sortAt: 2);
+        world.Incoming.Store["d1"].SalePointUid = "p1";
+        world.AddDocument("d2", "o1", "e1", sortAt: 1);
+        world.Incoming.Store["d2"].SalePointUid = "p2";
+
+        var page = (await world.Sut.ListAsync("o1", "", "", 0, 10)).Value;
+
+        var first = page.Rows.Single(item => item.Id == "d1");
+        Assert.Equal("Склад", first.SalePointName);
+        Assert.False(first.SalePointClosed);
+        var second = page.Rows.Single(item => item.Id == "d2");
+        Assert.Equal("Старый", second.SalePointName);
+        Assert.True(second.SalePointClosed);
+    }
+
+    [Fact]
+    public async Task List_отбирает_по_точке_и_без_точки()
+    {
+        var world = new World();
+        world.AddDocument("d1", "o1", "e1", sortAt: 3);
+        world.Incoming.Store["d1"].SalePointUid = "p1";
+        world.AddDocument("d2", "o1", "e1", sortAt: 2);
+        world.Incoming.Store["d2"].SalePointUid = "p2";
+        world.AddDocument("d3", "o1", "e1", sortAt: 1);
+
+        var byPoint = (await world.Sut.ListAsync("o1", "", "", 0, 10, salePoint: "p1")).Value;
+        var without = (await world.Sut.ListAsync("o1", "", "", 0, 10, salePoint: "none")).Value;
+
+        Assert.Equal(["d1"], byPoint.Rows.Select(item => item.Id));
+        Assert.Equal(["d3"], without.Rows.Select(item => item.Id));
+    }
+
+    [Fact]
+    public async Task Отбор_точки_без_организации_даёт_ошибку()
+    {
+        var world = new World();
+
+        var result = await world.Sut.ListAsync("", "", "", 0, 10, salePoint: "p1");
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("Выберите организацию для отбора по торговой точке", result.Error);
+    }
+
+    [Fact]
+    public async Task List_по_guid_учитывает_отбор_точки()
+    {
+        var world = new World();
+        const string uuid = "426307f6-395a-4f0f-a806-baa505bedd6d";
+        world.AddDocument("d1", "o1", "e1", sortAt: 3, status: VetisIncomingStatus.Accepted);
+        world.Incoming.Store["d1"].SalePointUid = "p1";
+        world.Incoming.Store["d1"].Vsds[0].Uuid = uuid;
+        world.AddDocument("d2", "o1", "e1", sortAt: 2, status: VetisIncomingStatus.Accepted);
+        world.Incoming.Store["d2"].SalePointUid = "p2";
+        world.Incoming.Store["d2"].Vsds[0].Uuid = uuid;
+        world.AddDocument("d3", "o1", "e1", sortAt: 1, status: VetisIncomingStatus.Accepted);
+        world.Incoming.Store["d3"].Vsds[0].Uuid = uuid;
+
+        var byPoint = (await world.Sut.ListAsync(
+            "o1", "e1", VetisIncomingStatus.NotAccepted, 0, 10, vsdUuid: uuid, salePoint: "p1")).Value;
+        var without = (await world.Sut.ListAsync(
+            "o1", "", VetisIncomingStatus.NotAccepted, 0, 10, vsdUuid: uuid, salePoint: "none")).Value;
+
+        Assert.Equal(["d1"], byPoint.Rows.Select(item => item.Id));
+        Assert.Equal(["d3"], without.Rows.Select(item => item.Id));
+    }
+
+    [Fact]
+    public async Task Get_отдаёт_только_открытые_точки()
+    {
+        var world = new World();
+        world.AddDocument("d1", "o1", "e1", sortAt: 1);
+        world.Incoming.Store["d1"].SalePointUid = "p1";
+
+        var view = (await world.Sut.GetAsync("d1")).Value;
+
+        var point = Assert.Single(view.SalePoints);
+        Assert.Equal("p1", point.Uid);
+    }
+
     private static World PendingDocuments()
     {
         var world = new World();
@@ -208,7 +291,12 @@ public class VetisIncomingQueryServiceTests
                         new OrganizationEnterprise { Guid = "e1", Name = "Колбасный дворик", Presentation = "Металлургов, 32", Participates = true },
                         new OrganizationEnterprise { Guid = "e2", Name = "Магазин-2", Participates = true }
                     ]
-                }
+                },
+                SalePoints =
+                [
+                    new SalePoint { Uid = "p1", Name = "Склад", Address = "Металлургов, 32" },
+                    new SalePoint { Uid = "p2", Name = "Старый", Address = "Ленина, 1", Closed = true }
+                ]
             };
             Sut = new VetisIncomingQueryService(Incoming, Organizations);
         }

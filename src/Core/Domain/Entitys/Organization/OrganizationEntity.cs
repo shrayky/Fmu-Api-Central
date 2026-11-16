@@ -25,6 +25,8 @@ public class OrganizationEntity : IHaveStringId
 
     public List<EtrnConnection> EtrnConnections { get; set; } = [];
 
+    public List<SalePoint> SalePoints { get; set; } = [];
+
     public int? GisMtLastStatusCode { get; set; }
 
     public string GisMtLastStatusDescription { get; set; } = string.Empty;
@@ -51,6 +53,7 @@ public class OrganizationEntity : IHaveStringId
         GisMtLastStatus ??= new();
         GisMtProductGroups ??= [];
         EtrnConnections ??= [];
+        SalePoints ??= [];
         if (GisMtLastStatus.Code != null)
             return;
 

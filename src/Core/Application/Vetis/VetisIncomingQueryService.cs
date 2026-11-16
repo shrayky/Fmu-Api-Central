@@ -1,5 +1,6 @@
 using CSharpFunctionalExtensions;
 using Domain.Attributes;
+using Domain.Entitys.Organization;
 using Domain.Entitys.Organization.Interfaces;
 using Domain.Vetis;
 using Microsoft.Extensions.DependencyInjection;
@@ -32,27 +33,43 @@ public sealed class VetisIncomingQueryService
         string status,
         int skip,
         int limit,
-        string vsdUuid = "")
+        string vsdUuid = "",
+        string salePoint = "")
     {
         var offset = VetisPaging.Skip(skip);
         var size = VetisPaging.Limit(limit);
         var uuid = NormalizeVsdUuid(vsdUuid);
+        var (salePointUid, onlyWithout) = SalePointFilter.Parse(salePoint);
+        if ((salePointUid.Length > 0 || onlyWithout) && string.IsNullOrWhiteSpace(organizationId))
+            return Result.Failure<VetisRowsPage<VetisIncomingRow>>("Выберите организацию для отбора по торговой точке");
+
         // GUID ищется по всем статусам: документ уже может быть погашен, а журнал открыт на «Не принят».
+        // Точка при этом остаётся: иначе отбор в журнале молча снимается.
         var filter = uuid.Length > 0
-            ? new VetisIncomingFilter { VsdUuid = uuid }
+            ? new VetisIncomingFilter
+            {
+                VsdUuid = uuid,
+                OrganizationId = salePointUid.Length > 0 || onlyWithout ? organizationId ?? "" : "",
+                SalePointUid = salePointUid,
+                OnlyWithoutSalePoint = onlyWithout
+            }
             : new VetisIncomingFilter
             {
                 OrganizationId = organizationId ?? "",
                 EnterpriseGuid = enterpriseGuid ?? "",
-                Status = KnownStatuses.Contains(status) ? status : ""
+                Status = KnownStatuses.Contains(status) ? status : "",
+                SalePointUid = salePointUid,
+                OnlyWithoutSalePoint = onlyWithout
             };
 
         var fetched = await _incoming.List(filter, offset, size + 1);
         if (fetched.IsFailure)
             return Result.Failure<VetisRowsPage<VetisIncomingRow>>(fetched.Error);
 
-        var directory = new VetisDirectory(await _organizations.All());
-        var rows = fetched.Value.Select(item => ToRow(item, directory)).ToList();
+        var organizations = await _organizations.All();
+        var directory = new VetisDirectory(organizations);
+        var salePoints = new SalePointDirectory(organizations);
+        var rows = fetched.Value.Select(item => ToRow(item, directory, salePoints)).ToList();
         return Result.Success(VetisPaging.Page(rows, offset, size));
     }
 
@@ -65,10 +82,13 @@ public sealed class VetisIncomingQueryService
         if (found.Value == null)
             return Result.Failure<VetisIncomingView>("Документ не найден.");
 
-        var directory = new VetisDirectory(await _organizations.All());
+        var organizations = await _organizations.All();
+        var directory = new VetisDirectory(organizations);
+        var salePoints = new SalePointDirectory(organizations);
         var document = found.Value;
         var view = new VetisIncomingView
         {
+            SalePoints = salePoints.Options(document.OrganizationId, openOnly: true).ToList(),
             Vsds = document.Vsds
                 .Select(vsd => new VetisVsdView
                 {
@@ -87,7 +107,7 @@ public sealed class VetisIncomingQueryService
                 })
                 .ToList()
         };
-        Fill(view, document, directory);
+        Fill(view, document, directory, salePoints);
         return Result.Success(view);
     }
 
@@ -131,7 +151,10 @@ public sealed class VetisIncomingQueryService
                     Id = item.Id,
                     Name = item.Name,
                     NotAcceptedCount = enterprises.Sum(enterprise => enterprise.NotAcceptedCount),
-                    Enterprises = enterprises
+                    Enterprises = enterprises,
+                    SalePoints = (item.SalePoints ?? [])
+                        .Select(point => new SalePointOption { Uid = point.Uid, Name = point.Name, Closed = point.Closed })
+                        .ToList()
                 };
             })
             .ToList();
@@ -160,20 +183,30 @@ public sealed class VetisIncomingQueryService
         return text;
     }
 
-    private static VetisIncomingRow ToRow(VetisIncomingDocumentEntity document, VetisDirectory directory)
+    private static VetisIncomingRow ToRow(
+        VetisIncomingDocumentEntity document,
+        VetisDirectory directory,
+        SalePointDirectory salePoints)
     {
         var row = new VetisIncomingRow();
-        Fill(row, document, directory);
+        Fill(row, document, directory, salePoints);
         return row;
     }
 
-    private static void Fill(VetisIncomingRow row, VetisIncomingDocumentEntity document, VetisDirectory directory)
+    private static void Fill(
+        VetisIncomingRow row,
+        VetisIncomingDocumentEntity document,
+        VetisDirectory directory,
+        SalePointDirectory salePoints)
     {
         row.Id = document.Id;
         row.Number = document.Number;
         row.Date = document.Date;
         row.Loose = document.Loose;
         row.Consignor = document.Consignor;
+        row.SalePointUid = document.SalePointUid;
+        row.SalePointName = salePoints.Name(document.OrganizationId, document.SalePointUid);
+        row.SalePointClosed = salePoints.Closed(document.OrganizationId, document.SalePointUid);
         row.OrganizationId = document.OrganizationId;
         row.OrganizationName = directory.OrganizationName(document.OrganizationId);
         row.EnterpriseGuid = document.EnterpriseGuid;

@@ -122,6 +122,12 @@ public sealed class EtrnIncomingDocumentEntity : IHaveStringId
     [JsonPropertyName("deliveryAddress")]
     public string DeliveryAddress { get; set; } = "";
 
+    /// <summary>
+    /// Ссылка на торговую точку организации. Имя и «закрыта» на документ не копируются: их подставляет чтение.
+    /// </summary>
+    [JsonPropertyName("salePointUid")]
+    public string SalePointUid { get; set; } = "";
+
     [JsonPropertyName("status")]
     public string Status { get; set; } = EtrnDocumentStatus.Waiting;
 

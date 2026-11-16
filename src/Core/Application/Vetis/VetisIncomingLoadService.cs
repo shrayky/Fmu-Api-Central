@@ -138,7 +138,7 @@ public sealed class VetisIncomingLoadService : IVetisIncomingLoader
                     break;
                 }
 
-                var stored = await SaveDocumentsAsync(organization.Id, enterprise.Guid, result.Documents, saved);
+                var stored = await SaveDocumentsAsync(organization, enterprise, result.Documents, saved);
                 if (stored.IsFailure)
                     return Result.Failure<DateTimeOffset>("ВСД получены, но не сохранены: " + stored.Error);
 
@@ -162,12 +162,12 @@ public sealed class VetisIncomingLoadService : IVetisIncomingLoader
     }
 
     private async Task<Result> SaveDocumentsAsync(
-        string organizationId,
-        string enterpriseGuid,
+        OrganizationEntity organization,
+        OrganizationEnterprise enterprise,
         IReadOnlyList<VetisIncomingVsd> vsds,
         HashSet<string> saved)
     {
-        var grouped = VetisIncomingDocumentEntity.Group(organizationId, enterpriseGuid, vsds);
+        var grouped = VetisIncomingDocumentEntity.Group(organization.Id, enterprise.Guid, vsds);
         var owner = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var document in grouped)
         {
@@ -196,6 +196,10 @@ public sealed class VetisIncomingLoadService : IVetisIncomingLoader
                 target.Drop(movedAway);
             }
 
+            // Заполняется только пустое поле: выбранная вручную точка повторную загрузку переживает.
+            if (target.SalePointUid.Length == 0)
+                target.SalePointUid = SalePointMatch.Find(organization.SalePoints, enterprise.Address);
+
             var written = await _incoming.Save(target);
             if (written.IsFailure)
                 return written;
@@ -209,7 +213,7 @@ public sealed class VetisIncomingLoadService : IVetisIncomingLoader
         if (uuids.Count == 0)
             return Result.Success();
 
-        return await _incoming.Release(organizationId, enterpriseGuid, uuids, keep);
+        return await _incoming.Release(organization.Id, enterprise.Guid, uuids, keep);
     }
 
     /// <summary>

@@ -96,6 +96,32 @@ public class VetisQueriesTests
         Assert.DoesNotContain("sort", query.Keys);
     }
 
+    [Fact]
+    public void Incoming_по_uuid_и_точке_режет_организацию_и_точку()
+    {
+        var query = VetisIncomingQuery.List(
+            new VetisIncomingFilter
+            {
+                OrganizationId = "o1",
+                Status = "notAccepted",
+                EnterpriseGuid = "e1",
+                SalePointUid = "p1",
+                VsdUuid = "426307f6-395a-4f0f-a806-baa505bedd6d"
+            },
+            0,
+            10);
+
+        var selector = Assert.IsType<Dictionary<string, object>>(query["selector"]);
+        var vsds = Assert.IsType<Dictionary<string, object>>(selector["data.vsds"]);
+        var match = Assert.IsType<Dictionary<string, object>>(vsds["$elemMatch"]);
+        Assert.Equal("426307f6-395a-4f0f-a806-baa505bedd6d", match["uuid"]);
+        Assert.Equal("o1", selector["data.organizationId"]);
+        Assert.Equal("p1", selector["data.salePointUid"]);
+        Assert.DoesNotContain("data.status", selector.Keys);
+        Assert.DoesNotContain("data.enterpriseGuid", selector.Keys);
+        Assert.Equal("_all_docs", query["use_index"]);
+    }
+
     /// <summary>
     /// Индекс только по моменту CouchDB не использует, если в отборе есть другое поле: _find отвечает no_usable_index.
     /// </summary>
@@ -231,6 +257,49 @@ public class VetisQueriesTests
     }
 
     [Fact]
+    public void Incoming_отбирает_по_торговой_точке()
+    {
+        var query = VetisIncomingQuery.List(
+            new VetisIncomingFilter
+            {
+                OrganizationId = "o1",
+                SalePointUid = "p1",
+                EnterpriseGuid = "e1",
+                Status = VetisIncomingStatus.Accepted
+            },
+            0,
+            50);
+
+        var selector = Assert.IsType<Dictionary<string, object>>(query["selector"]);
+        Assert.Equal("o1", selector["data.organizationId"]);
+        Assert.Equal("p1", selector["data.salePointUid"]);
+        Assert.Equal("e1", selector["data.enterpriseGuid"]);
+        Assert.Equal(VetisIncomingStatus.Accepted, selector["data.status"]);
+        var sort = Assert.IsType<Dictionary<string, string>[]>(query["sort"]);
+        Assert.Equal(
+            ["data.organizationId", "data.salePointUid", "data.enterpriseGuid", "data.status", "data.sortAt"],
+            sort.Select(item => item.Keys.Single()));
+        Assert.Equal(
+            "organizationId-salePointUid-enterpriseGuid-status-sort-at-idx",
+            Assert.IsType<string[]>(query["use_index"])[1]);
+        Assert.Contains("data.salePointUid", Assert.IsType<string[]>(query["fields"]));
+    }
+
+    [Fact]
+    public void Incoming_отбирает_без_точки()
+    {
+        var query = VetisIncomingQuery.List(
+            new VetisIncomingFilter { OrganizationId = "o1", OnlyWithoutSalePoint = true },
+            0,
+            50);
+
+        var selector = Assert.IsType<Dictionary<string, object>>(query["selector"]);
+        Assert.Equal("", selector["data.salePointUid"]);
+        var index = Assert.IsType<string[]>(query["use_index"]);
+        Assert.Equal("organizationId-salePointUid-sort-at-idx", index[1]);
+    }
+
+    [Fact]
     public void Incoming_для_автогашения_идёт_от_старых_без_skip()
     {
         var first = VetisIncomingQuery.Oldest(organizationId: "o1", status: "notAccepted", dated: true, afterSortAt: 0, afterId: "", limit: 20);
@@ -262,5 +331,48 @@ public class VetisQueriesTests
         var index = DatabaseIndexes.DatabaseIndexSchema()[DatabaseNames.VetisIncoming]
             .Single(item => item.Name == "organizationId-status-sort-at-id-idx");
         Assert.Equal(["data.organizationId", "data.status", "data.sortAt", "data.id"], index.Index.Fields);
+    }
+
+    /// <summary>
+    /// Точка всегда отбирается вместе с организацией, поэтому индексов без организации быть не должно.
+    /// </summary>
+    [Fact]
+    public void Schema_содержит_индексы_торговой_точки_Ветис()
+    {
+        var schema = DatabaseIndexes.DatabaseIndexSchema();
+        var names = schema[DatabaseNames.VetisIncoming].Select(index => index.Name).ToList();
+
+        Assert.Contains("organizationId-salePointUid-sort-at-idx", names);
+        Assert.Contains("organizationId-salePointUid-enterpriseGuid-sort-at-idx", names);
+        Assert.Contains("organizationId-salePointUid-status-sort-at-idx", names);
+        Assert.Contains("organizationId-salePointUid-enterpriseGuid-status-sort-at-idx", names);
+        Assert.DoesNotContain(names, name => name.StartsWith("salePointUid-"));
+    }
+
+    [Fact]
+    public void Индекс_торговой_точки_ставит_организацию_первой()
+    {
+        var indexes = VetisIncomingQuery.SalePointIndexes().ToList();
+
+        var baseIndex = Assert.Single(indexes, index => index.Name == "organizationId-salePointUid-sort-at-idx");
+        Assert.Equal(["data.organizationId", "data.salePointUid", "data.sortAt"], baseIndex.Fields);
+        Assert.All(indexes, index => Assert.Equal("data.organizationId", index.Fields[0]));
+    }
+
+    [Fact]
+    public void Проверка_удаления_идёт_по_индексу_торговой_точки()
+    {
+        var query = VetisIncomingQuery.AnyBySalePoint("o1", "p1");
+
+        var selector = Assert.IsType<Dictionary<string, object>>(query["selector"]);
+        Assert.Equal("o1", selector["data.organizationId"]);
+        Assert.Equal("p1", selector["data.salePointUid"]);
+        var anchor = Assert.IsType<Dictionary<string, object>>(selector["data.sortAt"]);
+        Assert.Equal(0L, anchor["$gte"]);
+        Assert.Equal(1, query["limit"]);
+        Assert.Equal(["data.id"], Assert.IsType<string[]>(query["fields"]));
+        var index = Assert.IsType<string[]>(query["use_index"]);
+        Assert.Equal("vetis-incoming", index[0]);
+        Assert.Equal("organizationId-salePointUid-sort-at-idx", index[1]);
     }
 }

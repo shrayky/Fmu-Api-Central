@@ -52,17 +52,24 @@ public sealed class EtrnIncomingQueryService
         string number,
         string consignor,
         int skip,
-        int limit)
+        int limit,
+        string salePoint = "")
     {
         var offset = EtrnPaging.Skip(skip);
         var size = EtrnPaging.Limit(limit);
+        var (salePointUid, onlyWithout) = SalePointFilter.Parse(salePoint);
+        if ((salePointUid.Length > 0 || onlyWithout) && string.IsNullOrWhiteSpace(organizationId))
+            return Result.Failure<EtrnRowsPage<EtrnIncomingRow>>("Выберите организацию для отбора по торговой точке");
+
         var filter = new EtrnIncomingFilter
         {
             OrganizationId = organizationId ?? "",
             ConnectionId = connectionId ?? "",
             Status = status ?? "",
             Number = number ?? "",
-            Consignor = consignor ?? ""
+            Consignor = consignor ?? "",
+            SalePointUid = salePointUid,
+            OnlyWithoutSalePoint = onlyWithout
         };
 
         var fetched = await _incoming.List(filter, offset, size + 1);
@@ -70,11 +77,12 @@ public sealed class EtrnIncomingQueryService
             return Result.Failure<EtrnRowsPage<EtrnIncomingRow>>(fetched.Error);
 
         var organizations = await _organizations.All();
+        var salePoints = new SalePointDirectory(organizations);
         var rows = new List<EtrnIncomingRow>();
         foreach (var item in fetched.Value)
         {
             await RememberAddress(item);
-            rows.Add(ToRow(item, organizations));
+            rows.Add(ToRow(item, organizations, salePoints));
         }
 
         return Result.Success(EtrnPaging.Page(rows, offset, size));
@@ -89,6 +97,7 @@ public sealed class EtrnIncomingQueryService
             return Result.Failure<EtrnIncomingView>("Документ не найден.");
 
         var organizations = await _organizations.All();
+        var salePoints = new SalePointDirectory(organizations);
         var document = found.Value;
         await RememberAddress(document);
         await RememberWeight(document);
@@ -97,6 +106,7 @@ public sealed class EtrnIncomingQueryService
             Uid = document.Uid,
             GeneralComment = document.GeneralComment,
             SignedAt = document.SignedAt,
+            SalePoints = salePoints.Options(document.OrganizationId, openOnly: true).ToList(),
             Lines = document.Lines
                 .Select(line => new EtrnLineView
                 {
@@ -113,7 +123,7 @@ public sealed class EtrnIncomingQueryService
                 .ToList(),
             CanDecide = document.CanDecide
         };
-        Fill(view, document, organizations);
+        Fill(view, document, organizations, salePoints);
         return Result.Success(view);
     }
 
@@ -124,6 +134,9 @@ public sealed class EtrnIncomingQueryService
         foreach (var item in organizations.Where(item => (item.EtrnConnections ?? []).Count > 0))
         {
             var organization = new EtrnFilterOrganization { Id = item.Id, Name = item.Name };
+            organization.SalePoints = (item.SalePoints ?? [])
+                .Select(point => new SalePointOption { Uid = point.Uid, Name = point.Name, Closed = point.Closed })
+                .ToList();
             foreach (var connection in item.EtrnConnections ?? [])
             {
                 var sync = await _syncStates.Find(connection.Id);
@@ -214,23 +227,30 @@ public sealed class EtrnIncomingQueryService
             await _incoming.Save(document);
     }
 
-    private static EtrnIncomingRow ToRow(EtrnIncomingDocumentEntity document, List<OrganizationEntity> organizations)
+    private static EtrnIncomingRow ToRow(
+        EtrnIncomingDocumentEntity document,
+        List<OrganizationEntity> organizations,
+        SalePointDirectory salePoints)
     {
         var row = new EtrnIncomingRow();
-        Fill(row, document, organizations);
+        Fill(row, document, organizations, salePoints);
         return row;
     }
 
     private static void Fill(
         EtrnIncomingRow row,
         EtrnIncomingDocumentEntity document,
-        List<OrganizationEntity> organizations)
+        List<OrganizationEntity> organizations,
+        SalePointDirectory salePoints)
     {
         row.Id = document.Id;
         row.Number = document.Number;
         row.Date = document.Date;
         row.Consignor = document.Consignor;
         row.DeliveryAddress = document.DeliveryAddress;
+        row.SalePointUid = document.SalePointUid;
+        row.SalePointName = salePoints.Name(document.OrganizationId, document.SalePointUid);
+        row.SalePointClosed = salePoints.Closed(document.OrganizationId, document.SalePointUid);
         row.OrganizationId = document.OrganizationId;
         row.OrganizationName = organizations
             .FirstOrDefault(item => string.Equals(item.Id, document.OrganizationId, StringComparison.OrdinalIgnoreCase))?.Name ?? "";

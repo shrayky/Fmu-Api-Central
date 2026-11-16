@@ -1,17 +1,20 @@
 import { incomingStatusLabel, vetisCountLabel } from '../../utils/vetisFormat.js';
+import { salePointFilterOptions } from '../../utils/salePointFormat.js';
 
 const ALL = "__all__";
 const STATUSES = ["accepted", "partial", "notAccepted", "rejected"];
 
 export class VetisFilterBar {
-    constructor({ prefix, organizations, withStatus, withVsd, onChange }) {
+    constructor({ prefix, organizations, withStatus, withVsd, withSalePoint, onChange }) {
         this.organizations = organizations;
         this.withStatus = withStatus;
         this.withVsd = withVsd;
+        this.withSalePoint = !!withSalePoint;
         this.onChange = onChange;
         this.ids = {
             organization: `${prefix}OrganizationFilter`,
             enterprise: `${prefix}EnterpriseFilter`,
+            salePoint: `${prefix}SalePointFilter`,
             status: `${prefix}StatusFilter`,
             vsd: `${prefix}VsdFilter`,
         };
@@ -28,6 +31,21 @@ export class VetisFilterBar {
                 options: this._organizationOptions(),
                 on: { onChange: (organizationId) => this._organizationChanged(organizationId) },
             },
+        ];
+
+        if (this.withSalePoint) {
+            elements.push({
+                view: "richselect",
+                id: this.ids.salePoint,
+                width: 240,
+                value: ALL,
+                disabled: true,
+                options: [{ id: ALL, value: "Все точки" }],
+                on: { onChange: () => this.onChange() },
+            });
+        }
+
+        elements.push(
             {
                 view: "richselect",
                 id: this.ids.enterprise,
@@ -36,8 +54,8 @@ export class VetisFilterBar {
                 disabled: true,
                 options: [{ id: ALL, value: "Все предприятия" }],
                 on: { onChange: () => this.onChange() },
-            },
-        ];
+            }
+        );
 
         if (this.withStatus) {
             elements.push({
@@ -80,6 +98,12 @@ export class VetisFilterBar {
             enterpriseGuid: pick(this.ids.enterprise),
         };
 
+        if (this.withSalePoint) {
+            const salePoint = pick(this.ids.salePoint);
+            if (salePoint)
+                values.salePoint = salePoint;
+        }
+
         if (this.withStatus) {
             values.status = pick(this.ids.status);
         }
@@ -106,6 +130,7 @@ export class VetisFilterBar {
 
     _organizationChanged(organizationId) {
         this._showEnterprises(organizationId, ALL);
+        this._showSalePoints(organizationId, ALL);
         this.onChange();
     }
 
@@ -117,6 +142,7 @@ export class VetisFilterBar {
 
         const selected = organization.getValue();
         const enterpriseId = $$(this.ids.enterprise)?.getValue();
+        const salePointId = $$(this.ids.salePoint)?.getValue();
         organization.blockEvent();
         organization.define("options", this._organizationOptions());
         organization.refresh();
@@ -124,6 +150,7 @@ export class VetisFilterBar {
         organization.setValue(next);
         organization.unblockEvent();
         this._showEnterprises(next, enterpriseId);
+        this._showSalePoints(next, salePointId);
     }
 
     _organizationOptions() {
@@ -131,6 +158,27 @@ export class VetisFilterBar {
             { id: ALL, value: "Все организации" },
             ...this.organizations.map((item) => ({ id: item.id, value: vetisCountLabel(item.name, item.notAcceptedCount) })),
         ];
+    }
+
+    _showSalePoints(organizationId, keepSalePointId) {
+        const control = $$(this.ids.salePoint);
+        if (!control)
+            return;
+
+        const organization = this.organizations.find((item) => item.id === organizationId);
+        const options = salePointFilterOptions(organization?.salePoints)
+            .map((item) => ({ id: item.id || ALL, value: item.value }));
+
+        control.blockEvent();
+        control.define("options", options);
+        control.refresh();
+        const keep = options.some((item) => item.id === keepSalePointId) ? keepSalePointId : ALL;
+        control.setValue(keep);
+        control.unblockEvent();
+        if (organization)
+            control.enable();
+        else
+            control.disable();
     }
 
     _showEnterprises(organizationId, keepEnterpriseId) {

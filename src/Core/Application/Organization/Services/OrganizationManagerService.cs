@@ -24,19 +24,22 @@ public class OrganizationManagerService : IOrganizationManagerService
     private readonly IApplicationState _applicationState;
     private readonly IInstanceGroupRepository _instanceGroupRepository;
     private readonly IEtrnSyncStateRepository _etrnSync;
+    private readonly ISalePointUsage _salePoints;
 
     public OrganizationManagerService(
         IOrganizationRepository repository,
         ITrueApiAuthService trueApiAuthService,
         IApplicationState applicationState,
         IInstanceGroupRepository instanceGroupRepository,
-        IEtrnSyncStateRepository etrnSync)
+        IEtrnSyncStateRepository etrnSync,
+        ISalePointUsage salePoints)
     {
         _repository = repository;
         _trueApiAuthService = trueApiAuthService;
         _applicationState = applicationState;
         _instanceGroupRepository = instanceGroupRepository;
         _etrnSync = etrnSync;
+        _salePoints = salePoints;
     }
 
     public async Task<Result> Create(OrganizationView data)
@@ -74,6 +77,10 @@ public class OrganizationManagerService : IOrganizationManagerService
         var unique = await EnsureUniqueInn(prepared.Value.Inn, prepared.Value.Id);
         if (unique.IsFailure)
             return unique;
+
+        var unused = await EnsurePointsUnused(exist.Value, prepared.Value);
+        if (unused.IsFailure)
+            return unused;
 
         var previous = exist.Value.EtrnConnections ?? [];
         Apply(exist.Value, prepared.Value);
@@ -167,6 +174,32 @@ public class OrganizationManagerService : IOrganizationManagerService
         return Result.Success();
     }
 
+    /// <summary>
+    /// Точку, на которую ссылается документ, удалять нельзя: её закрывают. Проверка повторяется при сохранении,
+    /// потому что между открытием карточки и сохранением могли прийти документы.
+    /// </summary>
+    private async Task<Result> EnsurePointsUnused(OrganizationEntity entity, OrganizationView data)
+    {
+        if (data.SalePoints == null)
+            return Result.Success();
+
+        var kept = data.SalePoints
+            .Select(point => point.Uid)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var removed in (entity.SalePoints ?? []).Where(point => !kept.Contains(point.Uid)))
+        {
+            var used = await _salePoints.UsedAsync(entity.Id, removed.Uid);
+            if (used.IsFailure)
+                return Result.Failure(used.Error);
+
+            if (used.Value)
+                return Result.Failure($"Точку «{removed.Name}» используют входящие документы: удалить нельзя, закройте её");
+        }
+
+        return Result.Success();
+    }
+
     private static Result<OrganizationView> Prepare(OrganizationView data)
     {
         var name = (data.Name ?? string.Empty).Trim();
@@ -185,6 +218,22 @@ public class OrganizationManagerService : IOrganizationManagerService
                 return Result.Failure<OrganizationView>(delay.Error);
         }
 
+        if (data.SalePoints != null)
+        {
+            var points = NormalizeSalePoints(data.SalePoints);
+            var invalid = ValidateSalePoints(points);
+            if (invalid.Length > 0)
+                return Result.Failure<OrganizationView>(invalid);
+
+            var collision = SalePointDirectory.Collision(points);
+            if (collision != null)
+                return Result.Failure<OrganizationView>(
+                    $"{(collision.Value.Alias ? "Синоним" : "Адрес")} «{collision.Value.Address}» уже указан "
+                    + $"у открытой точки «{collision.Value.Point.Name}»");
+
+            data.SalePoints = points;
+        }
+
         data.Name = name;
         data.Inn = inn;
         data.TrueApiIntegrationSettings ??= new TrueApiIntegrationSettings();
@@ -192,6 +241,71 @@ public class OrganizationManagerService : IOrganizationManagerService
     }
 
     private static string NormalizeInn(string? inn) => (inn ?? string.Empty).Trim();
+
+    /// <summary>
+    /// Uid выдаётся здесь: карточка присылает пустой у новой точки и нового синонима.
+    /// </summary>
+    private static List<SalePoint> NormalizeSalePoints(IEnumerable<SalePoint> points) =>
+        points.Select(point => new SalePoint
+        {
+            Uid = SalePointUid(point.Uid),
+            Name = (point.Name ?? "").Trim(),
+            Address = (point.Address ?? "").Trim(),
+            FiasId = (point.FiasId ?? "").Trim(),
+            Closed = point.Closed,
+            Aliases = (point.Aliases ?? [])
+                .Select(alias => new SalePointAlias
+                {
+                    Uid = SalePointUid(alias.Uid),
+                    Address = (alias.Address ?? "").Trim()
+                })
+                .Where(alias => alias.Address.Length > 0)
+                .ToList()
+        }).ToList();
+
+    private static string SalePointUid(string? uid)
+    {
+        var text = (uid ?? "").Trim();
+        return text.Length is 0 or > 36 ? Guid.NewGuid().ToString() : text;
+    }
+
+    private static string ValidateSalePoints(List<SalePoint> points)
+    {
+        foreach (var point in points)
+        {
+            if (point.Name.Length == 0)
+                return "Укажите название торговой точки";
+
+            if (point.Address.Length == 0)
+                return "Укажите адрес торговой точки";
+
+            if (point.Name.Length > 150)
+                return "Название торговой точки: не больше 150 символов";
+
+            if (point.Address.Length > 250)
+                return "Адрес торговой точки: не больше 250 символов";
+
+            if (point.FiasId.Length > 36)
+                return "ФИАС торговой точки: не больше 36 символов";
+
+            if (point.Aliases.Any(alias => alias.Address.Length > 250))
+                return "Адрес синонима: не больше 250 символов";
+        }
+
+        return "";
+    }
+
+    private static SalePoint CopySalePoint(SalePoint point) => new()
+    {
+        Uid = point.Uid,
+        Name = point.Name,
+        Address = point.Address,
+        FiasId = point.FiasId,
+        Closed = point.Closed,
+        Aliases = (point.Aliases ?? [])
+            .Select(alias => new SalePointAlias { Uid = alias.Uid, Address = alias.Address })
+            .ToList()
+    };
 
     /// <summary>
     /// Адрес API хранится без хвостового слэша.
@@ -238,6 +352,8 @@ public class OrganizationManagerService : IOrganizationManagerService
             incoming.Password,
             entity.TrueApiIntegrationSettings?.Password ?? string.Empty);
         entity.TrueApiIntegrationSettings = incoming;
+        if (data.SalePoints != null)
+            entity.SalePoints = data.SalePoints.Select(CopySalePoint).ToList();
         if (data.VetisSettings != null)
             OrganizationVetisScope.Apply(entity.VetisSettings ??= new(), data.VetisSettings);
         if (data.EtrnConnections != null)
@@ -305,7 +421,8 @@ public class OrganizationManagerService : IOrganizationManagerService
                     ApiUrl = connection.ApiUrl,
                     IncomingFrom = connection.ResolvedIncomingFrom()
                 })
-                .ToList()
+                .ToList(),
+            SalePoints = (entity.SalePoints ?? []).Select(CopySalePoint).ToList()
         };
     }
 

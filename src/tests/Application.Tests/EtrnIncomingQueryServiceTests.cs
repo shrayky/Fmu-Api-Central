@@ -146,6 +146,92 @@ public class EtrnIncomingQueryServiceTests
         Assert.Equal("d", Assert.Single(sameLetters.Value.Rows).Id);
     }
 
+    [Fact]
+    public async Task Список_подставляет_имя_точки_и_признак_закрытой()
+    {
+        var incoming = new MemoryEtrnIncoming();
+        incoming.Store["a"] = Card("a", "0001", EtrnDocumentStatus.Waiting, "", 3);
+        incoming.Store["a"].SalePointUid = "p1";
+        incoming.Store["b"] = Card("b", "0002", EtrnDocumentStatus.Waiting, "", 2);
+        incoming.Store["b"].SalePointUid = "p2";
+        var organizations = new MemoryOrganizationRepository();
+        organizations.Store["o1"] = Organization();
+        var query = new EtrnIncomingQueryService(incoming, organizations, new MemoryEtrnSyncStates());
+
+        var page = await query.ListAsync("o1", "", "", "", "", 0, 50);
+
+        Assert.True(page.IsSuccess, page.IsFailure ? page.Error : "");
+        var first = page.Value.Rows.Single(row => row.Id == "a");
+        Assert.Equal("p1", first.SalePointUid);
+        Assert.Equal("Склад", first.SalePointName);
+        Assert.False(first.SalePointClosed);
+        var second = page.Value.Rows.Single(row => row.Id == "b");
+        Assert.Equal("Старый", second.SalePointName);
+        Assert.True(second.SalePointClosed);
+    }
+
+    [Fact]
+    public async Task Список_отбирает_по_точке_и_без_точки()
+    {
+        var incoming = new MemoryEtrnIncoming();
+        incoming.Store["a"] = Card("a", "0001", EtrnDocumentStatus.Waiting, "", 3);
+        incoming.Store["a"].SalePointUid = "p1";
+        incoming.Store["b"] = Card("b", "0002", EtrnDocumentStatus.Waiting, "", 2);
+        incoming.Store["b"].SalePointUid = "p2";
+        incoming.Store["c"] = Card("c", "0003", EtrnDocumentStatus.Waiting, "", 1);
+        var organizations = new MemoryOrganizationRepository();
+        organizations.Store["o1"] = Organization();
+        var query = new EtrnIncomingQueryService(incoming, organizations, new MemoryEtrnSyncStates());
+
+        var byPoint = await query.ListAsync("o1", "", "", "", "", 0, 50, salePoint: "p1");
+        var without = await query.ListAsync("o1", "", "", "", "", 0, 50, salePoint: "none");
+
+        Assert.Equal(["a"], byPoint.Value.Rows.Select(row => row.Id));
+        Assert.Equal(["c"], without.Value.Rows.Select(row => row.Id));
+    }
+
+    [Fact]
+    public async Task Отбор_точки_без_организации_даёт_ошибку()
+    {
+        var query = new EtrnIncomingQueryService(
+            new MemoryEtrnIncoming(),
+            new MemoryOrganizationRepository(),
+            new MemoryEtrnSyncStates());
+
+        var result = await query.ListAsync("", "", "", "", "", 0, 50, salePoint: "p1");
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("Выберите организацию для отбора по торговой точке", result.Error);
+    }
+
+    [Fact]
+    public async Task Карточка_отдаёт_только_открытые_точки()
+    {
+        var incoming = new MemoryEtrnIncoming();
+        incoming.Store["a"] = Card("a", "0001", EtrnDocumentStatus.Waiting, "", 3);
+        incoming.Store["a"].SalePointUid = "p1";
+        var organizations = new MemoryOrganizationRepository();
+        organizations.Store["o1"] = Organization();
+        var query = new EtrnIncomingQueryService(incoming, organizations, new MemoryEtrnSyncStates());
+
+        var view = await query.GetAsync("a");
+
+        var point = Assert.Single(view.Value.SalePoints);
+        Assert.Equal("p1", point.Uid);
+        Assert.Equal("Склад", point.Name);
+    }
+
+    private static OrganizationEntity Organization() => new()
+    {
+        Id = "o1",
+        Name = "ИП",
+        SalePoints =
+        [
+            new SalePoint { Uid = "p1", Name = "Склад", Address = "Москва, Ленина, 1" },
+            new SalePoint { Uid = "p2", Name = "Старый", Address = "Москва, Ленина, 2", Closed = true }
+        ]
+    };
+
     private static EtrnIncomingDocumentEntity Card(string id, string number, string status, string lastError, long sortAt = 0) => new()
     {
         Id = id,
@@ -196,5 +282,8 @@ public class EtrnIncomingQueryServiceTests
 
         public Task<Result<List<EtrnIncomingDocumentEntity>>> StaleSending(long beforeUnix, int limit) =>
             inner.StaleSending(beforeUnix, limit);
+
+        public Task<Result<bool>> AnyBySalePoint(string organizationId, string salePointUid) =>
+            inner.AnyBySalePoint(organizationId, salePointUid);
     }
 }

@@ -1,5 +1,6 @@
 import etrnService from '../../services/etrnService.js';
 import { etrnStatusCss, etrnStatusLabel, formatIsoMoment } from '../../utils/etrnFormat.js';
+import { salePointLabel } from '../../utils/salePointFormat.js';
 import { VetisPagedTable } from '../vetis/vetisPagedTable.js';
 import { EtrnFilterBar } from './etrnFilterBar.js';
 import { openEtrnIncomingWindow } from './etrnIncomingWindow.js';
@@ -11,12 +12,16 @@ export class EtrnIncomingTab {
             organizations,
             withStatus: true,
             withJournalSearch: true,
+            withSalePoint: true,
             onChange: () => this.refresh(),
         });
         this.table = new VetisPagedTable({
             id: "etrnIncomingTable",
             fetchPage: (filters, skip, limit) => etrnService.incoming(filters, skip, limit),
-            onOpen: (row) => openEtrnIncomingWindow(row, { onAccepted: () => this.refresh() }),
+            onOpen: (row) => openEtrnIncomingWindow(row, {
+                onAccepted: () => this.refresh(),
+                onSalePointChanged: () => this.refresh()
+            }),
         });
     }
 
@@ -29,6 +34,12 @@ export class EtrnIncomingTab {
                     { id: "number", header: "Номер", width: 160, template: (row) => this._escape(row.number) },
                     { id: "consignor", header: "Поставщик", fillspace: 1, template: (row) => this._escape(row.consignor) },
                     { id: "deliveryAddress", header: "Адрес выгрузки", fillspace: 1.4, template: (row) => this._escape(row.deliveryAddress) },
+                    {
+                        id: "salePointName",
+                        header: "Торговая точка",
+                        width: 220,
+                        template: (row) => this._escape(salePointLabel(row))
+                    },
                     { id: "operatorName", header: "Оператор", width: 180, template: (row) => this._escape(row.operatorName) },
                     { id: "organizationName", header: "Организация", width: 220, template: (row) => this._escape(row.organizationName) },
                     { id: "status", header: "Статус", width: 160, template: (row) => this._statusBadge(row) },

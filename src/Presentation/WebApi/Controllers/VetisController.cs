@@ -1,5 +1,7 @@
 using System.Security.Claims;
+using Application.SalePoints;
 using Application.Vetis;
+using Domain.Entitys.Organization.Dto;
 using Domain.Vetis;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -16,19 +18,22 @@ public class VetisController : ControllerBase
     private readonly VetisQuenchProgressStore _progress;
     private readonly VetisApplicationService _applications;
     private readonly IVetisJobStatusStore _jobs;
+    private readonly SalePointService _salePoints;
 
     public VetisController(
         VetisIncomingQueryService incoming,
         VetisIncomingQuenchService quench,
         VetisQuenchProgressStore progress,
         VetisApplicationService applications,
-        IVetisJobStatusStore jobs)
+        IVetisJobStatusStore jobs,
+        SalePointService salePoints)
     {
         _incoming = incoming;
         _quench = quench;
         _progress = progress;
         _applications = applications;
         _jobs = jobs;
+        _salePoints = salePoints;
     }
 
     [HttpGet("jobs")]
@@ -50,10 +55,11 @@ public class VetisController : ControllerBase
         [FromQuery] string? enterpriseGuid,
         [FromQuery] string? status,
         [FromQuery] string? vsdUuid,
+        [FromQuery] string? salePoint,
         [FromQuery] int skip = 0,
         [FromQuery] int limit = 0)
     {
-        var result = await _incoming.ListAsync(organizationId ?? "", enterpriseGuid ?? "", status ?? "", skip, limit, vsdUuid ?? "");
+        var result = await _incoming.ListAsync(organizationId ?? "", enterpriseGuid ?? "", status ?? "", skip, limit, vsdUuid ?? "", salePoint ?? "");
         return result.IsSuccess ? Ok(result.Value) : BadRequest(result.Error);
     }
 
@@ -73,6 +79,36 @@ public class VetisController : ControllerBase
     {
         var author = User.FindFirst(ClaimTypes.Name)?.Value ?? "";
         var result = await _quench.QuenchAsync(id, command?.Facts ?? [], cancellationToken, author: author);
+        return result.IsSuccess ? Ok(result.Value) : BadRequest(result.Error);
+    }
+
+    /// <summary>
+    /// Сопоставление торговой точки вручную. Пустая строка очищает поле.
+    /// </summary>
+    [HttpPost("incoming/{id}/sale-point")]
+    public async Task<IActionResult> AssignSalePoint(string id, [FromBody] SalePointCommand? command)
+    {
+        var result = await _salePoints.AssignVetisAsync(id, command?.SalePointUid ?? "");
+        return result.IsSuccess ? Ok(result.Value) : BadRequest(result.Error);
+    }
+
+    /// <summary>
+    /// Подбор точки по адресу площадки: поле заполняется, только если оно пустое.
+    /// </summary>
+    [HttpPost("incoming/{id}/sale-point/match")]
+    public async Task<IActionResult> MatchSalePoint(string id)
+    {
+        var result = await _salePoints.MatchVetisAsync(id);
+        return result.IsSuccess ? Ok(result.Value) : BadRequest(result.Error);
+    }
+
+    /// <summary>
+    /// Подтверждённое добавление адреса документа в синонимы выбранной точки.
+    /// </summary>
+    [HttpPost("incoming/{id}/sale-point/alias")]
+    public async Task<IActionResult> RememberSalePointAlias(string id)
+    {
+        var result = await _salePoints.RememberVetisAliasAsync(id);
         return result.IsSuccess ? Ok(result.Value) : BadRequest(result.Error);
     }
 

@@ -11,6 +11,13 @@ public sealed class VetisIncomingFilter
     public string Status { get; init; } = "";
 
     public string VsdUuid { get; init; } = "";
+
+    /// <summary>
+    /// Точка в отборе. Пусто — отбора нет; пустая строка документа — только при OnlyWithoutSalePoint.
+    /// </summary>
+    public string SalePointUid { get; init; } = "";
+
+    public bool OnlyWithoutSalePoint { get; init; }
 }
 
 /// <summary>
@@ -33,6 +40,11 @@ public interface IVetisIncomingRepository
     /// Строки списка приходят без XML ВСД: нужны только счётчики документа.
     /// </summary>
     Task<Result<List<VetisIncomingDocumentEntity>>> List(VetisIncomingFilter filter, int skip, int limit);
+
+    /// <summary>
+    /// Есть ли документ с этой точкой: проверка перед удалением точки из справочника.
+    /// </summary>
+    Task<Result<bool>> AnyBySalePoint(string organizationId, string salePointUid);
 
     /// <summary>
     /// Пары организация-площадка документов «Не принят», без XML ВСД.

@@ -55,6 +55,10 @@ internal sealed class MemoryEtrnIncoming : IEtrnIncomingRepository
                 || item.Number.Contains(filter.Number.Trim(), StringComparison.OrdinalIgnoreCase))
             .Where(item => filter.Consignor.Length == 0
                 || item.Consignor.Contains(filter.Consignor.Trim(), StringComparison.OrdinalIgnoreCase))
+            .Where(item => !filter.OnlyWithoutSalePoint || item.SalePointUid.Length == 0)
+            .Where(item => filter.OnlyWithoutSalePoint
+                || filter.SalePointUid.Length == 0
+                || string.Equals(item.SalePointUid, filter.SalePointUid, StringComparison.OrdinalIgnoreCase))
             .OrderByDescending(item => item.SortAt)
             .ThenBy(item => item.Id, StringComparer.Ordinal)
             .Skip(skip)
@@ -62,6 +66,14 @@ internal sealed class MemoryEtrnIncoming : IEtrnIncomingRepository
             .Select(Clone)
             .ToList();
         return Task.FromResult(Result.Success(rows));
+    }
+
+    public Task<Result<bool>> AnyBySalePoint(string organizationId, string salePointUid)
+    {
+        var found = Store.Values.Any(item =>
+            string.Equals(item.OrganizationId, organizationId, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(item.SalePointUid, salePointUid, StringComparison.OrdinalIgnoreCase));
+        return Task.FromResult(Result.Success(found));
     }
 
     public Task<Result<List<EtrnIncomingDocumentEntity>>> StaleSending(long beforeUnix, int limit)

@@ -461,6 +461,160 @@ public class EtrnIncomingLoadServiceTests
         Assert.Equal(EtrnDocumentStatus.Accepted, world.Incoming.Store[document.Id].Status);
     }
 
+    [Fact]
+    public async Task Load_подбирает_точку_по_адресу()
+    {
+        var world = new World();
+        world.Organizations.Store["o1"] = Organization(connection: Connection(), salePoints:
+        [
+            new SalePoint { Uid = "p1", Name = "Склад", Address = "Москва, ул. Ленина, 1" }
+        ]);
+        world.Operator.EnqueueFetch(ScriptedEtrnOperator.Fetching(ScriptedEtrnOperator.Document("d-1")));
+
+        await world.Loader.LoadAsync(CancellationToken.None);
+
+        var stored = world.Incoming.Store[EtrnIncomingDocumentEntity.BuildId("o1", "c1", "d-1")];
+        Assert.Equal("p1", stored.SalePointUid);
+    }
+
+    /// <summary>
+    /// Выбранная вручную точка не сбрасывается, даже если адрес титула указывает на другую.
+    /// </summary>
+    [Fact]
+    public async Task Load_не_меняет_выбранную_точку()
+    {
+        var world = new World();
+        world.Organizations.Store["o1"] = Organization(connection: Connection(), salePoints:
+        [
+            new SalePoint { Uid = "p1", Name = "Склад", Address = "Москва, ул. Ленина, 1" },
+            new SalePoint { Uid = "p2", Name = "Магазин", Address = "Москва, ул. Мира, 2" }
+        ]);
+        var id = EtrnIncomingDocumentEntity.BuildId("o1", "c1", "d-1");
+        world.Incoming.Store[id] = new EtrnIncomingDocumentEntity
+        {
+            Id = id,
+            OrganizationId = "o1",
+            OperatorDocumentId = "d-1",
+            Operator = EtrnOperator.For(Connection()),
+            SalePointUid = "p2",
+            Status = EtrnDocumentStatus.Waiting
+        };
+        world.Operator.EnqueueFetch(ScriptedEtrnOperator.Fetching(ScriptedEtrnOperator.Document("d-1")));
+
+        await world.Loader.LoadAsync(CancellationToken.None);
+
+        Assert.Equal("p2", world.Incoming.Store[id].SalePointUid);
+    }
+
+    [Fact]
+    public async Task Load_оставляет_точку_пустой_без_совпадения()
+    {
+        var world = new World();
+        world.Organizations.Store["o1"] = Organization(connection: Connection(), salePoints:
+        [
+            new SalePoint { Uid = "p1", Name = "Склад", Address = "Москва, ул. Мира, 2" }
+        ]);
+        world.Operator.EnqueueFetch(ScriptedEtrnOperator.Fetching(ScriptedEtrnOperator.Document("d-1")));
+
+        await world.Loader.LoadAsync(CancellationToken.None);
+
+        Assert.Equal("", world.Incoming.Store[EtrnIncomingDocumentEntity.BuildId("o1", "c1", "d-1")].SalePointUid);
+    }
+
+    /// <summary>
+    /// Повторный опрос не переписывает принятую накладную, но пустую точку заполняет.
+    /// </summary>
+    [Fact]
+    public async Task Load_подбирает_точку_принятой_накладной_не_переписывая_её()
+    {
+        var world = new World();
+        world.Organizations.Store["o1"] = Organization(connection: Connection(), salePoints:
+        [
+            new SalePoint { Uid = "p1", Name = "Склад", Address = "Москва, ул. Ленина, 1" }
+        ]);
+        var id = EtrnIncomingDocumentEntity.BuildId("o1", "c1", "d-1");
+        world.Incoming.Store[id] = new EtrnIncomingDocumentEntity
+        {
+            Id = id,
+            OrganizationId = "o1",
+            OperatorDocumentId = "d-1",
+            Operator = EtrnOperator.For(Connection()),
+            Status = EtrnDocumentStatus.Accepted,
+            Number = "было",
+            DeliveryAddress = "Москва, ул. Ленина, 1"
+        };
+        world.Operator.EnqueueFetch(ScriptedEtrnOperator.Fetching(
+            ScriptedEtrnOperator.Document("d-1", number: "стало")));
+
+        await world.Loader.LoadAsync(CancellationToken.None);
+
+        var stored = world.Incoming.Store[id];
+        Assert.Equal("p1", stored.SalePointUid);
+        Assert.Equal(EtrnDocumentStatus.Accepted, stored.Status);
+        Assert.Equal("было", stored.Number);
+    }
+
+    [Fact]
+    public async Task Load_подбирает_точку_когда_список_только_меняет_статус()
+    {
+        var world = new World();
+        world.Organizations.Store["o1"] = Organization(connection: Connection(), salePoints:
+        [
+            new SalePoint { Uid = "p1", Name = "Склад", Address = "Москва, ул. Ленина, 1" }
+        ]);
+        var waiting = Stored("d-1", EtrnDocumentStatus.Waiting);
+        waiting.DeliveryAddress = "Москва, ул. Ленина, 1";
+        waiting.Number = "было";
+        world.Incoming.Store[waiting.Id] = waiting;
+        world.Operator.EnqueueFetch(new EtrnFetchResult
+        {
+            Completed = true,
+            Position = new EtrnPollPosition("e1", "d-1"),
+            ListedStates =
+            [
+                new EtrnListedState
+                {
+                    OperatorDocumentId = "d-1",
+                    Status = EtrnDocumentStatus.Accepted,
+                    Action = EtrnAcceptanceAction.Received
+                }
+            ]
+        });
+
+        await world.Loader.LoadAsync(CancellationToken.None);
+
+        var stored = world.Incoming.Store[waiting.Id];
+        Assert.Equal("p1", stored.SalePointUid);
+        Assert.Equal(EtrnDocumentStatus.Accepted, stored.Status);
+        Assert.Equal("было", stored.Number);
+        Assert.Equal(1, Assert.Single(stored.Lines).Places);
+    }
+
+    [Fact]
+    public async Task Load_подбирает_точку_когда_накладную_закрывает_список()
+    {
+        var world = new World();
+        world.Organizations.Store["o1"] = Organization(connection: Connection(), salePoints:
+        [
+            new SalePoint { Uid = "p1", Name = "Склад", Address = "Москва, ул. Ленина, 1" }
+        ]);
+        var waiting = Stored("d-1", EtrnDocumentStatus.Waiting);
+        waiting.DeliveryAddress = "Москва, ул. Ленина, 1";
+        world.Incoming.Store[waiting.Id] = waiting;
+        world.Operator.EnqueueFetch(new EtrnFetchResult
+        {
+            Completed = true,
+            Position = new EtrnPollPosition("e1", "d-1"),
+            ClosedDocumentIds = ["d-1"]
+        });
+
+        await world.Loader.LoadAsync(CancellationToken.None);
+
+        var stored = world.Incoming.Store[waiting.Id];
+        Assert.Equal("p1", stored.SalePointUid);
+        Assert.Equal(EtrnDocumentStatus.Closed, stored.Status);
+    }
+
     private static EtrnIncomingDocumentEntity Stored(string operatorDocumentId, string status) => new()
     {
         Id = EtrnIncomingDocumentEntity.BuildId("o1", "c1", operatorDocumentId),
@@ -477,7 +631,8 @@ public class EtrnIncomingLoadServiceTests
     private static OrganizationEntity Organization(
         EtrnConnection connection,
         string eventId = "",
-        string documentId = "") => new()
+        string documentId = "",
+        List<SalePoint>? salePoints = null) => new()
     {
         Id = "o1",
         Name = "Организация",
@@ -494,7 +649,8 @@ public class EtrnIncomingLoadServiceTests
         VetisSettings = new OrganizationVetisSettings
         {
             Enterprises = []
-        }
+        },
+        SalePoints = salePoints ?? []
     };
 
     private sealed class World

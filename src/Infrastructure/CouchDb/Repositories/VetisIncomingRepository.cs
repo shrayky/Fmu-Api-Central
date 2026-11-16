@@ -100,6 +100,18 @@ public class VetisIncomingRepository : BaseCouchDbRepository<VetisIncomingDocume
         return await ExecuteMangoQueryAsync(VetisIncomingQuery.List(filter, skip, limit));
     }
 
+    public async Task<Result<bool>> AnyBySalePoint(string organizationId, string salePointUid)
+    {
+        if (!_appState.DbState())
+            return Result.Failure<bool>(DatabaseUnavailable);
+
+        var found = await ExecuteMangoQueryAsync(VetisIncomingQuery.AnyBySalePoint(organizationId, salePointUid));
+        if (found.IsFailure)
+            return Result.Failure<bool>(found.Error);
+
+        return Result.Success(found.Value.Count > 0);
+    }
+
     public async Task<Result<List<VetisIncomingHead>>> HeadsAfter(string afterId, int limit)
     {
         if (!_appState.DbState())

@@ -1,3 +1,4 @@
+using Domain.Entitys.Organization;
 using Domain.Etrn;
 using Domain.GisMt.Models;
 using System.Text.Json.Serialization;
@@ -41,4 +42,7 @@ public record OrganizationView
 
     [JsonPropertyName("etrnConnections")]
     public List<EtrnConnection>? EtrnConnections { get; set; }
+
+    [JsonPropertyName("salePoints")]
+    public List<SalePoint>? SalePoints { get; set; }
 }

@@ -7,6 +7,29 @@ export const padding = {
     right: 20
 };
 
+/**
+ * Браузер не должен сам заполнять поля приложения сохранёнными логинами и паролями.
+ *
+ * Webix рисует поля обычными <input>, и если в форме есть текстовое поле и поле пароля,
+ * Chrome, Edge и Яндекс считают её формой входа: в «ИНН организации» прилетает логин
+ * из сохранённой пары, в «Пароль от ЭЦП» и «Пароль API» — пароль.
+ *
+ * autocomplete=off Chrome для полей входа игнорирует, а new-password понимает:
+ * это поле смены пароля, подставлять в него сохранённый пароль нельзя.
+ * data-* — подсказки менеджерам паролей (LastPass, 1Password, Bitwarden).
+ */
+const AUTOFILL_OFF = {
+    autocomplete: "off",
+    "data-lpignore": "true",
+    "data-1p-ignore": "true",
+    "data-bwignore": "true"
+};
+
+const AUTOFILL_SECRET = {
+    ...AUTOFILL_OFF,
+    autocomplete: "new-password"
+};
+
 export function TableToolbar(tableName, prms = {}) {
     let newElement = {
         cols: [
@@ -78,6 +101,7 @@ export function TextBox(type, label, name, prms = {}) {
         labelPosition: "top",
         id: id,
         name: name,
+        attributes: { ...AUTOFILL_OFF },
     }
 
     return applyParameters(newElement, prms);
@@ -95,6 +119,7 @@ export function Text(label, name, value, prms = {}) {
         labelPosition: "top",
         id: id,
         name: name,
+        attributes: { ...AUTOFILL_OFF },
     }
 
     return applyParameters(newElement, prms);
@@ -111,7 +136,8 @@ export function Number(label, name, value, format, prms = {}) {
         value: value,
         label: label,
         labelPosition: "top",
-        "format": format
+        "format": format,
+        attributes: { ...AUTOFILL_OFF },
     }
 
     return applyParameters(newElement, prms);
@@ -128,6 +154,7 @@ export function PasswordBox(label, name, prms = {}) {
         labelPosition: "top",
         id: id,
         name: name,
+        attributes: { ...AUTOFILL_SECRET },
     }
 
     return applyParameters(newElement, prms);
@@ -145,6 +172,7 @@ export function TextBoxFormated(type, label, name, format, prms = {}) {
         labelPosition: "top",
         id: id,
         name: name,
+        attributes: { ...AUTOFILL_OFF },
     }
 
     return applyParameters(newElement, prms);
@@ -168,6 +196,12 @@ export function CheckBox(label, name, prms = {}) {
 
 function applyParameters(newElement, prms) {
     for (let prm in prms) {
+        // attributes копятся: значения по умолчанию из фабрики не должны теряться.
+        if (prm === "attributes" && newElement.attributes) {
+            newElement.attributes = { ...newElement.attributes, ...prms.attributes };
+            continue;
+        }
+
         newElement[prm] = prms[prm];
     }
 

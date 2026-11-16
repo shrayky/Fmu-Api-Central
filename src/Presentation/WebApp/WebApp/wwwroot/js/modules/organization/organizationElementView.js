@@ -8,6 +8,7 @@ import { markingBody } from "./organizationMarkingTab.js";
 import { setVetisFieldsEnabled, vetisBody, vetisSettings } from "./organizationVetisTab.js";
 import { closeLetter, showEnterprises } from "./organizationVetisEnterprises.js";
 import { etrnBody, etrnConnectionsFromTable, loadEtrnErrors, showEtrnConnections } from "./organizationEtrnTab.js";
+import { closeImportWindow, closeSalePointWindow, salePointsBody, salePointsFromTable, showSalePoints } from "./organizationSalePoints.js";
 
 class OrganizationElementView {
     constructor() {
@@ -33,6 +34,23 @@ class OrganizationElementView {
             markingTab: "Маркировка",
             vetisTab: "Ветис",
             etrnTab: "ЭТрН",
+            salePointsTab: "Торговые точки",
+            salePointAdd: "Добавить",
+            salePointEdit: "Торговая точка",
+            salePointName: "Название",
+            salePointAddress: "Адрес",
+            salePointFias: "ФИАС",
+            salePointAliases: "Синонимы адреса",
+            salePointAliasesHeader: "Синонимы адреса",
+            salePointAliasAdd: "Добавить синоним",
+            salePointImport: "Загрузить",
+            salePointImportTitle: "Загрузка торговых точек",
+            salePointImportAddresses: "Адреса, по одному в строке",
+            salePointImportHint: "Каждая строка — новая торговая точка. Название подставится из адреса.",
+            salePointImportEmpty: "Вставьте хотя бы один адрес",
+            salePointImportDuplicate: "Такие адреса уже есть в справочнике",
+            salePointClosed: "Закрыта",
+            salePointOk: "ОК",
             etrnType: "Тип",
             etrnName: "Название",
             etrnEnable: "Включено",
@@ -78,7 +96,7 @@ class OrganizationElementView {
         };
 
         this.SIZES = {
-            maxWidth: 1040,
+            maxWidth: 1280,
             maxHeight: 1080,
             viewportMargin: 24,
             minTabview: 360,
@@ -122,6 +140,16 @@ class OrganizationElementView {
             autoQuench: "organizationVetisAutoQuench",
             autoQuenchDelay: "organizationVetisAutoQuenchDelay",
             etrnTab: "organizationEtrnTab",
+            salePointsTab: "organizationSalePointsTab",
+            salePointsTable: "organizationSalePointsTable",
+            salePointWindow: "organizationSalePointWindow",
+            salePointName: "organizationSalePointName",
+            salePointAddress: "organizationSalePointAddress",
+            salePointFias: "organizationSalePointFias",
+            salePointAliases: "organizationSalePointAliases",
+            salePointClosed: "organizationSalePointClosed",
+            salePointImportWindow: "organizationSalePointImportWindow",
+            salePointImport: "organizationSalePointImport",
             etrnConnections: "organizationEtrnConnections",
             etrnOfdForm: "organizationEtrnOfdForm",
             etrnSabyForm: "organizationEtrnSabyForm",
@@ -147,6 +175,7 @@ class OrganizationElementView {
         const vetis = editedData.vetisSettings || {};
         this._loadedVetis = editedData.vetisSettings || null;
         this._loadedEtrn = editedData.etrnConnections || [];
+        this._loadedSalePoints = editedData.salePoints || [];
         const configuration = await loadConfiguration();
         const content = configuration?.value?.Content;
         const vetisOn = !!content?.vetisSettings?.enable;
@@ -162,12 +191,14 @@ class OrganizationElementView {
             modal: true,
             move: false,
             resize: false,
-            width: Math.min(window.innerWidth * 0.9, this.SIZES.maxWidth),
+            width: Math.min(window.innerWidth - this.SIZES.viewportMargin * 2, this.SIZES.maxWidth),
             height: windowHeight,
             position: "center",
             on: {
                 onDestruct: () => {
                     closeLetter(this);
+                    closeSalePointWindow(this);
+                    closeImportWindow(this);
                     if (onClose) {
                         onClose();
                     }
@@ -217,6 +248,7 @@ class OrganizationElementView {
         }
 
         showEtrnConnections(this, this._loadedEtrn);
+        showSalePoints(this, this._loadedSalePoints);
         loadEtrnErrors(this);
 
         setTimeout(() => {
@@ -306,18 +338,11 @@ class OrganizationElementView {
         else
             tabbar.disableOption(this.NAMES.etrnTab);
     }
-
-    /**
-     * Окно берёт всю высоту экрана: на вкладке «Ветис» настройки должны влезать без прокрутки.
-     * Предел 1080 — выше панель настроек уже нечего заполнять.
-     */
     _windowHeight() {
         return Math.min(window.innerHeight - this.SIZES.viewportMargin, this.SIZES.maxHeight);
     }
 
-    /**
-     * Высота вкладок — остаток окна после шапки, полей над вкладками и кнопок.
-     */
+
     _tabviewHeight(windowHeight) {
         return Math.max(this.SIZES.minTabview, windowHeight - this.SIZES.tabviewChrome);
     }
@@ -328,6 +353,7 @@ class OrganizationElementView {
             id: this.NAMES.tabs,
             height: this._tabviewHeight(windowHeight),
             cells: organizationTabCells(
+                { header: this.LABELS.salePointsTab, body: salePointsBody(this) },
                 { header: this.LABELS.markingTab, body: markingBody(this, groups, trueApi, token) },
                 { header: this.LABELS.vetisTab, body: vetisOn ? vetisBody(this, vetis) : {} },
                 { header: this.LABELS.etrnTab, body: etrnOn ? etrnBody(this) : {} },
@@ -381,7 +407,10 @@ class OrganizationElementView {
                 password: $$(this.NAMES.password).getValue(),
                 digitalSignature: $$(this.NAMES.digitalSignature).getValue()
             },
-            etrnConnections: etrnConnectionsFromTable(this)
+            etrnConnections: etrnConnectionsFromTable(this),
+            salePoints: $$(this.NAMES.salePointsTable)
+                ? salePointsFromTable(this)
+                : this._loadedSalePoints
         };
 
         if ($$(this.NAMES.apiKey))
