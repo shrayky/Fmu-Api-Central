@@ -968,6 +968,126 @@ public class EtrnSabyGatewayTests
     }
 
     [Fact]
+    public async Task Доставлен_в_списке_при_открытой_приёмке_в_чтении_ждёт_приёмки()
+    {
+        var world = new World();
+        world.Handler.Files["https://files.test/title.xml"] = File.ReadAllBytes(
+            Path.Combine(AppContext.BaseDirectory, "XmlSamples", "sender-simple.xml"));
+        world.Handler.Respond = (call, _) => call.Method switch
+        {
+            EtrnMethods.ChangesList => SabyHandler.Result("""
+                {
+                  "Документ": [{
+                    "Идентификатор": "d1",
+                    "Состояние": {"Код":"4","Название":"Доставлен"},
+                    "Событие": [{
+                      "Идентификатор": "e1",
+                      "ДатаВремя": "13.11.2026 16.16.17",
+                      "Название": "Начало.Погружен",
+                      "Вложение": [{
+                        "Подтип": "1110339",
+                        "Файл": {"Имя": "ON_TRNACLGROT_1.xml", "Ссылка": "https://files.test/title.xml"}
+                      }]
+                    }]
+                  }]
+                }
+                """),
+            EtrnMethods.ReadDocument => SabyHandler.Result("""
+                {
+                  "Состояние": {"Код":"10","Название":"В обработке"},
+                  "Этап": [{"Название":"Приемка груза","Действие":[{"Название":"Получен"}]}]
+                }
+                """),
+            _ => SabyHandler.Result("true")
+        };
+
+        var result = await world.Gateway.FetchAsync(ContextEmpty, CancellationToken.None);
+
+        Assert.True(result.Value.Completed, result.Value.Error);
+        var document = Assert.Single(result.Value.Documents);
+        Assert.Equal(EtrnDocumentStatus.Waiting, document.Status);
+        Assert.Equal("", document.Error);
+    }
+
+    [Fact]
+    public async Task Список_получения_груза_без_титула_уступает_открытой_приёмке()
+    {
+        var world = new World();
+        world.Handler.Files["https://files.test/title.xml"] = File.ReadAllBytes(
+            Path.Combine(AppContext.BaseDirectory, "XmlSamples", "sender-simple.xml"));
+        world.Handler.Respond = (call, _) => call.Method switch
+        {
+            EtrnMethods.ChangesList => SabyHandler.Result("""
+                {
+                  "Документ": [{
+                    "Идентификатор": "d1",
+                    "Состояние": {"Код":"10","Название":"В обработке"},
+                    "Этап": {"Название":"Получение груза"},
+                    "Событие": [{ "Идентификатор": "e1", "ДатаВремя": "13.11.2026 16.18.07", "Название": "Получение груза.Принят" }]
+                  }]
+                }
+                """),
+            EtrnMethods.ReadDocument => SabyHandler.Result("""
+                {
+                  "Состояние": {"Код":"10","Название":"В обработке"},
+                  "Этап": [{"Название":"Приемка груза","Действие":[{"Название":"Получен"}]}],
+                  "Вложение": [{
+                    "Подтип": "1110339",
+                    "Файл": {"Имя": "ON_TRNACLGROT_1.xml", "Ссылка": "https://files.test/title.xml"}
+                  }]
+                }
+                """),
+            _ => SabyHandler.Result("true")
+        };
+
+        var result = await world.Gateway.FetchAsync(ContextEmpty, CancellationToken.None);
+
+        Assert.True(result.Value.Completed, result.Value.Error);
+        var document = Assert.Single(result.Value.Documents);
+        Assert.Equal(EtrnDocumentStatus.Waiting, document.Status);
+        Assert.Equal("", document.Error);
+    }
+
+    [Fact]
+    public async Task Завершённый_список_не_становится_ожиданием_из_чтения()
+    {
+        var world = new World();
+        world.Handler.Files["https://files.test/title.xml"] = File.ReadAllBytes(
+            Path.Combine(AppContext.BaseDirectory, "XmlSamples", "sender-simple.xml"));
+        world.Handler.Respond = (call, _) => call.Method switch
+        {
+            EtrnMethods.ChangesList => SabyHandler.Result("""
+                {
+                  "Документ": [{
+                    "Идентификатор": "d1",
+                    "Состояние": {"Код":"7","Название":"Выполнение завершено успешно"},
+                    "Событие": [{
+                      "Идентификатор": "e1",
+                      "ДатаВремя": "13.11.2026 16.18.07",
+                      "Вложение": [{
+                        "Подтип": "1110339",
+                        "Файл": {"Имя": "ON_TRNACLGROT_1.xml", "Ссылка": "https://files.test/title.xml"}
+                      }]
+                    }]
+                  }]
+                }
+                """),
+            EtrnMethods.ReadDocument => SabyHandler.Result("""
+                {"Этап":[{"Название":"Приемка груза","Действие":[{"Название":"Получен"}]}]}
+                """),
+            _ => SabyHandler.Result("true")
+        };
+
+        var result = await world.Gateway.FetchAsync(ContextEmpty, CancellationToken.None);
+
+        Assert.True(result.Value.Completed, result.Value.Error);
+        var document = Assert.Single(result.Value.Documents);
+        Assert.Equal(EtrnDocumentStatus.Closed, document.Status);
+        Assert.Equal("Выполнение завершено успешно", document.Error);
+        Assert.DoesNotContain(world.Handler.Calls, call => call.Method == EtrnMethods.ReadDocument);
+    }
+
+    [Fact]
     public async Task Обрыв_чтения_состояния_не_сохраняет_накладную()
     {
         var world = new World();

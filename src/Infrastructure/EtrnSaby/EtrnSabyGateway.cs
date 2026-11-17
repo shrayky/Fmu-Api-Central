@@ -933,7 +933,7 @@ public sealed class EtrnSabyGateway : IEtrnOperator
         List<EtrnExchange> exchanges,
         CancellationToken cancellationToken)
     {
-        var rows = new List<(string EventId, string DocumentId, string EventAt, string FileUrl, string FileName, DocumentPicture Picture, bool HasState)>();
+        var rows = new List<(string EventId, string DocumentId, string EventAt, string FileUrl, string FileName, DocumentPicture Picture)>();
         foreach (var item in documents.EnumerateArray())
         {
             var documentId = Text(item, "Идентификатор");
@@ -941,11 +941,10 @@ public sealed class EtrnSabyGateway : IEtrnOperator
                 continue;
 
             var picture = DocumentPicture.From(item);
-            var hasState = HasListedState(item);
             foreach (var change in ChangesOf(item))
             {
                 var file = ShipperFile(change);
-                rows.Add((Text(change, "Идентификатор"), documentId, Text(change, "ДатаВремя"), file.Url, file.Name, picture, hasState));
+                rows.Add((Text(change, "Идентификатор"), documentId, Text(change, "ДатаВремя"), file.Url, file.Name, picture));
             }
         }
 
@@ -1022,9 +1021,10 @@ public sealed class EtrnSabyGateway : IEtrnOperator
             if (title.IsFailure)
                 return Failed(events, index, fetched, [], exchanges, title.Error, context.Position, keepPosition: true, states: states);
 
-            // Состояние в списке уже есть. Читаем документ только без него: иначе завершённая накладная станет «Ждёт приёмки».
+            // Код 4 и фаза «Получение груза» в списке отстают: чтение уже может открыть «Приемка груза».
+            // Готовое решение и завершённое состояние не перечитываем, иначе закрытая накладная станет ожиданием.
             var picture = row.Picture;
-            if (!row.HasState)
+            if (NeedsCurrentStage(picture))
             {
                 var state = await CallAsync(
                     context,
@@ -1036,7 +1036,7 @@ public sealed class EtrnSabyGateway : IEtrnOperator
                 if (!state.Ok)
                     return Failed(events, index, fetched, [], exchanges, state.Error, context.Position, states: states);
 
-                picture = DocumentPicture.From(state.Result);
+                picture = PreferRead(picture, DocumentPicture.From(state.Result));
             }
 
             var fetchedDocument = title.Value.ToFetched(row.DocumentId);
@@ -1060,19 +1060,20 @@ public sealed class EtrnSabyGateway : IEtrnOperator
         if (read.Decision.Length > 0 || read.Finished)
             return read;
 
+        if (listed.Decision.Length > 0 || listed.Finished)
+            return listed;
+
+        if (read.IsAcceptance)
+            return read;
+
         if (listed.StateCode.Length > 0 || listed.Stage.Length > 0)
             return listed;
 
         return read;
     }
 
-    private static bool HasListedState(JsonElement document)
-    {
-        if (!document.TryGetProperty("Состояние", out var state) || state.ValueKind != JsonValueKind.Object)
-            return false;
-
-        return Text(state, "Код").Trim().Length > 0 || Text(state, "Название").Trim().Length > 0;
-    }
+    private static bool NeedsCurrentStage(DocumentPicture listed) =>
+        listed.Decision.Length == 0 && !listed.Finished && !listed.IsAcceptance;
 
     /// <summary>
     /// Пустой титул карточку не создаёт. Наружу уходит только смена статуса, которую список уже принёс.

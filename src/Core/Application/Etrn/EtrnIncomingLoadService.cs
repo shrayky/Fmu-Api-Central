@@ -110,7 +110,18 @@ public sealed class EtrnIncomingLoadService : IEtrnIncomingLoader
             return;
         }
 
-        if (stage.Value.Stage.Length == 0 || stage.Value.StillAcceptance)
+        // Список показывает имя этапа из заметки. Открытая приёмка эту заметку снимает.
+        if (stage.Value.StillAcceptance)
+        {
+            if (!EtrnDocumentState.IsStageNote(document.LastError))
+                return;
+
+            document.LastError = "";
+            await SaveWaitingAsync(organization.Value, document);
+            return;
+        }
+
+        if (stage.Value.Stage.Length == 0)
             return;
         if (document.LastError.Length > 0 && !EtrnDocumentState.IsStageNote(document.LastError))
             return;

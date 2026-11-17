@@ -395,6 +395,28 @@ public class EtrnIncomingLoadServiceTests
     }
 
     [Fact]
+    public async Task Open_снимает_заметку_получения_груза_когда_приёмка_открыта()
+    {
+        var world = new World();
+        world.Organizations.Store["o1"] = Organization(connection: Connection());
+        var waiting = Stored("d-1", EtrnDocumentStatus.Waiting);
+        waiting.LastError = EtrnDocumentState.StageUnavailable("Получение груза");
+        world.Incoming.Store[waiting.Id] = waiting;
+        world.Operator.EnqueueStage(new EtrnStageResult
+        {
+            Completed = true,
+            Stage = EtrnPollEvent.AcceptanceStage,
+            StillAcceptance = true
+        });
+
+        await world.Loader.SyncOpenAsync(waiting.Id, CancellationToken.None);
+
+        var stored = world.Incoming.Store[waiting.Id];
+        Assert.Equal(EtrnDocumentStatus.Waiting, stored.Status);
+        Assert.Equal("", stored.LastError);
+    }
+
+    [Fact]
     public async Task Open_ожидающую_СБИС_закрывает_если_приёмка_уже_получена()
     {
         var world = new World();
