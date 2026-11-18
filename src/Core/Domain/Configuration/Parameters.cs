@@ -34,6 +34,9 @@ public class Parameters
     [JsonPropertyName("etrnSettings")]
     public EtrnSettings EtrnSettings { get; set; } = new();
 
+    [JsonPropertyName("dadataSettings")]
+    public DadataSettings DadataSettings { get; set; } = new();
+
     [JsonPropertyName("security")]
     public SecuritySettings Security { get; set; } = new();
 

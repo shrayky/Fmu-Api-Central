@@ -42,6 +42,11 @@ internal sealed class MemoryOrganizationRepository : IOrganizationRepository
 
     public string? UpdateError { get; set; }
 
+    /// <summary>
+    /// Правка карточки между чтениями: например, точка исчезла, пока шла загрузка.
+    /// </summary>
+    public Func<string, Task>? BeforeGetById { get; set; }
+
     public Task<Result> Create(OrganizationEntity entity)
     {
         Store[entity.Id] = Clone(entity);
@@ -58,10 +63,15 @@ internal sealed class MemoryOrganizationRepository : IOrganizationRepository
         return Task.FromResult(Result.Success());
     }
 
-    public Task<Result<OrganizationEntity>> GetById(string id) =>
-        Task.FromResult(Store.TryGetValue(id, out var entity)
+    public async Task<Result<OrganizationEntity>> GetById(string id)
+    {
+        if (BeforeGetById != null)
+            await BeforeGetById(id);
+
+        return Store.TryGetValue(id, out var entity)
             ? Result.Success(Clone(entity))
-            : Result.Failure<OrganizationEntity>("нет"));
+            : Result.Failure<OrganizationEntity>("нет");
+    }
 
     public Task<Result<OrganizationEntity>> GetByInn(string inn) => throw new NotImplementedException();
 

@@ -4,6 +4,7 @@ import { setEtrnMenuVisible } from "../../services/EtrnMenuService.js";
 import { createServerTab, serverSettingsFormId } from "./serverTab.js";
 import { createVetisTab, vetisSettingsFormId } from "./vetisTab.js";
 import { createEtrnTab, etrnSettingsFormId } from "./etrnTab.js";
+import { createDadataTab, dadataSettingsFormId } from "./dadataTab.js";
 import { mapServerSettings } from "./loadedSettings.js";
 import { buildConfigurationUpdaters, vetisEndpoint } from "./saveSettings.js";
 import { readFieldValues } from "./tabFields.js";
@@ -30,11 +31,14 @@ const fieldNames = [
     "etrnEnable",
     "etrnRequestRetention",
     "etrnFailedRequestRetention",
+    "dadataEnable",
+    "dadataApiKey",
+    "dadataSecret",
 ];
 
-const formIds = [serverSettingsFormId, vetisSettingsFormId, etrnSettingsFormId];
+const formIds = [serverSettingsFormId, vetisSettingsFormId, etrnSettingsFormId, dadataSettingsFormId];
 
-export function createServerSettingsRows(serverTab, vetisTab, etrnTab, onSave) {
+export function createServerSettingsRows(serverTab, vetisTab, etrnTab, dadataTab, onSave) {
     return [
         {
             cols: [
@@ -51,7 +55,7 @@ export function createServerSettingsRows(serverTab, vetisTab, etrnTab, onSave) {
         {
             view: "tabview",
             id: "serverSettingsTabView",
-            cells: [serverTab, vetisTab, etrnTab]
+            cells: [serverTab, vetisTab, etrnTab, dadataTab]
         }
     ];
 }
@@ -104,6 +108,7 @@ class SettingsView {
         this.server = mapped.server;
         this.vetis = mapped.vetis;
         this.etrn = mapped.etrn;
+        this.dadata = mapped.dadata;
         return this;
     }
 
@@ -116,6 +121,7 @@ class SettingsView {
                 createServerTab(this.server),
                 createVetisTab(this.vetis),
                 createEtrnTab(this.etrn),
+                createDadataTab(this.dadata),
                 () => this.save()
             )
         };

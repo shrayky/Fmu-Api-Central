@@ -1,3 +1,4 @@
+using Application.Dadata;
 using Application.Etrn;
 using Application.SalePoints;
 using Application.Vetis;
@@ -22,19 +23,22 @@ public class OrganizationController : ControllerBase
     private readonly VetisProbeService _vetis;
     private readonly EtrnProbeService _etrn;
     private readonly ISalePointUsage _salePoints;
+    private readonly DadataAddressService _dadata;
 
     public OrganizationController(
         IOrganizationManagerService manager,
         IGisMtExchangeService gisMtExchange,
         VetisProbeService vetis,
         EtrnProbeService etrn,
-        ISalePointUsage salePoints)
+        ISalePointUsage salePoints,
+        DadataAddressService dadata)
     {
         _manager = manager;
         _gisMtExchange = gisMtExchange;
         _vetis = vetis;
         _etrn = etrn;
         _salePoints = salePoints;
+        _dadata = dadata;
     }
 
     [HttpGet]
@@ -105,6 +109,18 @@ public class OrganizationController : ControllerBase
         return result.IsSuccess
             ? Ok(new SalePointUsageView { Used = result.Value })
             : BadRequest(result.Error);
+    }
+
+    /// <summary>
+    /// Дома по адресу из окна торговой точки. Ключи DaData в ответ не попадают.
+    /// </summary>
+    [HttpPost("dadata-address")]
+    public async Task<IActionResult> DadataAddress(
+        [FromBody] DadataAddressRequest? request,
+        CancellationToken cancellationToken)
+    {
+        var result = await _dadata.Suggest(request?.Address ?? "", cancellationToken);
+        return result.IsSuccess ? Ok(result.Value) : BadRequest(result.Error);
     }
 
     /// <summary>

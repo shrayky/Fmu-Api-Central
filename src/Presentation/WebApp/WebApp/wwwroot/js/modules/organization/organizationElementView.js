@@ -13,6 +13,8 @@ import { closeImportWindow, closeSalePointWindow, salePointsBody, salePointsFrom
 class OrganizationElementView {
     constructor() {
         this.elementId = "";
+        // Кнопка «Получить» появляется только при включённой интеграции с DaData.
+        this._dadataEnabled = false;
 
         this.LABELS = {
             formTitle: "Организация",
@@ -40,6 +42,9 @@ class OrganizationElementView {
             salePointName: "Название",
             salePointAddress: "Адрес",
             salePointFias: "ФИАС",
+            salePointFiasLoad: "Получить",
+            salePointDadataTitle: "Выбор дома",
+            salePointDadataSelect: "Выбрать",
             salePointAliases: "Синонимы адреса",
             salePointAliasesHeader: "Синонимы адреса",
             salePointAliasAdd: "Добавить синоним",
@@ -146,6 +151,10 @@ class OrganizationElementView {
             salePointName: "organizationSalePointName",
             salePointAddress: "organizationSalePointAddress",
             salePointFias: "organizationSalePointFias",
+            salePointFiasLoad: "organizationSalePointFiasLoad",
+            salePointFiasSpinner: "organizationSalePointFiasSpinner",
+            salePointDadataWindow: "organizationSalePointDadataWindow",
+            salePointDadataList: "organizationSalePointDadataList",
             salePointAliases: "organizationSalePointAliases",
             salePointClosed: "organizationSalePointClosed",
             salePointImportWindow: "organizationSalePointImportWindow",
@@ -180,6 +189,7 @@ class OrganizationElementView {
         const content = configuration?.value?.Content;
         const vetisOn = !!content?.vetisSettings?.enable;
         const etrnOn = content?.etrnSettings?.enable === true;
+        this._dadataEnabled = content?.dadataSettings?.enable === true;
 
         if ($$(this.NAMES.windowId)) {
             $$(this.NAMES.windowId).destructor();

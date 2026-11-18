@@ -1,3 +1,4 @@
+using Application.Dadata;
 using Application.Tests.Fakes;
 using Application.Vetis;
 using Domain.Entitys.Organization;
@@ -430,6 +431,31 @@ public class VetisIncomingLoadServiceTests
         Assert.Equal("", Assert.Single(world.Incoming.Store.Values).SalePointUid);
     }
 
+    [Fact]
+    public async Task Load_передаёт_адрес_площадки_в_стандартизацию()
+    {
+        var world = new World();
+        world.SkipEnterprise("e2");
+        world.EnableDadata();
+        var organization = world.Organizations.Store["o1"];
+        organization.VetisSettings.Enterprises[0].Address = "Москва, ул. Ленина, 1";
+        organization.SalePoints =
+        [
+            new SalePoint { Uid = "p1", Name = "Склад", Address = "Москва, ул. Мира, 2", FiasId = "f1" }
+        ];
+        world.Dadata.EnqueueClean("f1");
+        world.Gateway.Enqueue(ScriptedVetisGateway.Page(1, Vsd("v1", "CONFIRMED", "ТТН-1")));
+
+        await world.Sut.LoadAsync(CancellationToken.None);
+
+        Assert.Equal("Москва, ул. Ленина, 1", Assert.Single(world.Dadata.CleanRequests));
+        var document = Assert.Single(world.Incoming.Store.Values);
+        Assert.Equal("p1", document.SalePointUid);
+        Assert.Equal(
+            "Москва, ул. Ленина, 1",
+            Assert.Single(world.Organizations.Store["o1"].SalePoints.Single(item => item.Uid == "p1").Aliases).Address);
+    }
+
     private static DateTimeOffset ParseCursor(string value)
     {
         Assert.True(VetisDateTime.TryParse(value, out var instant));
@@ -478,14 +504,28 @@ public class VetisIncomingLoadServiceTests
             Parameters = new MemoryVetisParameters(enable);
             Organizations.Store["o1"] = Organization("o1");
             var recorder = new VetisApplicationRecorder(Applications, NullLogger<VetisApplicationRecorder>.Instance, Clock);
+            var dadata = new DadataSalePointResolver(
+                new DadataAddressService(Dadata, Parameters),
+                Organizations,
+                NullLogger<DadataSalePointResolver>.Instance);
             Sut = new VetisIncomingLoadService(
                 Gateway,
                 Organizations,
                 Incoming,
                 recorder,
                 Parameters,
+                dadata,
                 NullLogger<VetisIncomingLoadService>.Instance,
                 Clock);
+        }
+
+        public ScriptedDadataClient Dadata { get; } = new();
+
+        public void EnableDadata()
+        {
+            Parameters.Value.DadataSettings.Enable = true;
+            Parameters.Value.DadataSettings.ApiKey = "api-key";
+            Parameters.Value.DadataSettings.Secret = "secret";
         }
 
         public FixedClock Clock { get; } = new(Now);

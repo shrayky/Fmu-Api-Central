@@ -133,6 +133,21 @@ class OrganizationService {
         return data.value;
     }
 
+    /** Дома DaData по адресу из окна торговой точки. */
+    async dadataAddress(address) {
+        const data = await this.authService.makeAuthenticatedRequest(`${this.apiEndpoint}/dadata-address`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ address })
+        });
+
+        if (!data.result) {
+            throw new Error(data.error);
+        }
+
+        return data.value || [];
+    }
+
     async parseVetisLetter(text) {
         const data = await this.authService.makeAuthenticatedRequest(`${this.apiEndpoint}/vetis/letter`, {
             method: "POST",

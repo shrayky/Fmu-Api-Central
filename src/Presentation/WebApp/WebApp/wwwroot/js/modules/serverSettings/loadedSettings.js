@@ -5,6 +5,7 @@ export function mapServerSettings(configuration) {
     const logger = configuration.loggerSettings ?? {};
     const vetis = configuration.vetisSettings ?? {};
     const etrn = configuration.etrnSettings ?? {};
+    const dadata = configuration.dadataSettings ?? {};
 
     return {
         server: {
@@ -33,6 +34,11 @@ export function mapServerSettings(configuration) {
             incomingFetchIntervalMinutes: etrn.incomingFetchIntervalMinutes ?? 5,
             requestRetentionDays: etrn.requestRetentionDays ?? 1,
             failedRequestRetentionDays: etrn.failedRequestRetentionDays ?? 7,
+        },
+        dadata: {
+            enable: dadata.enable === true,
+            apiKey: dadata.apiKey || "",
+            secret: dadata.secret || "",
         }
     };
 }

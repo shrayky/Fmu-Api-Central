@@ -4,6 +4,7 @@ using Application.MarkingCalendar.Services;
 using Authentication;
 using Configuration;
 using CouchDb;
+using Dadata;
 using Domain.Configuration;
 using Domain.Database;
 using Logger;
@@ -66,6 +67,7 @@ builder.Services.AddHttpClient(MarkingCalendarService.HttpClientName, client =>
 builder.Services.AddTrueApiIntegration();
 builder.Services.AddGisMtExchange();
 builder.Services.AddVetisApi();
+builder.Services.AddDadata();
 builder.Services.AddEtrnSaby();
 builder.Services.AddEtrnOfd();
 builder.Services.AddBotService(appSettings.BotSettings);

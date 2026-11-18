@@ -63,6 +63,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EtrnOfd.Tests", "src\tests\
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CertificateSigning", "src\Infrastructure\CertificateSigning\CertificateSigning.csproj", "{CA53527D-39CD-4F27-A374-763F32C0B188}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Dadata", "src\Infrastructure\Dadata\Dadata.csproj", "{14C76448-AA24-41BF-9073-7EB7A1CDCF0B}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -349,6 +351,18 @@ Global
 		{CA53527D-39CD-4F27-A374-763F32C0B188}.Release|x64.Build.0 = Release|Any CPU
 		{CA53527D-39CD-4F27-A374-763F32C0B188}.Release|x86.ActiveCfg = Release|Any CPU
 		{CA53527D-39CD-4F27-A374-763F32C0B188}.Release|x86.Build.0 = Release|Any CPU
+		{14C76448-AA24-41BF-9073-7EB7A1CDCF0B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{14C76448-AA24-41BF-9073-7EB7A1CDCF0B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{14C76448-AA24-41BF-9073-7EB7A1CDCF0B}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{14C76448-AA24-41BF-9073-7EB7A1CDCF0B}.Debug|x64.Build.0 = Debug|Any CPU
+		{14C76448-AA24-41BF-9073-7EB7A1CDCF0B}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{14C76448-AA24-41BF-9073-7EB7A1CDCF0B}.Debug|x86.Build.0 = Debug|Any CPU
+		{14C76448-AA24-41BF-9073-7EB7A1CDCF0B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{14C76448-AA24-41BF-9073-7EB7A1CDCF0B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{14C76448-AA24-41BF-9073-7EB7A1CDCF0B}.Release|x64.ActiveCfg = Release|Any CPU
+		{14C76448-AA24-41BF-9073-7EB7A1CDCF0B}.Release|x64.Build.0 = Release|Any CPU
+		{14C76448-AA24-41BF-9073-7EB7A1CDCF0B}.Release|x86.ActiveCfg = Release|Any CPU
+		{14C76448-AA24-41BF-9073-7EB7A1CDCF0B}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -381,6 +395,7 @@ Global
 		{11C5B49C-54A6-4B06-937B-8F3A72E4BC9D} = {ECC180F4-F5FA-4E74-8475-DF018F910FCC}
 		{38EC6A97-5831-44ED-8808-D025348D8426} = {EB556516-41B5-5F63-37FC-96959EC7E04A}
 		{CA53527D-39CD-4F27-A374-763F32C0B188} = {ECC180F4-F5FA-4E74-8475-DF018F910FCC}
+		{14C76448-AA24-41BF-9073-7EB7A1CDCF0B} = {ECC180F4-F5FA-4E74-8475-DF018F910FCC}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {CB0EE380-F315-4308-BAB8-99F101EEABE3}

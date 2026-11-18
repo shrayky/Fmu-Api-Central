@@ -60,6 +60,24 @@ export function buildConfigurationUpdaters(values) {
             incomingFetchIntervalMinutes: parseInt(values.etrnIncomingInterval),
             requestRetentionDays: parseInt(values.etrnRequestRetention),
             failedRequestRetentionDays: parseInt(values.etrnFailedRequestRetention)
-        })
+        }),
+        // Ключи DaData показываются на вкладке. Не отрисованное поле не должно стирать сохранённый ключ.
+        dadataSettings: prev => {
+            if (values.dadataEnable === undefined
+                && values.dadataApiKey === undefined
+                && values.dadataSecret === undefined)
+                return prev;
+
+            return {
+                ...prev,
+                enable: !!values.dadataEnable,
+                apiKey: values.dadataApiKey === undefined
+                    ? (prev.apiKey ?? "")
+                    : String(values.dadataApiKey || "").trim(),
+                secret: values.dadataSecret === undefined
+                    ? (prev.secret ?? "")
+                    : String(values.dadataSecret || "").trim()
+            };
+        }
     };
 }

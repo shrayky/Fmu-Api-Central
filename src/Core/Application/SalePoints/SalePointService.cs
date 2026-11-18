@@ -233,40 +233,11 @@ public sealed class SalePointService
         if (text.Length == 0)
             return Result.Failure("У документа нет адреса");
 
-        if (text.Length > 250)
-            return Result.Failure("Адрес синонима: не больше 250 символов");
+        var added = SalePointAliasRules.Add(organization, salePointUid, text);
+        if (added.IsFailure)
+            return added;
 
-        var points = organization.SalePoints ?? [];
-        var point = points.FirstOrDefault(item =>
-            string.Equals(item.Uid, salePointUid, StringComparison.OrdinalIgnoreCase));
-        if (point == null)
-            return Result.Failure("Точка не найдена в справочнике организации");
-
-        if (point.Closed)
-            return Result.Failure("Точка закрыта: выберите открытую");
-
-        if (Matches(point, text))
-            return Result.Failure($"Адрес уже указан у точки «{point.Name}»");
-
-        var other = points.FirstOrDefault(item =>
-            !item.Closed
-            && !string.Equals(item.Uid, point.Uid, StringComparison.OrdinalIgnoreCase)
-            && Matches(item, text));
-        if (other != null)
-            return Result.Failure($"Адрес «{text}» уже указан у открытой точки «{other.Name}»");
-
-        point.Aliases ??= [];
-        point.Aliases.Add(new SalePointAlias { Uid = Guid.NewGuid().ToString(), Address = text });
         return await _organizations.Update(organization);
-    }
-
-    private static bool Matches(SalePoint point, string address)
-    {
-        if (string.Equals((point.Address ?? "").Trim(), address, StringComparison.OrdinalIgnoreCase))
-            return true;
-
-        return (point.Aliases ?? []).Any(alias =>
-            string.Equals((alias.Address ?? "").Trim(), address, StringComparison.OrdinalIgnoreCase));
     }
 
     private static string EnterpriseAddress(OrganizationEntity organization, string enterpriseGuid) =>

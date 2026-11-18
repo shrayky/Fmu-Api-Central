@@ -1,3 +1,4 @@
+using Application.Dadata;
 using CSharpFunctionalExtensions;
 using Domain.Attributes;
 using Domain.Configuration.Interfaces;
@@ -21,6 +22,7 @@ public sealed class VetisIncomingLoadService : IVetisIncomingLoader
     private readonly IVetisIncomingRepository _incoming;
     private readonly VetisApplicationRecorder _recorder;
     private readonly IParametersService _parameters;
+    private readonly DadataSalePointResolver _dadataSalePoints;
     private readonly ILogger<VetisIncomingLoadService> _logger;
     private readonly TimeProvider _clock;
 
@@ -30,6 +32,7 @@ public sealed class VetisIncomingLoadService : IVetisIncomingLoader
         IVetisIncomingRepository incoming,
         VetisApplicationRecorder recorder,
         IParametersService parameters,
+        DadataSalePointResolver dadataSalePoints,
         ILogger<VetisIncomingLoadService> logger,
         TimeProvider? clock = null)
     {
@@ -38,6 +41,7 @@ public sealed class VetisIncomingLoadService : IVetisIncomingLoader
         _incoming = incoming;
         _recorder = recorder;
         _parameters = parameters;
+        _dadataSalePoints = dadataSalePoints;
         _logger = logger;
         _clock = clock ?? TimeProvider.System;
     }
@@ -49,10 +53,11 @@ public sealed class VetisIncomingLoadService : IVetisIncomingLoader
             return 0;
 
         var saved = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var cache = new DadataLookupCache();
         foreach (var organization in await _organizations.All())
         {
             if (organization.VetisSettings.Enable)
-                await LoadOrganizationAsync(organization, server, saved, cancellationToken);
+                await LoadOrganizationAsync(organization, server, saved, cache, cancellationToken);
         }
 
         return saved.Count;
@@ -62,6 +67,7 @@ public sealed class VetisIncomingLoadService : IVetisIncomingLoader
         OrganizationEntity organization,
         VetisSettings server,
         HashSet<string> saved,
+        DadataLookupCache cache,
         CancellationToken cancellationToken)
     {
         var call = VetisCallFactory.ForOrganization(server, organization.VetisSettings);
@@ -73,7 +79,7 @@ public sealed class VetisIncomingLoadService : IVetisIncomingLoader
 
         foreach (var enterprise in organization.VetisSettings.Enterprises.Where(item => item.Participates))
         {
-            var cursor = await ReadEnterpriseAsync(call, organization, enterprise, server, saved, cancellationToken);
+            var cursor = await ReadEnterpriseAsync(call, organization, enterprise, server, saved, cache, cancellationToken);
             if (cursor.IsFailure)
             {
                 _logger.LogWarning(
@@ -97,6 +103,7 @@ public sealed class VetisIncomingLoadService : IVetisIncomingLoader
         OrganizationEnterprise enterprise,
         VetisSettings server,
         HashSet<string> saved,
+        DadataLookupCache cache,
         CancellationToken cancellationToken)
     {
         var end = _clock.GetLocalNow();
@@ -138,7 +145,7 @@ public sealed class VetisIncomingLoadService : IVetisIncomingLoader
                     break;
                 }
 
-                var stored = await SaveDocumentsAsync(organization, enterprise, result.Documents, saved);
+                var stored = await SaveDocumentsAsync(organization, enterprise, result.Documents, saved, cache, cancellationToken);
                 if (stored.IsFailure)
                     return Result.Failure<DateTimeOffset>("ВСД получены, но не сохранены: " + stored.Error);
 
@@ -165,7 +172,9 @@ public sealed class VetisIncomingLoadService : IVetisIncomingLoader
         OrganizationEntity organization,
         OrganizationEnterprise enterprise,
         IReadOnlyList<VetisIncomingVsd> vsds,
-        HashSet<string> saved)
+        HashSet<string> saved,
+        DadataLookupCache cache,
+        CancellationToken cancellationToken)
     {
         var grouped = VetisIncomingDocumentEntity.Group(organization.Id, enterprise.Guid, vsds);
         var owner = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -198,7 +207,17 @@ public sealed class VetisIncomingLoadService : IVetisIncomingLoader
 
             // Заполняется только пустое поле: выбранная вручную точка повторную загрузку переживает.
             if (target.SalePointUid.Length == 0)
+            {
                 target.SalePointUid = SalePointMatch.Find(organization.SalePoints, enterprise.Address);
+                if (target.SalePointUid.Length == 0)
+                {
+                    target.SalePointUid = await _dadataSalePoints.Resolve(
+                        organization,
+                        enterprise.Address,
+                        cache,
+                        cancellationToken);
+                }
+            }
 
             var written = await _incoming.Save(target);
             if (written.IsFailure)

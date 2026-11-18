@@ -314,13 +314,17 @@ test("кнопка сохранения стоит над вкладками с�
     const rows = createServerSettingsRows(
         { header: "Настройки сервера", body: {} },
         { header: "Ветис", body: {} },
-        { header: "ЭТрН", body: {} }
+        { header: "ЭТрН", body: {} },
+        { header: "Прочие интеграции", body: {} }
     );
 
     assert.equal(rows[0].cols[0].value, "Сохранить");
     assert.equal(rows[0].cols[0].css, "webix_primary");
     assert.equal(rows[1].view, "tabview");
-    assert.deepEqual(rows[1].cells.map((cell) => cell.header), ["Настройки сервера", "Ветис", "ЭТрН"]);
+    assert.deepEqual(
+        rows[1].cells.map((cell) => cell.header),
+        ["Настройки сервера", "Ветис", "ЭТрН", "Прочие интеграции"]
+    );
 });
 
 test("кнопка сохранения вызывает переданный обработчик", async () => {
@@ -330,6 +334,7 @@ test("кнопка сохранения вызывает переданный о
         { header: "Настройки сервера", body: {} },
         { header: "Ветис", body: {} },
         { header: "ЭТрН", body: {} },
+        { header: "Прочие интеграции", body: {} },
         () => { called = true; }
     );
 

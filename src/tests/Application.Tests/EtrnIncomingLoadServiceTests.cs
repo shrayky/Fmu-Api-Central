@@ -1,3 +1,4 @@
+using Application.Dadata;
 using Application.Etrn;
 using Application.Tests.Fakes;
 using Domain.Etrn;
@@ -637,6 +638,363 @@ public class EtrnIncomingLoadServiceTests
         Assert.Equal(EtrnDocumentStatus.Closed, stored.Status);
     }
 
+    [Fact]
+    public async Task Load_совпадение_по_адресу_не_вызывает_стандартизацию()
+    {
+        var world = new World();
+        world.EnableDadata();
+        world.Organizations.Store["o1"] = Organization(connection: Connection(), salePoints:
+        [
+            new SalePoint { Uid = "p1", Name = "Склад", Address = "Москва, ул. Ленина, 1", FiasId = "f1" }
+        ]);
+        world.Operator.EnqueueFetch(ScriptedEtrnOperator.Fetching(ScriptedEtrnOperator.Document("d-1")));
+
+        await world.Loader.LoadAsync(CancellationToken.None);
+
+        Assert.Equal(0, world.Dadata.CleanCalls);
+        Assert.Equal("p1", world.Incoming.Store[EtrnIncomingDocumentEntity.BuildId("o1", "c1", "d-1")].SalePointUid);
+    }
+
+    [Fact]
+    public async Task Load_совпадение_по_синониму_не_вызывает_стандартизацию()
+    {
+        var world = new World();
+        world.EnableDadata();
+        world.Organizations.Store["o1"] = Organization(connection: Connection(), salePoints:
+        [
+            new SalePoint
+            {
+                Uid = "p1",
+                Name = "Склад",
+                Address = "Москва, ул. Мира, 2",
+                FiasId = "f1",
+                Aliases = [new SalePointAlias { Uid = "a1", Address = "Москва, ул. Ленина, 1" }]
+            }
+        ]);
+        world.Operator.EnqueueFetch(ScriptedEtrnOperator.Fetching(ScriptedEtrnOperator.Document("d-1")));
+
+        await world.Loader.LoadAsync(CancellationToken.None);
+
+        Assert.Equal(0, world.Dadata.CleanCalls);
+        Assert.Equal("p1", world.Incoming.Store[EtrnIncomingDocumentEntity.BuildId("o1", "c1", "d-1")].SalePointUid);
+    }
+
+    [Fact]
+    public async Task Load_выключенный_флаг_не_вызывает_стандартизацию()
+    {
+        var world = new World();
+        world.Parameters.Value.DadataSettings.ApiKey = "api-key";
+        world.Parameters.Value.DadataSettings.Secret = "secret";
+        world.Organizations.Store["o1"] = Organization(connection: Connection(), salePoints:
+        [
+            new SalePoint { Uid = "p1", Name = "Склад", Address = "Москва, ул. Мира, 2", FiasId = "f1" }
+        ]);
+        world.Operator.EnqueueFetch(ScriptedEtrnOperator.Fetching(ScriptedEtrnOperator.Document("d-1")));
+
+        await world.Loader.LoadAsync(CancellationToken.None);
+
+        Assert.Equal(0, world.Dadata.CleanCalls);
+        Assert.Equal("", world.Incoming.Store[EtrnIncomingDocumentEntity.BuildId("o1", "c1", "d-1")].SalePointUid);
+    }
+
+    [Fact]
+    public async Task Load_пустой_секрет_не_вызывает_стандартизацию()
+    {
+        var world = new World();
+        world.Parameters.Value.DadataSettings.Enable = true;
+        world.Parameters.Value.DadataSettings.ApiKey = "api-key";
+        world.Parameters.Value.DadataSettings.Secret = "";
+        world.Organizations.Store["o1"] = Organization(connection: Connection(), salePoints:
+        [
+            new SalePoint { Uid = "p1", Name = "Склад", Address = "Москва, ул. Мира, 2", FiasId = "f1" }
+        ]);
+        world.Operator.EnqueueFetch(ScriptedEtrnOperator.Fetching(ScriptedEtrnOperator.Document("d-1")));
+
+        await world.Loader.LoadAsync(CancellationToken.None);
+
+        Assert.Equal(0, world.Dadata.CleanCalls);
+        Assert.Equal("", world.Incoming.Store[EtrnIncomingDocumentEntity.BuildId("o1", "c1", "d-1")].SalePointUid);
+    }
+
+    [Fact]
+    public async Task Load_уверенный_дом_и_одна_точка_пишут_uid_и_синоним_исходного_адреса()
+    {
+        var world = new World();
+        world.EnableDadata();
+        world.Organizations.Store["o1"] = Organization(connection: Connection(), salePoints:
+        [
+            new SalePoint { Uid = "p1", Name = "Склад", Address = "Москва, ул. Мира, 2", FiasId = "f1" }
+        ]);
+        world.Dadata.EnqueueClean("f1");
+        world.Operator.EnqueueFetch(ScriptedEtrnOperator.Fetching(ScriptedEtrnOperator.Document("d-1")));
+
+        await world.Loader.LoadAsync(CancellationToken.None);
+
+        var stored = world.Incoming.Store[EtrnIncomingDocumentEntity.BuildId("o1", "c1", "d-1")];
+        Assert.Equal("p1", stored.SalePointUid);
+        var point = world.Organizations.Store["o1"].SalePoints.Single(item => item.Uid == "p1");
+        Assert.Equal("Москва, ул. Ленина, 1", Assert.Single(point.Aliases).Address);
+        Assert.Equal("f1", point.FiasId);
+    }
+
+    [Fact]
+    public async Task Load_исчезнувшая_точка_оставляет_uid_пустым()
+    {
+        var world = new World();
+        world.EnableDadata();
+        world.Organizations.Store["o1"] = Organization(connection: Connection(), salePoints:
+        [
+            new SalePoint { Uid = "p1", Name = "Склад", Address = "Москва, ул. Мира, 2", FiasId = "f1" }
+        ]);
+        world.Organizations.BeforeGetById = id =>
+        {
+            world.Organizations.Store[id].SalePoints = [];
+            return Task.CompletedTask;
+        };
+        world.Dadata.EnqueueClean("f1");
+        world.Operator.EnqueueFetch(ScriptedEtrnOperator.Fetching(ScriptedEtrnOperator.Document("d-1")));
+
+        await world.Loader.LoadAsync(CancellationToken.None);
+
+        Assert.Equal("", world.Incoming.Store[EtrnIncomingDocumentEntity.BuildId("o1", "c1", "d-1")].SalePointUid);
+        Assert.Equal(1, world.Dadata.CleanCalls);
+    }
+
+    [Fact]
+    public async Task Load_ноль_точек_с_одним_ФИАС_оставляют_uid_пустым()
+    {
+        var world = new World();
+        world.EnableDadata();
+        world.Organizations.Store["o1"] = Organization(connection: Connection(), salePoints:
+        [
+            new SalePoint { Uid = "p1", Name = "Склад", Address = "Москва, ул. Мира, 2", FiasId = "другой" }
+        ]);
+        world.Dadata.EnqueueClean("f1");
+        world.Operator.EnqueueFetch(ScriptedEtrnOperator.Fetching(ScriptedEtrnOperator.Document("d-1")));
+
+        await world.Loader.LoadAsync(CancellationToken.None);
+
+        Assert.Equal("", world.Incoming.Store[EtrnIncomingDocumentEntity.BuildId("o1", "c1", "d-1")].SalePointUid);
+        Assert.Empty(world.Organizations.Store["o1"].SalePoints[0].Aliases);
+    }
+
+    [Fact]
+    public async Task Load_несколько_точек_с_одним_ФИАС_оставляют_uid_пустым()
+    {
+        var world = new World();
+        world.EnableDadata();
+        world.Organizations.Store["o1"] = Organization(connection: Connection(), salePoints:
+        [
+            new SalePoint { Uid = "p1", Name = "Склад", Address = "Москва, ул. Мира, 2", FiasId = "f1" },
+            new SalePoint { Uid = "p2", Name = "Магазин", Address = "Москва, ул. Мира, 3", FiasId = " F1 " }
+        ]);
+        world.Dadata.EnqueueClean("f1");
+        world.Operator.EnqueueFetch(ScriptedEtrnOperator.Fetching(ScriptedEtrnOperator.Document("d-1")));
+
+        await world.Loader.LoadAsync(CancellationToken.None);
+
+        Assert.Equal("", world.Incoming.Store[EtrnIncomingDocumentEntity.BuildId("o1", "c1", "d-1")].SalePointUid);
+    }
+
+    [Fact]
+    public async Task Load_заполненный_uid_не_меняется()
+    {
+        var world = new World();
+        world.EnableDadata();
+        world.Organizations.Store["o1"] = Organization(connection: Connection(), salePoints:
+        [
+            new SalePoint { Uid = "p1", Name = "Склад", Address = "Москва, ул. Мира, 2", FiasId = "f1" }
+        ]);
+        var id = EtrnIncomingDocumentEntity.BuildId("o1", "c1", "d-1");
+        world.Incoming.Store[id] = new EtrnIncomingDocumentEntity
+        {
+            Id = id,
+            OrganizationId = "o1",
+            OperatorDocumentId = "d-1",
+            Operator = EtrnOperator.For(Connection()),
+            SalePointUid = "p2",
+            Status = EtrnDocumentStatus.Waiting
+        };
+        world.Operator.EnqueueFetch(ScriptedEtrnOperator.Fetching(ScriptedEtrnOperator.Document("d-1")));
+
+        await world.Loader.LoadAsync(CancellationToken.None);
+
+        Assert.Equal("p2", world.Incoming.Store[id].SalePointUid);
+        Assert.Equal(0, world.Dadata.CleanCalls);
+    }
+
+    [Fact]
+    public async Task Load_длинный_адрес_пишет_uid_без_синонима()
+    {
+        var world = new World();
+        world.EnableDadata();
+        world.Organizations.Store["o1"] = Organization(connection: Connection(), salePoints:
+        [
+            new SalePoint { Uid = "p1", Name = "Склад", Address = "Москва, ул. Мира, 2", FiasId = "f1" }
+        ]);
+        world.Dadata.EnqueueClean("f1");
+        world.Operator.EnqueueFetch(ScriptedEtrnOperator.Fetching(
+            ScriptedEtrnOperator.Document("d-1", address: new string('а', 251))));
+
+        await world.Loader.LoadAsync(CancellationToken.None);
+
+        Assert.Equal("p1", world.Incoming.Store[EtrnIncomingDocumentEntity.BuildId("o1", "c1", "d-1")].SalePointUid);
+        Assert.Empty(world.Organizations.Store["o1"].SalePoints.Single(item => item.Uid == "p1").Aliases);
+    }
+
+    [Fact]
+    public async Task Load_адрес_занятый_другой_точкой_пишет_uid_без_синонима()
+    {
+        var world = new World();
+        world.EnableDadata();
+        world.Organizations.Store["o1"] = Organization(connection: Connection(), salePoints:
+        [
+            new SalePoint { Uid = "p1", Name = "Склад", Address = "Москва, ул. Мира, 2", FiasId = "f1" },
+            new SalePoint { Uid = "p2", Name = "Магазин", Address = "Москва, ул. Мира, 3" }
+        ]);
+        // Адрес документа занял другой менеджер уже после того, как загрузка прочитала справочник.
+        world.Organizations.BeforeGetById = id =>
+        {
+            var other = world.Organizations.Store[id].SalePoints.Single(item => item.Uid == "p2");
+            other.Aliases.Add(new SalePointAlias { Uid = "a2", Address = "Москва, ул. Ленина, 1" });
+            return Task.CompletedTask;
+        };
+        world.Dadata.EnqueueClean("f1");
+        world.Operator.EnqueueFetch(ScriptedEtrnOperator.Fetching(ScriptedEtrnOperator.Document("d-1")));
+
+        await world.Loader.LoadAsync(CancellationToken.None);
+
+        Assert.Equal("p1", world.Incoming.Store[EtrnIncomingDocumentEntity.BuildId("o1", "c1", "d-1")].SalePointUid);
+        Assert.Empty(world.Organizations.Store["o1"].SalePoints.Single(item => item.Uid == "p1").Aliases);
+    }
+
+    [Fact]
+    public async Task Load_один_проход_с_одним_адресом_даёт_один_вызов()
+    {
+        var world = new World();
+        world.EnableDadata();
+        var address = new string('а', 251);
+        world.Organizations.Store["o1"] = Organization(connection: Connection(), salePoints:
+        [
+            new SalePoint { Uid = "p1", Name = "Склад", Address = "Москва, ул. Мира, 2", FiasId = "f1" }
+        ]);
+        world.Dadata.EnqueueClean("f1");
+        world.Operator.EnqueueFetch(ScriptedEtrnOperator.Fetching(
+            ScriptedEtrnOperator.Document("d-1", address: address),
+            ScriptedEtrnOperator.Document("d-2", address: address)));
+
+        await world.Loader.LoadAsync(CancellationToken.None);
+
+        Assert.Equal(1, world.Dadata.CleanCalls);
+        Assert.Equal("p1", world.Incoming.Store[EtrnIncomingDocumentEntity.BuildId("o1", "c1", "d-1")].SalePointUid);
+        Assert.Equal("p1", world.Incoming.Store[EtrnIncomingDocumentEntity.BuildId("o1", "c1", "d-2")].SalePointUid);
+    }
+
+    [Fact]
+    public async Task Load_две_загрузки_без_синонима_дают_два_вызова()
+    {
+        var world = new World();
+        world.EnableDadata();
+        var address = new string('а', 251);
+        world.Organizations.Store["o1"] = Organization(connection: Connection(), salePoints:
+        [
+            new SalePoint { Uid = "p1", Name = "Склад", Address = "Москва, ул. Мира, 2", FiasId = "f1" }
+        ]);
+        world.Dadata.EnqueueClean("f1");
+        world.Operator.EnqueueFetch(ScriptedEtrnOperator.Fetching(
+            ScriptedEtrnOperator.Document("d-1", address: address)));
+        await world.Loader.LoadAsync(CancellationToken.None);
+
+        world.Dadata.EnqueueClean("f1");
+        world.Operator.EnqueueFetch(ScriptedEtrnOperator.Fetching(
+            ScriptedEtrnOperator.Document("d-2", address: address)));
+        await world.Loader.LoadAsync(CancellationToken.None);
+
+        Assert.Equal(2, world.Dadata.CleanCalls);
+    }
+
+    [Fact]
+    public async Task Load_ошибка_стандартизации_сохраняет_накладную_без_точки()
+    {
+        var world = new World();
+        world.EnableDadata();
+        world.Organizations.Store["o1"] = Organization(connection: Connection(), salePoints:
+        [
+            new SalePoint { Uid = "p1", Name = "Склад", Address = "Москва, ул. Мира, 2", FiasId = "f1" }
+        ]);
+        world.Dadata.EnqueueCleanFailure("Нет связи с DaData");
+        world.Operator.EnqueueFetch(ScriptedEtrnOperator.Fetching(ScriptedEtrnOperator.Document("d-1")));
+
+        await world.Loader.LoadAsync(CancellationToken.None);
+
+        var stored = Assert.Single(world.Incoming.Store.Values);
+        Assert.Equal("", stored.SalePointUid);
+        Assert.Equal(EtrnDocumentStatus.Waiting, stored.Status);
+    }
+
+    [Fact]
+    public async Task Load_точка_без_ФИАС_подбирается_по_стандартизованному_адресу()
+    {
+        var world = new World();
+        world.EnableDadata();
+        world.Organizations.Store["o1"] = Organization(connection: Connection(), salePoints:
+        [
+            new SalePoint { Uid = "p1", Name = "Склад", Address = "г Москва, ул Ленина, д 1" }
+        ]);
+        world.Dadata.EnqueueClean("f1", result: "г Москва, ул Ленина, д 1");
+        world.Operator.EnqueueFetch(ScriptedEtrnOperator.Fetching(ScriptedEtrnOperator.Document("d-1")));
+
+        await world.Loader.LoadAsync(CancellationToken.None);
+
+        var stored = world.Incoming.Store[EtrnIncomingDocumentEntity.BuildId("o1", "c1", "d-1")];
+        Assert.Equal("p1", stored.SalePointUid);
+        var point = world.Organizations.Store["o1"].SalePoints.Single(item => item.Uid == "p1");
+        Assert.Equal("", point.FiasId);
+        Assert.Equal("Москва, ул. Ленина, 1", Assert.Single(point.Aliases).Address);
+    }
+
+    [Fact]
+    public async Task Load_точка_с_другим_ФИАС_не_подбирается_по_стандартизованному_адресу()
+    {
+        var world = new World();
+        world.EnableDadata();
+        world.Organizations.Store["o1"] = Organization(connection: Connection(), salePoints:
+        [
+            new SalePoint
+            {
+                Uid = "p1",
+                Name = "Склад",
+                Address = "г Москва, ул Ленина, д 1",
+                FiasId = "f2"
+            }
+        ]);
+        world.Dadata.EnqueueClean("f1", result: "г Москва, ул Ленина, д 1");
+        world.Operator.EnqueueFetch(ScriptedEtrnOperator.Fetching(ScriptedEtrnOperator.Document("d-1")));
+
+        await world.Loader.LoadAsync(CancellationToken.None);
+
+        Assert.Equal("", world.Incoming.Store[EtrnIncomingDocumentEntity.BuildId("o1", "c1", "d-1")].SalePointUid);
+        Assert.Empty(world.Organizations.Store["o1"].SalePoints[0].Aliases);
+    }
+
+    [Fact]
+    public async Task Load_неуверенный_разбор_не_подбирает_по_стандартизованному_адресу()
+    {
+        var world = new World();
+        world.EnableDadata();
+        world.Organizations.Store["o1"] = Organization(connection: Connection(), salePoints:
+        [
+            new SalePoint { Uid = "p1", Name = "Склад", Address = "г Москва, ул Ленина, д 1" }
+        ]);
+        world.Dadata.EnqueueClean("f1", qc: 3, result: "г Москва, ул Ленина, д 1");
+        world.Operator.EnqueueFetch(ScriptedEtrnOperator.Fetching(ScriptedEtrnOperator.Document("d-1")));
+
+        await world.Loader.LoadAsync(CancellationToken.None);
+
+        Assert.Equal("", world.Incoming.Store[EtrnIncomingDocumentEntity.BuildId("o1", "c1", "d-1")].SalePointUid);
+        Assert.Empty(world.Organizations.Store["o1"].SalePoints[0].Aliases);
+    }
+
     private static EtrnIncomingDocumentEntity Stored(string operatorDocumentId, string status) => new()
     {
         Id = EtrnIncomingDocumentEntity.BuildId("o1", "c1", operatorDocumentId),
@@ -689,6 +1047,8 @@ public class EtrnIncomingLoadServiceTests
 
         public MemoryEtrnParameters Parameters { get; } = new();
 
+        public ScriptedDadataClient Dadata { get; } = new();
+
         public FixedClock Clock { get; } = new(Now);
 
         public EtrnIncomingLoadService Loader { get; }
@@ -697,14 +1057,26 @@ public class EtrnIncomingLoadServiceTests
         {
             Parameters.Value.EtrnSettings.IncomingFetchIntervalMinutes = 5;
             var recorder = new EtrnRequestRecorder(Requests, NullLogger<EtrnRequestRecorder>.Instance, Clock);
+            var dadata = new DadataSalePointResolver(
+                new DadataAddressService(Dadata, Parameters),
+                Organizations,
+                NullLogger<DadataSalePointResolver>.Instance);
             Loader = new EtrnIncomingLoadService(
                 [Operator],
                 Organizations,
                 Incoming,
                 Sync,
                 recorder,
+                dadata,
                 NullLogger<EtrnIncomingLoadService>.Instance,
                 Clock);
+        }
+
+        public void EnableDadata()
+        {
+            Parameters.Value.DadataSettings.Enable = true;
+            Parameters.Value.DadataSettings.ApiKey = "api-key";
+            Parameters.Value.DadataSettings.Secret = "secret";
         }
     }
 }

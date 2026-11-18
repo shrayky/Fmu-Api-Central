@@ -8,6 +8,12 @@ import {
     salePointsToRows
 } from "../../utils/salePointFormat.js";
 import { errorText, escapeHtml } from "./organizationFormat.js";
+import {
+    DADATA_MESSAGES,
+    dadataHouseValues,
+    dadataSelection,
+    salePointFiasRow
+} from "./dadataSuggest.js";
 
 export function salePointsBody(view) {
     return {
@@ -56,7 +62,13 @@ export function salePointsFromTable(view) {
 }
 
 export function closeSalePointWindow(view) {
+    closeDadataWindow(view);
     $$(view.NAMES.salePointWindow)?.close();
+}
+
+export function closeDadataWindow(view) {
+    unbindDadataHotkeys(view);
+    $$(view.NAMES.salePointDadataWindow)?.destructor();
 }
 
 export function closeImportWindow(view) {
@@ -73,6 +85,7 @@ export function openSalePointWindow(view, rowId) {
     }));
 
     $$(view.NAMES.salePointWindow)?.destructor();
+    closeDadataWindow(view);
     // Иначе Esc и Alt+Enter окна срабатывают вместе с карточкой.
     view._setOrganizationHotkeys(false);
 
@@ -116,14 +129,16 @@ export function openSalePointWindow(view, rowId) {
                     attributes: { maxlength: 250 },
                     value: row?.address || ""
                 },
-                {
-                    view: "text",
-                    id: view.NAMES.salePointFias,
+                salePointFiasRow({
+                    enabled: view._dadataEnabled === true,
+                    fiasId: row?.fiasId || "",
                     label: view.LABELS.salePointFias,
-                    labelPosition: "top",
-                    attributes: { maxlength: 36 },
-                    value: row?.fiasId || ""
-                },
+                    name: view.NAMES.salePointFias,
+                    buttonId: view.NAMES.salePointFiasLoad,
+                    spinnerId: view.NAMES.salePointFiasSpinner,
+                    buttonLabel: view.LABELS.salePointFiasLoad,
+                    onLoad: () => loadDadataAddress(view)
+                }),
                 {
                     cols: [
                         {
@@ -292,6 +307,171 @@ function applyImport(view) {
         webix.message({ text: loaded.error, type: "error" });
     else if (!rows.length)
         webix.message(view.LABELS.salePointImportDuplicate);
+}
+
+/**
+ * Кнопка «Получить»: адрес из окна уходит на сервер, дома приходят списком.
+ */
+export async function loadDadataAddress(view) {
+    const address = String($$(view.NAMES.salePointAddress)?.getValue() || "").trim();
+    if (!address) {
+        webix.message({ text: DADATA_MESSAGES.emptyAddress, type: "error" });
+        return;
+    }
+
+    const button = $$(view.NAMES.salePointFiasLoad);
+    const spinner = $$(view.NAMES.salePointFiasSpinner);
+    button?.disable();
+    button?.hide();
+    spinner?.show();
+    try {
+        const loaded = dadataSelection(await organizationService.dadataAddress(address));
+        if (loaded.error) {
+            webix.message({ text: loaded.error, type: "error" });
+            return;
+        }
+
+        if (loaded.values) {
+            applyDadataValues(view, loaded.values);
+            return;
+        }
+
+        openDadataWindow(view, loaded.houses);
+    } catch (error) {
+        webix.message({ text: errorText(error.message) || DADATA_MESSAGES.unavailable, type: "error" });
+    } finally {
+        spinner?.hide();
+        button?.show();
+        button?.enable();
+    }
+}
+
+export function applyDadataHouse(view, house) {
+    const values = dadataHouseValues(house);
+    if (values.error) {
+        webix.message({ text: values.error, type: "error" });
+        return false;
+    }
+
+    applyDadataValues(view, values);
+    return true;
+}
+
+function applyDadataValues(view, values) {
+    $$(view.NAMES.salePointFias)?.setValue(values.fiasId);
+    // Пустой полный адрес DaData не затирает адрес, который уже ввели в окне.
+    if (values.address)
+        $$(view.NAMES.salePointAddress)?.setValue(values.address);
+}
+
+export function openDadataWindow(view, houses) {
+    closeDadataWindow(view);
+
+    webix.ui({
+        view: "window",
+        id: view.NAMES.salePointDadataWindow,
+        modal: true,
+        move: true,
+        resize: true,
+        position: "center",
+        width: Math.min(window.innerWidth - 40, 720),
+        height: Math.min(window.innerHeight - 40, 480),
+        head: {
+            view: "toolbar",
+            elements: [
+                { view: "label", label: view.LABELS.salePointDadataTitle },
+                { view: "icon", icon: "wxi-close", click: () => closeDadataWindow(view) }
+            ]
+        },
+        body: {
+            rows: [
+                {
+                    view: "list",
+                    id: view.NAMES.salePointDadataList,
+                    select: true,
+                    data: houses.map((house, index) => ({ id: `house-${index}`, ...house })),
+                    template: (row) => escapeHtml(row.address),
+                    on: {
+                        onItemDblClick(id) {
+                            if (applyDadataHouse(view, this.getItem(id)))
+                                closeDadataWindow(view);
+                        }
+                    }
+                },
+                {
+                    padding: { top: 10 },
+                    cols: [
+                        {
+                            view: "button",
+                            value: view.LABELS.salePointDadataSelect,
+                            width: 160,
+                            css: "webix_primary",
+                            click: () => applySelectedDadataHouse(view)
+                        },
+                        {
+                            view: "button",
+                            value: view.LABELS.cancelButton,
+                            width: 140,
+                            click: () => closeDadataWindow(view)
+                        },
+                        {}
+                    ]
+                }
+            ]
+        }
+    }).show();
+
+    bindDadataHotkeys(view);
+}
+
+/**
+ * Esc и Alt+Enter относятся к верхнему окну: перехват на документе не даёт им сработать в карточке под ним.
+ */
+function bindDadataHotkeys(view) {
+    unbindDadataHotkeys(view);
+
+    const windowId = view.NAMES.salePointDadataWindow;
+    const handler = (event) => {
+        if (!$$(windowId))
+            return;
+
+        if (event.key === "Escape") {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            closeDadataWindow(view);
+            return;
+        }
+
+        if (event.key === "Enter" && event.altKey) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            applySelectedDadataHouse(view);
+        }
+    };
+
+    view._dadataHotkeys = handler;
+    document.addEventListener("keydown", handler, true);
+}
+
+function unbindDadataHotkeys(view) {
+    if (!view._dadataHotkeys)
+        return;
+
+    document.removeEventListener("keydown", view._dadataHotkeys, true);
+    view._dadataHotkeys = null;
+}
+
+function applySelectedDadataHouse(view) {
+    const list = $$(view.NAMES.salePointDadataList);
+    const selectedId = list?.getSelectedId?.();
+    const selected = selectedId ? list.getItem(selectedId) : null;
+    if (!selected) {
+        webix.message({ text: DADATA_MESSAGES.selectHouse, type: "error" });
+        return;
+    }
+
+    if (applyDadataHouse(view, selected))
+        closeDadataWindow(view);
 }
 
 function applySalePoint(view, rowId) {

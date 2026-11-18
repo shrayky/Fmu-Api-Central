@@ -1,3 +1,4 @@
+using Application.Dadata;
 using CSharpFunctionalExtensions;
 using Domain.Attributes;
 using Domain.Etrn;
@@ -20,6 +21,7 @@ public sealed class EtrnIncomingLoadService : IEtrnIncomingLoader
     private readonly IEtrnIncomingRepository _incoming;
     private readonly IEtrnSyncStateRepository _syncStates;
     private readonly EtrnRequestRecorder _recorder;
+    private readonly DadataSalePointResolver _dadataSalePoints;
     private readonly ILogger<EtrnIncomingLoadService> _logger;
     private readonly TimeProvider _clock;
 
@@ -29,6 +31,7 @@ public sealed class EtrnIncomingLoadService : IEtrnIncomingLoader
         IEtrnIncomingRepository incoming,
         IEtrnSyncStateRepository syncStates,
         EtrnRequestRecorder recorder,
+        DadataSalePointResolver dadataSalePoints,
         ILogger<EtrnIncomingLoadService> logger,
         TimeProvider? clock = null)
     {
@@ -37,6 +40,7 @@ public sealed class EtrnIncomingLoadService : IEtrnIncomingLoader
         _incoming = incoming;
         _syncStates = syncStates;
         _recorder = recorder;
+        _dadataSalePoints = dadataSalePoints;
         _logger = logger;
         _clock = clock ?? TimeProvider.System;
     }
@@ -50,6 +54,7 @@ public sealed class EtrnIncomingLoadService : IEtrnIncomingLoader
             return;
 
         var document = found.Value;
+        var cache = new DadataLookupCache();
         if (document.Status != EtrnDocumentStatus.Waiting)
             return;
         if (!string.Equals(document.Operator.Type, EtrnOperatorType.Saby, StringComparison.OrdinalIgnoreCase))
@@ -98,7 +103,7 @@ public sealed class EtrnIncomingLoadService : IEtrnIncomingLoader
             document.LastError = "";
             document.SendingAt = null;
             document.SendingAtUnix = 0;
-            await SaveWaitingAsync(organization.Value, document);
+            await SaveWaitingAsync(organization.Value, document, cache, cancellationToken);
             return;
         }
 
@@ -106,7 +111,7 @@ public sealed class EtrnIncomingLoadService : IEtrnIncomingLoader
         {
             var name = stage.Value.StateName.Length > 0 ? stage.Value.StateName : stage.Value.Error;
             EtrnDocumentState.Finish(document, name);
-            await SaveWaitingAsync(organization.Value, document);
+            await SaveWaitingAsync(organization.Value, document, cache, cancellationToken);
             return;
         }
 
@@ -117,7 +122,7 @@ public sealed class EtrnIncomingLoadService : IEtrnIncomingLoader
                 return;
 
             document.LastError = "";
-            await SaveWaitingAsync(organization.Value, document);
+            await SaveWaitingAsync(organization.Value, document, cache, cancellationToken);
             return;
         }
 
@@ -131,7 +136,7 @@ public sealed class EtrnIncomingLoadService : IEtrnIncomingLoader
             return;
 
         document.LastError = note;
-        await SaveWaitingAsync(organization.Value, document);
+        await SaveWaitingAsync(organization.Value, document, cache, cancellationToken);
     }
 
     public async Task<int> LoadAsync(CancellationToken cancellationToken)
@@ -142,12 +147,13 @@ public sealed class EtrnIncomingLoadService : IEtrnIncomingLoader
         await ReconcileAsync(organizations, now, cancellationToken);
 
         var saved = new HashSet<string>(StringComparer.Ordinal);
+        var cache = new DadataLookupCache();
         foreach (var organization in organizations)
         {
             foreach (var connection in (organization.EtrnConnections ?? []).Where(item => item.Enable))
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                await LoadConnectionAsync(organization, connection, now, saved, cancellationToken);
+                await LoadConnectionAsync(organization, connection, now, saved, cache, cancellationToken);
             }
         }
 
@@ -159,6 +165,7 @@ public sealed class EtrnIncomingLoadService : IEtrnIncomingLoader
         EtrnConnection connection,
         DateTimeOffset now,
         HashSet<string> saved,
+        DadataLookupCache cache,
         CancellationToken cancellationToken)
     {
         var sync = await ReadSyncAsync(organization, connection);
@@ -218,7 +225,7 @@ public sealed class EtrnIncomingLoadService : IEtrnIncomingLoader
                     || previous.Status == EtrnDocumentStatus.Foreign)
                 {
                     // Тело накладной не трогаем, но пустую точку пишем: иначе она не попадёт в отбор.
-                    await KeepSalePointAsync(organization, previous);
+                    await KeepSalePointAsync(organization, previous, cache, cancellationToken);
                     continue;
                 }
 
@@ -229,7 +236,11 @@ public sealed class EtrnIncomingLoadService : IEtrnIncomingLoader
             }
 
             if (entity.SalePointUid.Length == 0)
-                entity.SalePointUid = SalePointMatch.Find(organization.SalePoints, entity.DeliveryAddress);
+                entity.SalePointUid = await MatchOrAskDadata(
+                    organization,
+                    entity.DeliveryAddress,
+                    cache,
+                    cancellationToken);
 
             var written = await _incoming.Save(entity);
             if (written.IsFailure)
@@ -241,7 +252,7 @@ public sealed class EtrnIncomingLoadService : IEtrnIncomingLoader
             saved.Add(entity.Id);
         }
 
-        await ApplyListedStatesAsync(organization, connection, batch.ListedStates, cancellationToken);
+        await ApplyListedStatesAsync(organization, connection, batch.ListedStates, cache, cancellationToken);
 
         foreach (var operatorDocumentId in (batch.ClosedDocumentIds ?? []).Distinct(StringComparer.Ordinal))
         {
@@ -258,7 +269,7 @@ public sealed class EtrnIncomingLoadService : IEtrnIncomingLoader
                 continue;
 
             EtrnDocumentState.Close(existing.Value);
-            AssignSalePointIfEmpty(organization, existing.Value);
+            await AssignSalePointIfEmpty(organization, existing.Value, cache, cancellationToken);
             var written = await _incoming.Save(existing.Value);
             if (written.IsFailure)
                 _logger.LogWarning("Закрытый документ ЭТрН {Id} не сохранён: {Error}", closedId, written.Error);
@@ -292,6 +303,7 @@ public sealed class EtrnIncomingLoadService : IEtrnIncomingLoader
         OrganizationEntity organization,
         EtrnConnection connection,
         IReadOnlyList<EtrnListedState>? states,
+        DadataLookupCache cache,
         CancellationToken cancellationToken)
     {
         foreach (var update in states ?? [])
@@ -320,14 +332,14 @@ public sealed class EtrnIncomingLoadService : IEtrnIncomingLoader
                 document.LastError = "";
                 document.SendingAt = null;
                 document.SendingAtUnix = 0;
-                await SaveWaitingAsync(organization, document);
+                await SaveWaitingAsync(organization, document, cache, cancellationToken);
                 continue;
             }
 
             if (update.Status == EtrnDocumentStatus.Closed)
             {
                 EtrnDocumentState.Finish(document, update.Error);
-                await SaveWaitingAsync(organization, document);
+                await SaveWaitingAsync(organization, document, cache, cancellationToken);
                 continue;
             }
 
@@ -344,7 +356,7 @@ public sealed class EtrnIncomingLoadService : IEtrnIncomingLoader
                 continue;
 
             document.LastError = update.Error;
-            await SaveWaitingAsync(organization, document);
+            await SaveWaitingAsync(organization, document, cache, cancellationToken);
         }
     }
 
@@ -352,28 +364,60 @@ public sealed class EtrnIncomingLoadService : IEtrnIncomingLoader
     /// Пустое поле заполняется и у накладной, которую опрос больше не переписывает.
     /// Уже выбранный uid не меняется. Совпадение ищется по адресу, который уже лежит в документе.
     /// </summary>
-    private async Task KeepSalePointAsync(OrganizationEntity organization, EtrnIncomingDocumentEntity document)
+    private async Task KeepSalePointAsync(
+        OrganizationEntity organization,
+        EtrnIncomingDocumentEntity document,
+        DadataLookupCache cache,
+        CancellationToken cancellationToken)
     {
         if (document.SalePointUid.Length > 0)
             return;
 
-        AssignSalePointIfEmpty(organization, document);
+        await AssignSalePointIfEmpty(organization, document, cache, cancellationToken);
         var written = await _incoming.Save(document);
         if (written.IsFailure)
             _logger.LogWarning("Точка ЭТрН {Id} не сохранена: {Error}", document.Id, written.Error);
     }
 
-    private static void AssignSalePointIfEmpty(OrganizationEntity organization, EtrnIncomingDocumentEntity document)
+    private async Task AssignSalePointIfEmpty(
+        OrganizationEntity organization,
+        EtrnIncomingDocumentEntity document,
+        DadataLookupCache cache,
+        CancellationToken cancellationToken)
     {
         if (document.SalePointUid.Length > 0)
             return;
 
-        document.SalePointUid = SalePointMatch.Find(organization.SalePoints, document.DeliveryAddress);
+        document.SalePointUid = await MatchOrAskDadata(
+            organization,
+            document.DeliveryAddress,
+            cache,
+            cancellationToken);
     }
 
-    private async Task SaveWaitingAsync(OrganizationEntity organization, EtrnIncomingDocumentEntity document)
+    /// <summary>
+    /// Совпадение по адресу или синониму, затем ФИАС дома из стандартизации DaData.
+    /// </summary>
+    private async Task<string> MatchOrAskDadata(
+        OrganizationEntity organization,
+        string address,
+        DadataLookupCache cache,
+        CancellationToken cancellationToken)
     {
-        AssignSalePointIfEmpty(organization, document);
+        var uid = SalePointMatch.Find(organization.SalePoints, address);
+        if (uid.Length > 0)
+            return uid;
+
+        return await _dadataSalePoints.Resolve(organization, address, cache, cancellationToken);
+    }
+
+    private async Task SaveWaitingAsync(
+        OrganizationEntity organization,
+        EtrnIncomingDocumentEntity document,
+        DadataLookupCache cache,
+        CancellationToken cancellationToken)
+    {
+        await AssignSalePointIfEmpty(organization, document, cache, cancellationToken);
         var written = await _incoming.Save(document);
         if (written.IsFailure)
             _logger.LogWarning("Состояние ЭТрН {Id} не сохранено: {Error}", document.Id, written.Error);
