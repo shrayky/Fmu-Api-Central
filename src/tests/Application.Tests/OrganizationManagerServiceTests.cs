@@ -208,14 +208,59 @@ public class OrganizationManagerServiceTests
             Id = "o1",
             Name = "Орг",
             Inn = "1234567890",
-            VetisSettings = new OrganizationVetisSettings { AutoQuench = true, AutoQuenchDelayHours = 6 }
+            VetisSettings = new OrganizationVetisSettings
+            {
+                AutoQuench = true,
+                AutoQuenchDelayHours = 6,
+                AutoQuenchFrom = "08:15",
+                AutoQuenchTo = "16:45"
+            }
         });
 
         Assert.True(result.IsSuccess);
         Assert.True(repository.Store["o1"].VetisSettings.AutoQuench);
         Assert.Equal(6, repository.Store["o1"].VetisSettings.AutoQuenchDelayHours);
-        Assert.True((await sut.List(1, 50)).Content.Single().VetisSettings!.AutoQuench);
-        Assert.Equal(6, (await sut.List(1, 50)).Content.Single().VetisSettings!.AutoQuenchDelayHours);
+        Assert.Equal("08:15", repository.Store["o1"].VetisSettings.AutoQuenchFrom);
+        Assert.Equal("16:45", repository.Store["o1"].VetisSettings.AutoQuenchTo);
+        var listed = (await sut.List(1, 50)).Content.Single().VetisSettings!;
+        Assert.True(listed.AutoQuench);
+        Assert.Equal(6, listed.AutoQuenchDelayHours);
+        Assert.Equal("08:15", listed.AutoQuenchFrom);
+        Assert.Equal("16:45", listed.AutoQuenchTo);
+    }
+
+    [Fact]
+    public async Task Update_не_пишет_организацию_с_перевёрнутым_окном_автогашения()
+    {
+        var repository = new FakeOrganizationRepository();
+        repository.Store["o1"] = new OrganizationEntity
+        {
+            Id = "o1",
+            Name = "Орг",
+            Inn = "1234567890",
+            VetisSettings = new OrganizationVetisSettings { AutoQuenchFrom = "09:00", AutoQuenchTo = "17:00" }
+        };
+        var sut = CreateSut(repository);
+
+        var result = await sut.Update(new OrganizationView
+        {
+            Id = "o1",
+            Name = "Орг",
+            Inn = "1234567890",
+            VetisSettings = new OrganizationVetisSettings
+            {
+                AutoQuench = true,
+                AutoQuenchDelayHours = 2,
+                AutoQuenchFrom = "18:00",
+                AutoQuenchTo = "09:00"
+            }
+        });
+
+        Assert.True(result.IsFailure);
+        Assert.Contains("Рабочий день", result.Error);
+        Assert.False(repository.Store["o1"].VetisSettings.AutoQuench);
+        Assert.Equal("09:00", repository.Store["o1"].VetisSettings.AutoQuenchFrom);
+        Assert.Equal("17:00", repository.Store["o1"].VetisSettings.AutoQuenchTo);
     }
 
     /// <summary>

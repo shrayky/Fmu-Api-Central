@@ -1,6 +1,6 @@
 import { Text, PasswordBox } from "../../utils/ui.js";
 import { newUuid } from "../../utils/uuid.js";
-import { positiveSetting } from "../../utils/vetisFormat.js";
+import { positiveSetting, quenchWindow } from "../../utils/vetisFormat.js";
 import { loadConfiguration } from "../../services/ConfigurationService.js";
 import organizationService from "../../services/organizationService.js";
 import { etrnTabState, organizationTabCells } from "./organizationEtrnAccess.js";
@@ -81,6 +81,9 @@ class OrganizationElementView {
             incomingHint: "Если дата задана, включение галки подставляет её в пустую дату площадки.",
             autoQuench: "Автогашение",
             autoQuenchDelay: "Задержка перед автогашением (часов)",
+            autoQuenchFrom: "Автогашение с",
+            autoQuenchTo: "Автогашение по",
+            autoQuenchWindow: "Рабочий день автогашения: начало должно быть раньше конца",
             positiveNumber: "Нужно целое число больше нуля",
             presentation: "Представление",
             address: "Адрес",
@@ -144,6 +147,8 @@ class OrganizationElementView {
             operatorLogin: "vetisOperatorLogin",
             autoQuench: "organizationVetisAutoQuench",
             autoQuenchDelay: "organizationVetisAutoQuenchDelay",
+            autoQuenchFrom: "organizationVetisAutoQuenchFrom",
+            autoQuenchTo: "organizationVetisAutoQuenchTo",
             etrnTab: "organizationEtrnTab",
             salePointsTab: "organizationSalePointsTab",
             salePointsTable: "organizationSalePointsTable",
@@ -445,6 +450,11 @@ class OrganizationElementView {
 
         if ($$(this.NAMES.apiKey) && !positiveSetting(data.vetisSettings?.autoQuenchDelayHours)) {
             webix.message({ text: this.LABELS.positiveNumber, type: "error" });
+            return false;
+        }
+
+        if ($$(this.NAMES.apiKey) && !quenchWindow(data.vetisSettings)) {
+            webix.message({ text: this.LABELS.autoQuenchWindow, type: "error" });
             return false;
         }
 

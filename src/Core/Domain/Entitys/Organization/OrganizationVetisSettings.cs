@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json.Serialization;
 using CSharpFunctionalExtensions;
 
@@ -56,6 +57,12 @@ public sealed class OrganizationVetisSettings
     [JsonPropertyName("autoQuenchDelayHours")]
     public int AutoQuenchDelayHours { get; set; } = 1;
 
+    [JsonPropertyName("autoQuenchFrom")]
+    public string AutoQuenchFrom { get; set; } = "09:00";
+
+    [JsonPropertyName("autoQuenchTo")]
+    public string AutoQuenchTo { get; set; } = "17:00";
+
     /// <summary>
     /// Уже лежащий ноль не должен гасить в ту же минуту: запись такой задержки не принимает.
     /// </summary>
@@ -65,4 +72,35 @@ public sealed class OrganizationVetisSettings
         AutoQuenchDelayHours > 0
             ? Result.Success()
             : Result.Failure("Задержка перед автогашением: нужно целое число больше нуля.");
+
+    /// <summary>
+    /// Пустые поля у уже сохранённой организации остаются окном 09:00–17:00.
+    /// Конец не входит: в 17:00 рабочий день уже закончился. Интервал через полночь не рабочий день.
+    /// </summary>
+    public bool InsideQuenchWindow(TimeOnly localTime)
+    {
+        var from = ParseClock(AutoQuenchFrom) ?? new TimeOnly(9, 0);
+        var to = ParseClock(AutoQuenchTo) ?? new TimeOnly(17, 0);
+        if (from >= to)
+            return false;
+
+        return localTime >= from && localTime < to;
+    }
+
+    public Result CheckWindow()
+    {
+        var from = ParseClock(AutoQuenchFrom);
+        var to = ParseClock(AutoQuenchTo);
+        return from != null && to != null && from < to
+            ? Result.Success()
+            : Result.Failure("Рабочий день автогашения: укажите время с и по, начало раньше конца.");
+    }
+
+    private static TimeOnly? ParseClock(string? value)
+    {
+        var text = (value ?? "").Trim();
+        return TimeOnly.TryParseExact(text, ["HH:mm", "H:mm"], CultureInfo.InvariantCulture, DateTimeStyles.None, out var time)
+            ? time
+            : null;
+    }
 }

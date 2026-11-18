@@ -1,3 +1,4 @@
+using Domain.Entitys.Organization;
 using Domain.Vetis;
 
 namespace Domain.Tests;
@@ -34,6 +35,44 @@ public class VetisAutoQuenchTests
 
         Assert.Equal(["empty", "car", "wagon"], VetisAutoQuench.DueUuids(vsds, 1, Now, requireVehicle: false));
         Assert.Equal(["car"], VetisAutoQuench.DueUuids(vsds, 1, Now, requireVehicle: true));
+    }
+
+    [Fact]
+    public void Окно_автогашения_с_девяти_включительно_до_семнадцати()
+    {
+        var settings = new OrganizationVetisSettings();
+
+        Assert.True(settings.InsideQuenchWindow(new TimeOnly(9, 0)));
+        Assert.True(settings.InsideQuenchWindow(new TimeOnly(16, 59)));
+        Assert.False(settings.InsideQuenchWindow(new TimeOnly(8, 59)));
+        Assert.False(settings.InsideQuenchWindow(new TimeOnly(17, 0)));
+    }
+
+    [Fact]
+    public void Пустое_окно_автогашения_считается_с_девяти_до_семнадцати()
+    {
+        var settings = new OrganizationVetisSettings { AutoQuenchFrom = "", AutoQuenchTo = " " };
+
+        Assert.True(settings.InsideQuenchWindow(new TimeOnly(9, 0)));
+        Assert.False(settings.InsideQuenchWindow(new TimeOnly(17, 0)));
+    }
+
+    [Fact]
+    public void Своё_окно_автогашения_режет_время_по_заданным_границам()
+    {
+        var settings = new OrganizationVetisSettings { AutoQuenchFrom = "10:30", AutoQuenchTo = "11:00" };
+
+        Assert.True(settings.InsideQuenchWindow(new TimeOnly(10, 30)));
+        Assert.False(settings.InsideQuenchWindow(new TimeOnly(11, 0)));
+    }
+
+    [Fact]
+    public void Окно_автогашения_не_принимает_конец_не_позже_начала()
+    {
+        Assert.True(new OrganizationVetisSettings { AutoQuenchFrom = "17:00", AutoQuenchTo = "09:00" }.CheckWindow().IsFailure);
+        Assert.True(new OrganizationVetisSettings { AutoQuenchFrom = "09:00", AutoQuenchTo = "09:00" }.CheckWindow().IsFailure);
+        Assert.True(new OrganizationVetisSettings { AutoQuenchFrom = "abc", AutoQuenchTo = "17:00" }.CheckWindow().IsFailure);
+        Assert.True(new OrganizationVetisSettings().CheckWindow().IsSuccess);
     }
 
     [Fact]

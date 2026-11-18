@@ -76,6 +76,8 @@ export function vetisSettings(view) {
         incomingFrom: fromDate($$(view.NAMES.vetisIncomingFrom)?.getValue()),
         autoQuench: !!$$(view.NAMES.autoQuench)?.getValue(),
         autoQuenchDelayHours: parseInt($$(view.NAMES.autoQuenchDelay)?.getValue(), 10),
+        autoQuenchFrom: fromTime($$(view.NAMES.autoQuenchFrom)?.getValue()),
+        autoQuenchTo: fromTime($$(view.NAMES.autoQuenchTo)?.getValue()),
         enterprises
     };
 }
@@ -146,6 +148,13 @@ function vetisSettingsBody(view, vetis) {
                         }),
                         {
                             cols: [
+                                timeField(view.LABELS.autoQuenchFrom, view.NAMES.autoQuenchFrom, vetis.autoQuenchFrom, 9, 0),
+                                timeField(view.LABELS.autoQuenchTo, view.NAMES.autoQuenchTo, vetis.autoQuenchTo, 17, 0),
+                                {}
+                            ]
+                        },
+                        {
+                            cols: [
                                 { view: "button", value: view.LABELS.check, width: 210, click: () => probe(view, "check") },
                                 {}
                             ]
@@ -155,4 +164,53 @@ function vetisSettingsBody(view, vetis) {
             ]
         }
     };
+}
+
+function timeField(label, id, value, fallbackHour, fallbackMinute) {
+    return {
+        view: "datepicker",
+        type: "time",
+        id,
+        label,
+        labelPosition: "top",
+        editable: true,
+        format: "%H:%i",
+        width: 160,
+        value: toTime(value, fallbackHour, fallbackMinute),
+        suggest: {
+            type: "calendar",
+            body: {
+                type: "time",
+                calendarTime: "%H:%i"
+            }
+        }
+    };
+}
+
+function toTime(value, fallbackHour, fallbackMinute) {
+    const match = /^(\d{1,2}):(\d{2})$/.exec(String(value || "").trim());
+    const hours = match ? Number(match[1]) : fallbackHour;
+    const minutes = match ? Number(match[2]) : fallbackMinute;
+    return new Date(2000, 0, 1, hours, minutes, 0);
+}
+
+function fromTime(value) {
+    if (typeof value === "string") {
+        const match = /^(\d{1,2}):(\d{2})/.exec(value.trim());
+        if (!match)
+            return "";
+
+        const hours = Number(match[1]);
+        const minutes = Number(match[2]);
+        if (hours > 23 || minutes > 59)
+            return "";
+
+        return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+    }
+
+    const date = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(date.getTime()))
+        return "";
+
+    return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 }

@@ -49,7 +49,9 @@ public sealed class VetisAutoQuenchWorker(
                         .GetRequiredService<IVetisIncomingAutoQuencher>()
                         .QuenchBatchAsync(_cursor, stoppingToken);
                     // После полного прохода снова с начала: задержка могла выйти, загрузка — дописать номер.
-                    _cursor = quenched.Finished ? new VetisQuenchCursor() : quenched.Cursor ?? new();
+                    _cursor = quenched.Finished
+                        ? new VetisQuenchCursor { Lanes = quenched.Held ?? [] }
+                        : quenched.Cursor ?? new();
                     var finished = DateTimeOffset.Now;
                     if (quenched.Error.Length > 0)
                     {

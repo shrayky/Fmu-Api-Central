@@ -46,9 +46,27 @@ public sealed class VetisIncomingAutoQuenchService : IVetisIncomingAutoQuencher
 
         var batch = server.AutoQuenchBatch();
         var now = _clock.GetUtcNow();
-        var organizations = (await _organizations.All())
+        var localTime = TimeOnly.FromDateTime(_clock.GetLocalNow().DateTime);
+        var enabled = (await _organizations.All())
             .Where(item => item.VetisSettings.Enable && item.VetisSettings.AutoQuench)
             .ToList();
+        var organizations = enabled.Where(item => item.VetisSettings.InsideQuenchWindow(localTime)).ToList();
+        var paused = enabled
+            .Where(item => !item.VetisSettings.InsideQuenchWindow(localTime))
+            .Select(item => item.Id)
+            .ToHashSet(StringComparer.Ordinal);
+        var held = (cursor?.Lanes ?? []).Where(mark => paused.Contains(mark.OrganizationId)).ToList();
+        if (organizations.Count == 0 && paused.Count > 0)
+        {
+            _logger.LogInformation("Автогашение: погашено документов {Count}", 0);
+            return new VetisQuenchBatch
+            {
+                Finished = false,
+                Cursor = new VetisQuenchCursor { Lanes = held },
+                Held = held
+            };
+        }
+
         var lanes = OpenLanes(organizations, cursor);
         var started = 0;
         var looked = 0;
@@ -63,7 +81,7 @@ public sealed class VetisIncomingAutoQuenchService : IVetisIncomingAutoQuencher
             cancellationToken.ThrowIfCancellationRequested();
             var picked = await NextHead(lanes, batch);
             if (picked.IsFailure)
-                return Finish(lanes, quenchedDocuments, picked.Error, false);
+                return Finish(lanes, quenchedDocuments, picked.Error, false, held);
             if (picked.Value is not Pick pick)
             {
                 finished = true;
@@ -75,7 +93,7 @@ public sealed class VetisIncomingAutoQuenchService : IVetisIncomingAutoQuencher
 
             var found = await _incoming.Find(pick.Head.Id);
             if (found.IsFailure)
-                return Finish(lanes, quenchedDocuments, found.Error, false);
+                return Finish(lanes, quenchedDocuments, found.Error, false, held);
             if (found.Value == null)
             {
                 looked++;
@@ -116,11 +134,11 @@ public sealed class VetisIncomingAutoQuenchService : IVetisIncomingAutoQuencher
         {
             var tail = await PassFinished(lanes, batch);
             if (tail.IsFailure)
-                return Finish(lanes, quenchedDocuments, error ?? tail.Error, false);
+                return Finish(lanes, quenchedDocuments, error ?? tail.Error, false, held);
             finished = tail.Value;
         }
 
-        return Finish(lanes, quenchedDocuments, error, finished);
+        return Finish(lanes, quenchedDocuments, error, finished, held);
 
         void Note(string documentId, string message)
         {
@@ -135,17 +153,35 @@ public sealed class VetisIncomingAutoQuenchService : IVetisIncomingAutoQuencher
         lane.ResumeId = head.Id;
     }
 
-    private VetisQuenchBatch Finish(List<Lane> lanes, int quenchedDocuments, string? error, bool finished)
+    private VetisQuenchBatch Finish(
+        List<Lane> lanes,
+        int quenchedDocuments,
+        string? error,
+        bool finished,
+        List<VetisQuenchLaneMark> held)
     {
         _logger.LogInformation("Автогашение: погашено документов {Count}", quenchedDocuments);
+        var marks = Snapshot(lanes).Lanes;
+        foreach (var mark in held)
+        {
+            if (!marks.Exists(item => SameLane(item, mark)))
+                marks.Add(mark);
+        }
+
         return new VetisQuenchBatch
         {
             QuenchedDocuments = quenchedDocuments,
             Error = error ?? "",
             Finished = finished,
-            Cursor = Snapshot(lanes)
+            Cursor = new VetisQuenchCursor { Lanes = marks },
+            Held = held
         };
     }
+
+    private static bool SameLane(VetisQuenchLaneMark left, VetisQuenchLaneMark right) =>
+        left.OrganizationId == right.OrganizationId
+        && left.Status == right.Status
+        && left.Dated == right.Dated;
 
     private static List<Lane> OpenLanes(
         IReadOnlyList<OrganizationEntity> organizations,

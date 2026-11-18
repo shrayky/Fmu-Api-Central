@@ -37,7 +37,7 @@ public interface IVetisIncomingAutoQuencher
 
 /// <summary>
 /// Error заполнен при обрыве запуска и при отказе гашения. QuenchedDocuments при этом уже погашенные документы.
-/// Finished — журнал дочитан, следующий круг начинает сначала.
+/// Finished — журнал дочитан, следующий круг начинает сначала. Held при этом остаётся: это позиции организаций вне рабочего дня.
 /// </summary>
 public sealed class VetisQuenchBatch
 {
@@ -48,6 +48,8 @@ public sealed class VetisQuenchBatch
     public bool Finished { get; init; }
 
     public VetisQuenchCursor Cursor { get; init; } = new();
+
+    public List<VetisQuenchLaneMark> Held { get; init; } = [];
 }
 
 public sealed class VetisQuenchCursor

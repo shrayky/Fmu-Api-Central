@@ -5,6 +5,7 @@ import {
     formatUnixMoment,
     canQuenchRows,
     positiveSetting,
+    quenchWindow,
     quenchLockedByProgress,
     editedActualVolume,
     incomingWindowClosable,
@@ -21,6 +22,7 @@ import {
     vsdStatusLabel,
     vsdErrorIcon,
     vsdCountText,
+    expiryHtml,
     vsdXmlFileName,
     requestStateText,
     jobStatusHtml,
@@ -142,6 +144,20 @@ test("верный факт нормализуется, неверный не п
     assert.equal(editedActualVolume("10", "-1").ok, false);
     assert.equal(editedActualVolume("10", "").ok, false);
     assert.equal(editedActualVolume("10", "много").ok, false);
+});
+
+test("истёкший срок рисуется красным и экранируется", () => {
+    assert.equal(expiryHtml("02.05.2026", true), "<span class=\"vetis-expired\">02.05.2026</span>");
+    assert.equal(expiryHtml("20.11.2026", false), "20.11.2026");
+    assert.equal(expiryHtml("a<b", true), "<span class=\"vetis-expired\">a&lt;b</span>");
+    assert.equal(expiryHtml("", true), "");
+});
+
+test("рабочий день автогашения — начало раньше конца", () => {
+    assert.equal(quenchWindow({ autoQuenchFrom: "09:00", autoQuenchTo: "17:00" }), true);
+    assert.equal(quenchWindow({ autoQuenchFrom: "09:00", autoQuenchTo: "09:00" }), false);
+    assert.equal(quenchWindow({ autoQuenchFrom: "18:00", autoQuenchTo: "09:00" }), false);
+    assert.equal(quenchWindow({ autoQuenchFrom: "", autoQuenchTo: "17:00" }), false);
 });
 
 test("период, пакет и задержка — целое число больше нуля", () => {

@@ -38,6 +38,48 @@ public class VetisIncomingAutoQuenchServiceTests
     }
 
     [Fact]
+    public async Task Вне_рабочего_дня_организация_не_читается_и_курсор_остаётся()
+    {
+        var world = new World();
+        world.Clock.Now = Local(2026, 10, 30, 18, 0);
+        world.Organizations.Store["o1"].VetisSettings.AutoQuenchFrom = "09:00";
+        world.Organizations.Store["o1"].VetisSettings.AutoQuenchTo = "17:00";
+        world.Organizations.Store["o2"] = Organization("o2", vetis: true, auto: true);
+        world.Organizations.Store["o2"].VetisSettings.AutoQuenchFrom = "09:00";
+        world.Organizations.Store["o2"].VetisSettings.AutoQuenchTo = "19:00";
+        world.Incoming.Store["late"] = Document("late", "o1", "2026-10-01", Vsd("late-vsd", "2026-10-01T08:00:00+07:00"));
+        world.Incoming.Store["day"] = Document("day", "o2", "2026-10-01", Vsd("day-vsd", "2026-10-01T08:00:00+07:00"));
+        world.Gateway.EnqueueQuench(Done("day-vsd"));
+        var cursor = Mark("o1", 40, "late");
+
+        var batch = await world.Sut.QuenchBatchAsync(cursor, CancellationToken.None);
+
+        Assert.Equal(["day-vsd"], world.Gateway.QuenchedUuids);
+        Assert.Equal("CONFIRMED", world.Incoming.Store["late"].Vsds.Single().Status);
+        Assert.DoesNotContain("o1", world.Incoming.OldestOrganizations);
+        var kept = Assert.Single(batch.Held, lane => lane.OrganizationId == "o1");
+        Assert.Equal(40, kept.AfterSortAt);
+        Assert.Equal("late", kept.AfterId);
+    }
+
+    [Fact]
+    public async Task Вне_рабочего_дня_у_всех_обход_не_считается_законченным()
+    {
+        var world = new World();
+        world.Clock.Now = Local(2026, 10, 30, 18, 0);
+        world.Organizations.Store["o1"].VetisSettings.AutoQuenchFrom = "09:00";
+        world.Organizations.Store["o1"].VetisSettings.AutoQuenchTo = "17:00";
+        world.Incoming.Store["late"] = Document("late", "o1", "2026-10-01", Vsd("late-vsd", "2026-10-01T08:00:00+07:00"));
+
+        var batch = await world.Sut.QuenchBatchAsync(Mark("o1", 40, "late"), CancellationToken.None);
+
+        Assert.Equal(0, world.Incoming.OldestCalls);
+        Assert.False(batch.Finished);
+        Assert.Equal("late", Assert.Single(batch.Cursor.Lanes).AfterId);
+        Assert.Equal("late", Assert.Single(batch.Held).AfterId);
+    }
+
+    [Fact]
     public async Task Организация_без_автогашения_и_выключенный_Ветис_не_читаются()
     {
         var world = new World();
@@ -224,6 +266,27 @@ public class VetisIncomingAutoQuenchServiceTests
         Vsds = vsds.ToList()
     };
 
+    private static VetisQuenchCursor Mark(string organizationId, long afterSortAt, string afterId) => new()
+    {
+        Lanes =
+        [
+            new VetisQuenchLaneMark
+            {
+                OrganizationId = organizationId,
+                Status = VetisIncomingStatus.NotAccepted,
+                Dated = true,
+                AfterSortAt = afterSortAt,
+                AfterId = afterId
+            }
+        ]
+    };
+
+    private static DateTimeOffset Local(int year, int month, int day, int hour, int minute)
+    {
+        var wall = new DateTime(year, month, day, hour, minute, 0, DateTimeKind.Unspecified);
+        return new DateTimeOffset(wall, TimeZoneInfo.Local.GetUtcOffset(wall));
+    }
+
     private static OrganizationEntity Organization(string id, bool vetis, bool auto) => new()
     {
         Id = id,
@@ -233,6 +296,8 @@ public class VetisIncomingAutoQuenchServiceTests
             Enable = vetis,
             AutoQuench = auto,
             AutoQuenchDelayHours = 1,
+            AutoQuenchFrom = "00:00",
+            AutoQuenchTo = "23:59",
             ApiKey = "key",
             BasicLogin = "user",
             BasicPassword = "secret",

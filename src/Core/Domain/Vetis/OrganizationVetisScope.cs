@@ -22,6 +22,8 @@ public static class OrganizationVetisScope
         current.IncomingFrom = NormalizeDate(update.IncomingFrom);
         current.AutoQuench = update.AutoQuench;
         current.AutoQuenchDelayHours = update.AutoQuenchDelayHours;
+        current.AutoQuenchFrom = (update.AutoQuenchFrom ?? "").Trim();
+        current.AutoQuenchTo = (update.AutoQuenchTo ?? "").Trim();
         current.Enterprises = Normalize(update.Enterprises, current.IncomingFrom, current.Enterprises);
     }
 

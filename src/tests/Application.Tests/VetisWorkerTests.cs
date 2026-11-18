@@ -65,6 +65,47 @@ public class VetisWorkerTests
     }
 
     [Fact]
+    public async Task После_прохода_курсор_вне_окна_не_сбрасывается()
+    {
+        var calls = new List<VetisQuenchCursor?>();
+        var done = new TaskCompletionSource<List<VetisQuenchCursor?>>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var held = new VetisQuenchLaneMark { OrganizationId = "o1", Status = VetisIncomingStatus.NotAccepted, Dated = true, AfterId = "kept" };
+        var quencher = new ScriptQuencher(cursor =>
+        {
+            lock (calls)
+            {
+                calls.Add(cursor);
+                if (calls.Count < 2)
+                {
+                    return new VetisQuenchBatch
+                    {
+                        Finished = true,
+                        Held = [held]
+                    };
+                }
+
+                done.TrySetResult(calls.ToList());
+                return new VetisQuenchBatch { Finished = true };
+            }
+        });
+        var scope = new MapScope(
+            (typeof(IParametersService), new MemoryVetisParameters()),
+            (typeof(IVetisIncomingAutoQuencher), quencher));
+        var worker = new VetisAutoQuenchWorker(
+            scope,
+            new VetisJobStatusStore(),
+            NullLogger<VetisAutoQuenchWorker>.Instance,
+            TimeSpan.Zero,
+            TimeSpan.Zero);
+
+        await worker.StartAsync(CancellationToken.None);
+        var snapshot = await done.Task.WaitAsync(TimeSpan.FromSeconds(3));
+        await worker.StopAsync(CancellationToken.None);
+
+        Assert.Equal("kept", snapshot[1]!.Lanes.Single().AfterId);
+    }
+
+    [Fact]
     public void Хост_создаёт_воркеры_без_тестовых_пауз()
     {
         var scope = new MapScope(

@@ -139,6 +139,8 @@ public class VetisCursorTests
         {
             AutoQuench = true,
             AutoQuenchDelayHours = 4,
+            AutoQuenchFrom = "08:00",
+            AutoQuenchTo = "18:30",
             Enterprises = [new OrganizationEnterprise { Guid = "e1", Name = "Склад", Participates = true }]
         };
 
@@ -146,6 +148,8 @@ public class VetisCursorTests
 
         Assert.True(current.AutoQuench);
         Assert.Equal(4, current.AutoQuenchDelayHours);
+        Assert.Equal("08:00", current.AutoQuenchFrom);
+        Assert.Equal("18:30", current.AutoQuenchTo);
         Assert.Equal("e1", current.Enterprises.Single().Guid);
     }
 

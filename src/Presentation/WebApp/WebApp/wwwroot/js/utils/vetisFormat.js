@@ -36,6 +36,14 @@ function escapeHtml(value) {
         .replaceAll("\"", "&quot;");
 }
 
+export function expiryHtml(text, expired) {
+    const value = escapeHtml(text);
+    if (!value)
+        return "";
+
+    return expired ? `<span class="vetis-expired">${value}</span>` : value;
+}
+
 export function jobStatusHtml(jobs, error) {
     if (error)
         return `<div>${escapeHtml(error)}</div>`;
@@ -186,6 +194,25 @@ export function incomingFromForSave(loaded, pickerDay) {
         return stored;
 
     return day;
+}
+
+export function quenchWindow(settings) {
+    const from = clockMinutes(settings?.autoQuenchFrom);
+    const to = clockMinutes(settings?.autoQuenchTo);
+    return from != null && to != null && from < to;
+}
+
+function clockMinutes(value) {
+    const match = /^(\d{1,2}):(\d{2})$/.exec(String(value ?? "").trim());
+    if (!match)
+        return null;
+
+    const hours = Number(match[1]);
+    const minutes = Number(match[2]);
+    if (hours > 23 || minutes > 59)
+        return null;
+
+    return hours * 60 + minutes;
 }
 
 export function formatUnixMoment(seconds) {

@@ -216,6 +216,10 @@ public class OrganizationManagerService : IOrganizationManagerService
             var delay = data.VetisSettings.CheckDelay();
             if (delay.IsFailure)
                 return Result.Failure<OrganizationView>(delay.Error);
+
+            var window = data.VetisSettings.CheckWindow();
+            if (window.IsFailure)
+                return Result.Failure<OrganizationView>(window.Error);
         }
 
         if (data.SalePoints != null)
@@ -451,6 +455,8 @@ public class OrganizationManagerService : IOrganizationManagerService
             IncomingFrom = settings.IncomingFrom,
             AutoQuench = settings.AutoQuench,
             AutoQuenchDelayHours = settings.AutoQuenchDelayHours,
+            AutoQuenchFrom = settings.AutoQuenchFrom,
+            AutoQuenchTo = settings.AutoQuenchTo,
             Enterprises = settings.Enterprises ?? []
         };
     }
