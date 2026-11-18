@@ -31,6 +31,15 @@
     display: block;
 }
 
+.sidebar-server-clock .webix_template {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    padding: 0;
+    color: #94a1b3;
+}
+
 /* РћР±С‹С‡РЅРѕРµ СЃРѕСЃС‚РѕСЏРЅРёРµ - Р±РѕР»РµРµ СЃРїРµС†РёС„РёС‡РЅС‹Рµ СЃРµР»РµРєС‚РѕСЂС‹ РґР»СЏ РіР°СЂР°РЅС‚РёРё РїСЂРёРјРµРЅРµРЅРёСЏ */
 .webix_tree_item .mdi-menu,
 .webix_list_item .mdi-menu {

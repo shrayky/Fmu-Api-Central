@@ -1,4 +1,8 @@
+import { loadServerTime } from "../services/ConfigurationService.js";
+import { serverClockText } from "../utils/serverClock.js";
+
 const SIDEBAR_COLLAPSED_KEY = "sidebar_collapsed";
+const CLOCK_SYNC_MS = 5 * 60 * 1000;
 
 export class Sidebar {
     constructor({ items, onSelect, logo, logoText }) {
@@ -9,6 +13,10 @@ export class Sidebar {
         this.sidebarId = "mainSidebar";
         this.logoId = "logoText";
         this.collapsedLogoId = "collapsedLogo";
+        this.clockId = "serverClock";
+        this._clockStarted = false;
+        this._iso = "";
+        this._syncedAt = 0;
     }
 
     getView() {
@@ -57,6 +65,19 @@ export class Sidebar {
                 },
                 {
                     view: "template",
+                    id: this.clockId,
+                    borderless: true,
+                    height: 36,
+                    css: "sidebar-server-clock",
+                    template: "",
+                    hidden: collapsed,
+                    on: {
+                        onAfterRender: () => this._ensureClock(),
+                        onDestruct: () => this._stopClock()
+                    }
+                },
+                {
+                    view: "template",
                     id: this.collapsedLogoId,
                     borderless: true,
                     height: 44,
@@ -83,14 +104,59 @@ export class Sidebar {
     _syncLogos(isCollapsed) {
         const logo = $$(this.logoId);
         const collapsedLogo = $$(this.collapsedLogoId);
+        const clock = $$(this.clockId);
 
         if (isCollapsed) {
             logo.hide();
+            clock?.hide();
             collapsedLogo.show();
         } else {
             logo.show();
+            clock?.show();
             collapsedLogo.hide();
         }
+    }
+
+    _ensureClock() {
+        if (this._clockStarted)
+            return;
+
+        this._clockStarted = true;
+        this._syncClock();
+        this._tickTimer = setInterval(() => this._paint(), 1000);
+        this._syncTimer = setInterval(() => this._syncClock(), CLOCK_SYNC_MS);
+    }
+
+    _stopClock() {
+        clearInterval(this._tickTimer);
+        clearInterval(this._syncTimer);
+    }
+
+    async _syncClock() {
+        try {
+            const result = await loadServerTime();
+            if (result?.result && result.value?.local) {
+                this._iso = String(result.value.local);
+                this._syncedAt = Date.now();
+            } else if (!this._iso) {
+                this._iso = "";
+            }
+        } catch {
+            if (!this._iso)
+                this._iso = "";
+        }
+
+        this._paint();
+    }
+
+    _paint() {
+        const view = $$(this.clockId);
+        if (!view)
+            return;
+
+        const elapsed = this._iso ? Date.now() - this._syncedAt : 0;
+        view.define("template", serverClockText(this._iso, elapsed));
+        view.refresh();
     }
 
     _isMobile() {

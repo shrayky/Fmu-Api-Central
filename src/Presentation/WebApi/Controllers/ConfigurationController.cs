@@ -3,6 +3,7 @@
 using Application.Configuration.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 
@@ -63,5 +64,12 @@ namespace WebApi.Controllers
         [HttpGet("about")]
         [AllowAnonymous]
         public IActionResult About() => Ok(_configurationService.AppInformation());
+
+        /// <summary>
+        /// Локальное время сервера: рабочий день автогашения считается по нему, а не по часам браузера.
+        /// </summary>
+        [HttpGet("time")]
+        public IActionResult Time() =>
+            Ok(new { local = DateTimeOffset.Now.ToString("yyyy-MM-ddTHH:mm:sszzz", CultureInfo.InvariantCulture) });
     }
 }

@@ -2,6 +2,12 @@
 
 import { AuthService } from './AuthService.js';
 
+export async function loadServerTime() {
+  return await AuthService.makeAuthenticatedRequest('/api/Configuration/time', {
+    method: 'GET'
+  });
+}
+
 export async function loadConfiguration() {
   return await AuthService.makeAuthenticatedRequest('/api/Configuration', {
     method: 'GET'
