@@ -73,6 +73,12 @@ public sealed class VetisIncomingView : VetisIncomingRow
     /// </summary>
     [JsonPropertyName("salePoints")]
     public List<SalePointOption> SalePoints { get; set; } = [];
+
+    [JsonPropertyName("expiryDate")]
+    public string ExpiryDate { get; set; } = "";
+
+    [JsonPropertyName("expiryExpired")]
+    public bool ExpiryExpired { get; set; }
 }
 
 public sealed class VetisVsdView
@@ -112,6 +118,12 @@ public sealed class VetisVsdView
 
     [JsonPropertyName("rawXml")]
     public string RawXml { get; set; } = "";
+
+    [JsonPropertyName("expiryDate")]
+    public string ExpiryDate { get; set; } = "";
+
+    [JsonPropertyName("expiryExpired")]
+    public bool ExpiryExpired { get; set; }
 }
 
 public class VetisApplicationRow

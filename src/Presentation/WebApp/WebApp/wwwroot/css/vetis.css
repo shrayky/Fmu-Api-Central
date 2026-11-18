@@ -77,7 +77,8 @@
     color: #d9534f;
 }
 
-.vetis-request-error {
+.vetis-request-error,
+.vetis-expired {
     color: #d9534f;
 }
 

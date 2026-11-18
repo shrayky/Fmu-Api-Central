@@ -122,6 +122,71 @@ public class VetisIncomingQueryServiceTests
     }
 
     [Fact]
+    public async Task Get_показывает_срок_годности_ВСД_и_самый_ранний_в_документе()
+    {
+        var world = new World();
+        world.AddDocument("d1", "o1", "e1", sortAt: 1);
+        world.Incoming.Store["d1"].Vsds =
+        [
+            new VetisIncomingVsd
+            {
+                Uuid = "late",
+                RawXml = """<expiryDate><firstDate><year>2026</year><month>11</month><day>20</day></firstDate></expiryDate>"""
+            },
+            new VetisIncomingVsd
+            {
+                Uuid = "early",
+                RawXml = """<expiryDate><firstDate><year>2026</year><month>5</month><day>2</day></firstDate></expiryDate>"""
+            },
+            new VetisIncomingVsd
+            {
+                Uuid = "text",
+                RawXml = """<expiryDate><informalDate>до вскрытия</informalDate></expiryDate>"""
+            }
+        ];
+
+        var view = (await world.Sut.GetAsync("d1")).Value;
+
+        Assert.Equal("20.11.2026", view.Vsds.Single(item => item.Uuid == "late").ExpiryDate);
+        Assert.Equal("02.05.2026", view.Vsds.Single(item => item.Uuid == "early").ExpiryDate);
+        Assert.Equal("до вскрытия", view.Vsds.Single(item => item.Uuid == "text").ExpiryDate);
+        Assert.Equal("02.05.2026", view.ExpiryDate);
+    }
+
+    [Fact]
+    public async Task Get_помечает_истёкший_срок_и_не_трогает_текст()
+    {
+        var world = new World();
+        world.AddDocument("d1", "o1", "e1", sortAt: 1);
+        world.Incoming.Store["d1"].Vsds =
+        [
+            new VetisIncomingVsd
+            {
+                Uuid = "old",
+                RawXml = """<expiryDate><firstDate><year>2000</year><month>1</month><day>1</day></firstDate></expiryDate>"""
+            },
+            new VetisIncomingVsd
+            {
+                Uuid = "far",
+                RawXml = """<expiryDate><firstDate><year>2999</year><month>1</month><day>1</day></firstDate></expiryDate>"""
+            },
+            new VetisIncomingVsd
+            {
+                Uuid = "text",
+                RawXml = """<expiryDate><informalDate>до вскрытия</informalDate></expiryDate>"""
+            }
+        ];
+
+        var view = (await world.Sut.GetAsync("d1")).Value;
+
+        Assert.True(view.Vsds.Single(item => item.Uuid == "old").ExpiryExpired);
+        Assert.False(view.Vsds.Single(item => item.Uuid == "far").ExpiryExpired);
+        Assert.False(view.Vsds.Single(item => item.Uuid == "text").ExpiryExpired);
+        Assert.Equal("01.01.2000", view.ExpiryDate);
+        Assert.True(view.ExpiryExpired);
+    }
+
+    [Fact]
     public async Task Get_неизвестного_документа_возвращает_ошибку()
     {
         var result = await new World().Sut.GetAsync("нет");

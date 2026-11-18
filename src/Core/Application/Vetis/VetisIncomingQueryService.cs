@@ -86,26 +86,36 @@ public sealed class VetisIncomingQueryService
         var directory = new VetisDirectory(organizations);
         var salePoints = new SalePointDirectory(organizations);
         var document = found.Value;
+        var today = DateOnly.FromDateTime(DateTimeOffset.Now.DateTime);
+        var earliest = VetisExpiry.Earliest(document.Vsds.Select(vsd => vsd.RawXml));
         var view = new VetisIncomingView
         {
             SalePoints = salePoints.Options(document.OrganizationId, openOnly: true).ToList(),
             Vsds = document.Vsds
-                .Select(vsd => new VetisVsdView
+                .Select(vsd =>
                 {
-                    Uuid = vsd.Uuid,
-                    IssueNumber = vsd.IssueNumber,
-                    IssueDate = vsd.IssueDate,
-                    Status = vsd.Status,
-                    ProductName = vsd.ProductName,
-                    Volume = vsd.Volume,
-                    ActualVolume = vsd.ActualVolume,
-                    Transport = VetisTransport.Describe(vsd.RawXml),
-                    ConsignorName = vsd.ConsignorName,
-                    ReceivedAt = vsd.ReceivedAt,
-                    LastError = vsd.LastError,
-                    RawXml = vsd.RawXml
+                    var expiry = VetisExpiry.Text(vsd.RawXml);
+                    return new VetisVsdView
+                    {
+                        Uuid = vsd.Uuid,
+                        IssueNumber = vsd.IssueNumber,
+                        IssueDate = vsd.IssueDate,
+                        Status = vsd.Status,
+                        ProductName = vsd.ProductName,
+                        Volume = vsd.Volume,
+                        ActualVolume = vsd.ActualVolume,
+                        Transport = VetisTransport.Describe(vsd.RawXml),
+                        ConsignorName = vsd.ConsignorName,
+                        ReceivedAt = vsd.ReceivedAt,
+                        LastError = vsd.LastError,
+                        RawXml = vsd.RawXml,
+                        ExpiryDate = expiry,
+                        ExpiryExpired = VetisExpiry.Expired(expiry, today)
+                    };
                 })
-                .ToList()
+                .ToList(),
+            ExpiryDate = earliest,
+            ExpiryExpired = VetisExpiry.Expired(earliest, today)
         };
         Fill(view, document, directory, salePoints);
         return Result.Success(view);

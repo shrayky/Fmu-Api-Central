@@ -1,6 +1,6 @@
 import vetisService from '../../services/vetisService.js';
 import { copyText } from '../../utils/copyText.js';
-import { canQuenchRows, editedActualVolume, formatIsoMoment, incomingStatusLine, incomingWindowClosable, quenchLockedByProgress, quenchStageText, quenchSummary, sameIncomingDocument, vsdErrorIcon, vsdStatusLabel, vsdXmlFileName } from '../../utils/vetisFormat.js';
+import { canQuenchRows, editedActualVolume, expiryHtml, formatIsoMoment, incomingStatusLine, incomingWindowClosable, quenchLockedByProgress, quenchStageText, quenchSummary, sameIncomingDocument, vsdErrorIcon, vsdStatusLabel, vsdXmlFileName } from '../../utils/vetisFormat.js';
 import { openVetisWindow } from './vetisWindow.js';
 import { salePointBar } from '../organization/salePointPicker.js';
 
@@ -45,7 +45,7 @@ export async function openIncomingWindow(row, { onQuenched, onSalePointChanged }
         canClose: () => incomingWindowClosable(openedId, busyId),
         body: {
             rows: [
-                { view: "template", id: INFO_ID, borderless: true, height: 110, template: infoHtml(incoming) },
+                { view: "template", id: INFO_ID, borderless: true, height: 132, template: infoHtml(incoming) },
                 salePointBar({
                     prefix: "vetisIncoming",
                     document: incoming,
@@ -77,6 +77,7 @@ export async function openIncomingWindow(row, { onQuenched, onSalePointChanged }
                         { id: "issueDate", header: "Дата оформления", width: 140, template: (vsd) => formatIsoMoment(vsd.issueDate) },
                         { id: "lastError", header: "", width: 32, template: (vsd) => vsdErrorIcon(vsd.lastError) },
                         { id: "productName", header: "Продукция", fillspace: true },
+                        { id: "expiryDate", header: "Срок годности", width: 130, template: (vsd) => expiryHtml(vsd.expiryDate, vsd.expiryExpired) },
                         { id: "volume", header: "Объём", width: 100 },
                         { id: "actualVolume", header: "Факт", width: 110, editor: "text" },
                         { id: "transport", header: "Транспорт", width: 260 },
@@ -144,7 +145,7 @@ export async function openIncomingWindow(row, { onQuenched, onSalePointChanged }
 function infoHtml(incoming) {
     return infoLines(incoming)
         .filter(([, value]) => value)
-        .map(([name, value]) => `<div><b>${webix.template.escape(name)}:</b> ${webix.template.escape(value)}</div>`)
+        .map(([name, value, expired]) => `<div><b>${webix.template.escape(name)}:</b> ${expired ? expiryHtml(value, true) : webix.template.escape(value)}</div>`)
         .join("");
 }
 
@@ -154,6 +155,7 @@ function infoLines(incoming) {
         ["Предприятие", incoming.enterpriseName],
         ["Поставщик", incoming.consignor],
         ["Статус", incomingStatusLine(incoming)],
+        ["Срок годности", incoming.expiryDate, !!incoming.expiryExpired],
     ];
 }
 
