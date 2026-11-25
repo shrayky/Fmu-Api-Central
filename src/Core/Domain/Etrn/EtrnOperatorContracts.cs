@@ -126,6 +126,8 @@ public sealed class EtrnExecuteCommand
     public EtrnIncomingDocumentEntity Document { get; init; } = new();
 
     public EtrnDecision Decision { get; init; } = new();
+
+    public EtrnCorrection? Correction { get; init; }
 }
 
 public sealed class EtrnExecuteResult

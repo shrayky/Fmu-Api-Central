@@ -205,6 +205,43 @@ public class EtrnAcceptanceServiceTests
         Assert.Equal(3, world.Requests.Store.Count);
     }
 
+    [Fact]
+    public async Task Accept_пишет_титул_платформы_в_журнал()
+    {
+        var world = new World();
+        world.Put(Document());
+        const string body = """{"message":"Некорректный титул"}""";
+        world.Operator.EnqueueExecute(new EtrnExecuteResult
+        {
+            Completed = false,
+            Error = "Платформа ЭТрН ответила 400",
+            Exchanges =
+            [
+                new EtrnExchange
+                {
+                    Method = EtrnMethods.OfdConsigneeTitle,
+                    Completed = false,
+                    Error = "400",
+                    Parameters = "308924",
+                    RequestBody = "<Файл/>",
+                    ResponseBody = body
+                }
+            ]
+        });
+
+        var result = await world.Acceptance.AcceptAsync(
+            Document().Id,
+            new EtrnAcceptCommand { Intent = EtrnAcceptanceIntent.Reject, Comment = "брак" },
+            CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        var row = Assert.Single(world.Requests.Store.Values);
+        Assert.Equal(EtrnMethods.OfdConsigneeTitle, row.Method);
+        Assert.Equal(body, row.ResponseBody);
+        Assert.Equal("400", row.Error);
+        Assert.False(row.Completed);
+    }
+
     [Theory]
     [InlineData(EtrnDocumentStatus.Accepted)]
     [InlineData(EtrnDocumentStatus.Rejected)]
@@ -224,6 +261,117 @@ public class EtrnAcceptanceServiceTests
         Assert.True(result.IsFailure);
         Assert.Equal(EtrnDocumentState.AlreadyClosed, result.Error);
         Assert.Equal(0, world.Operator.ExecuteCalls);
+    }
+
+    [Fact]
+    public async Task Исправление_Платформы_отправляет_записанный_приём()
+    {
+        var world = new World();
+        world.AsPlatform();
+        var document = Document();
+        document.Operator.Type = EtrnOperatorType.Ofd;
+        document.Status = EtrnDocumentStatus.Accepted;
+        document.Action = EtrnAcceptanceAction.Received;
+        document.Lines[0].FactPlaces = 10;
+        document.Lines[0].FactWeight = "100";
+        world.Put(document);
+        world.Operator.EnqueueExecute(new EtrnExecuteResult { Completed = true });
+
+        var result = await world.Acceptance.AcceptAsync(
+            document.Id,
+            new EtrnAcceptCommand
+            {
+                Correction = true,
+                CorrectionNumber = 1,
+                CorrectionDate = "20.11.2026",
+                Intent = EtrnAcceptanceIntent.Reject,
+                Comment = "не брать из формы"
+            },
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess, result.IsFailure ? result.Error : "");
+        Assert.Equal(1, world.Operator.ExecuteCalls);
+        Assert.Equal(EtrnAcceptanceAction.Received, world.Operator.LastCommand!.Decision.Action);
+        Assert.Equal(1, world.Operator.LastCommand.Correction!.Number);
+        Assert.Equal("20.11.2026", world.Operator.LastCommand.Correction.Date);
+        var stored = world.Incoming.Store[document.Id];
+        Assert.Equal(EtrnDocumentStatus.Accepted, stored.Status);
+        Assert.Equal("", stored.LastError);
+        Assert.Equal(1, stored.CorrectionNumber);
+        Assert.Equal("20.11.2026", stored.CorrectionDate);
+        Assert.Equal(1, result.Value.CorrectionNumber);
+        Assert.Equal("20.11.2026", result.Value.CorrectionDate);
+    }
+
+    [Fact]
+    public async Task Исправление_без_номера_не_зовёт_шлюз()
+    {
+        var world = new World();
+        world.AsPlatform();
+        var document = Document();
+        document.Operator.Type = EtrnOperatorType.Ofd;
+        document.Status = EtrnDocumentStatus.Accepted;
+        document.Action = EtrnAcceptanceAction.Received;
+        world.Put(document);
+
+        var result = await world.Acceptance.AcceptAsync(
+            document.Id,
+            new EtrnAcceptCommand { Correction = true, CorrectionNumber = 0, CorrectionDate = "20.11.2026" },
+            CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(EtrnCorrection.BadNumber, result.Error);
+        Assert.Equal(0, world.Operator.ExecuteCalls);
+        Assert.Equal(EtrnDocumentStatus.Accepted, world.Incoming.Store[document.Id].Status);
+    }
+
+    [Fact]
+    public async Task Исправление_СБИС_остаётся_закрытым()
+    {
+        var world = new World();
+        var document = Document();
+        document.Status = EtrnDocumentStatus.Accepted;
+        world.Put(document);
+
+        var result = await world.Acceptance.AcceptAsync(
+            document.Id,
+            new EtrnAcceptCommand { Correction = true, CorrectionNumber = 1, CorrectionDate = "20.11.2026" },
+            CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(EtrnDocumentState.AlreadyClosed, result.Error);
+        Assert.Equal(0, world.Operator.ExecuteCalls);
+    }
+
+    [Fact]
+    public async Task Сбой_исправления_не_возвращает_ожидание()
+    {
+        var world = new World();
+        world.AsPlatform();
+        var document = Document();
+        document.Operator.Type = EtrnOperatorType.Ofd;
+        document.Status = EtrnDocumentStatus.Rejected;
+        document.Action = EtrnAcceptanceAction.Rejected;
+        document.GeneralComment = "брак";
+        world.Put(document);
+        world.Operator.EnqueueExecute(new EtrnExecuteResult
+        {
+            Completed = false,
+            Error = "Платформа ЭТрН ответила 400"
+        });
+
+        var result = await world.Acceptance.AcceptAsync(
+            document.Id,
+            new EtrnAcceptCommand { Correction = true, CorrectionNumber = 1, CorrectionDate = "20.11.2026" },
+            CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("Платформа ЭТрН ответила 400", result.Error);
+        var stored = world.Incoming.Store[document.Id];
+        Assert.Equal(EtrnDocumentStatus.Rejected, stored.Status);
+        Assert.Equal("Платформа ЭТрН ответила 400", stored.LastError);
+        Assert.Equal(1, stored.CorrectionNumber);
+        Assert.Equal("20.11.2026", stored.CorrectionDate);
     }
 
     [Fact]
@@ -312,5 +460,11 @@ public class EtrnAcceptanceServiceTests
 
         public void Put(EtrnIncomingDocumentEntity document) =>
             Incoming.Store[document.Id] = MemoryEtrnIncoming.Clone(document);
+
+        public void AsPlatform()
+        {
+            Organizations.Store["o1"].EtrnConnections![0].Type = EtrnOperatorType.Ofd;
+            Operator.Type = EtrnOperatorType.Ofd;
+        }
     }
 }

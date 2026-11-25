@@ -143,6 +143,15 @@ public sealed class EtrnIncomingDocumentEntity : IHaveStringId
     [JsonPropertyName("signedAt")]
     public string SignedAt { get; set; } = "";
 
+    /// <summary>
+    /// Последние введённые номер и дата исправления: следующая отправка открывает их для правки.
+    /// </summary>
+    [JsonPropertyName("correctionNumber")]
+    public int CorrectionNumber { get; set; }
+
+    [JsonPropertyName("correctionDate")]
+    public string CorrectionDate { get; set; } = "";
+
     [JsonPropertyName("sendingAt")]
     public DateTimeOffset? SendingAt { get; set; }
 
@@ -170,6 +179,11 @@ public sealed class EtrnIncomingDocumentEntity : IHaveStringId
         && HasQuantity
         && EtrnDocumentState.StageOf(LastError).Length == 0
         && !EtrnDocumentState.IsForeignNote(LastError);
+
+    [JsonIgnore]
+    public bool CanCorrect =>
+        string.Equals(Operator.Type, EtrnOperatorType.Ofd, StringComparison.OrdinalIgnoreCase)
+        && Status is EtrnDocumentStatus.Accepted or EtrnDocumentStatus.Rejected;
 
     [JsonIgnore]
     public string StatusLabel

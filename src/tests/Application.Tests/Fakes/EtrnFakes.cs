@@ -161,7 +161,7 @@ internal sealed class ScriptedEtrnOperator : IEtrnOperator
     private readonly Queue<EtrnExecuteResult> _execute = new();
     private readonly Queue<EtrnStageResult> _stage = new();
 
-    public string Type => EtrnOperatorType.Saby;
+    public string Type { get; set; } = EtrnOperatorType.Saby;
 
     public int FetchCalls { get; private set; }
 

@@ -4,6 +4,7 @@ using CSharpFunctionalExtensions;
 using Domain.Etrn;
 using Domain.Etrn.Xml;
 using EtrnOfd;
+using Microsoft.Extensions.Logging;
 
 namespace EtrnOfd.Tests;
 
@@ -198,7 +199,8 @@ public class OfdEtrnGatewayTests
         Assert.Equal(2, puts.Count);
         Assert.EndsWith("/etrns/308924/documents/1110341v5.01", puts[0].Url, StringComparison.Ordinal);
         Assert.StartsWith("application/xml", puts[0].ContentType, StringComparison.Ordinal);
-        var xml = ConsigneeTitleWriter.ToWindows1251(ConsigneeTitleWriter.Build(document, decision, World.SignedAt));
+        var xml = ConsigneeTitleWriter.ToWindows1251(
+            ConsigneeTitleWriter.Build(document, decision, World.SignedAt, world.Names.Value.Value));
         Assert.Equal(xml, puts[0].Body);
         Assert.Equal(stored, world.Signer.Last.Content);
         Assert.NotEqual(xml, world.Signer.Last.Content);
@@ -319,6 +321,112 @@ public class OfdEtrnGatewayTests
         Assert.Empty(world.Signer.Last.Content);
         Assert.DoesNotContain(world.Handler.Calls, call =>
             call.Method == "PUT" && call.Url.EndsWith("/signature", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Приёмка_при_400_пишет_тело_ответа_в_обмен_и_лог()
+    {
+        var world = World.Ready();
+        const string body = """{"message":"Некорректный титул"}""";
+        world.Handler.Respond = call =>
+        {
+            if (call.Url.Contains("/security/public/api/v3/oauth/token", StringComparison.Ordinal))
+                return OfdHandler.Json("""{"access_token":"token-1","expires_in":900}""");
+            if (call.Method == "GET" && call.Url.EndsWith("/etrns/308924/documents", StringComparison.Ordinal))
+                return OfdHandler.Json("[]");
+            if (call.Method == "PUT" && call.Url.EndsWith("/documents/1110341v5.01", StringComparison.Ordinal))
+                return OfdHandler.Json(HttpStatusCode.BadRequest, body);
+            return OfdHandler.Status(HttpStatusCode.NotFound);
+        };
+
+        var result = await world.Gateway.ExecuteAsync(
+            world.Context,
+            new EtrnExecuteCommand
+            {
+                Document = new EtrnIncomingDocumentEntity
+                {
+                    OperatorDocumentId = "308924",
+                    Number = "ТН-77",
+                    Date = "2026-11-04",
+                    Lines = [new EtrnCargoLine { Index = 1, Places = 10, GrossWeight = "100" }]
+                },
+                Decision = new EtrnDecision { Action = EtrnAcceptanceAction.Received }
+            },
+            CancellationToken.None);
+
+        Assert.False(result.Value.Completed);
+        Assert.Equal("Платформа ЭТрН ответила 400", result.Value.Error);
+        var title = Assert.Single(result.Value.Exchanges, item => item.Method == EtrnMethods.OfdConsigneeTitle);
+        Assert.Contains(EtrnMethods.OfdConsigneeTitle, EtrnMethods.Service);
+        Assert.Equal("400", title.Error);
+        Assert.Equal(body, title.ResponseBody);
+        Assert.Contains(world.Logger.Warnings, message =>
+            message.Contains("400", StringComparison.Ordinal)
+            && message.Contains("Некорректный титул", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Исправление_уходит_в_титул_с_номером_и_датой()
+    {
+        var world = World.Ready();
+        world.Handler.Respond = call =>
+        {
+            if (call.Url.Contains("/security/public/api/v3/oauth/token", StringComparison.Ordinal))
+                return OfdHandler.Json("""{"access_token":"token-1","expires_in":900}""");
+            if (call.Method == "GET" && call.Url.EndsWith("/etrns/308924/documents", StringComparison.Ordinal))
+                return OfdHandler.Json("[]");
+            if (call.Method == "PUT" && call.Url.EndsWith("/documents/1110341v5.01", StringComparison.Ordinal))
+                return OfdHandler.Json(HttpStatusCode.BadRequest, "{}");
+            return OfdHandler.Status(HttpStatusCode.NotFound);
+        };
+
+        await world.Gateway.ExecuteAsync(
+            world.Context,
+            new EtrnExecuteCommand
+            {
+                Document = new EtrnIncomingDocumentEntity
+                {
+                    OperatorDocumentId = "308924",
+                    Number = "ТН-77",
+                    Date = "2026-11-04",
+                    Lines = [new EtrnCargoLine { Index = 1, Places = 10, GrossWeight = "100" }]
+                },
+                Decision = new EtrnDecision { Action = EtrnAcceptanceAction.Received },
+                Correction = new EtrnCorrection { Number = 1, Date = "20.11.2026" }
+            },
+            CancellationToken.None);
+
+        var title = world.Handler.Calls.Single(call =>
+            call.Method == "PUT" && call.Url.EndsWith("/documents/1110341v5.01", StringComparison.Ordinal));
+        var xml = Encoding.GetEncoding("windows-1251").GetString(title.Body);
+        Assert.Contains("НомИспр=\"1\"", xml, StringComparison.Ordinal);
+        Assert.Contains("ДатаИспр=\"20.11.2026\"", xml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Приёмка_без_ФИО_сертификата_не_отправляет_титул()
+    {
+        var world = World.Ready();
+        world.Names.Value = Result.Failure<EtrnSignerName>("В сертификате нет фамилии и имени подписанта");
+
+        var result = await world.Gateway.ExecuteAsync(
+            world.Context,
+            new EtrnExecuteCommand
+            {
+                Document = new EtrnIncomingDocumentEntity
+                {
+                    OperatorDocumentId = "308924",
+                    Number = "ТН-77",
+                    Date = "2026-11-04",
+                    Lines = [new EtrnCargoLine { Index = 1, Places = 10, GrossWeight = "100" }]
+                },
+                Decision = new EtrnDecision { Action = EtrnAcceptanceAction.Received }
+            },
+            CancellationToken.None);
+
+        Assert.False(result.Value.Completed);
+        Assert.Equal("В сертификате нет фамилии и имени подписанта", result.Value.Error);
+        Assert.Empty(world.Handler.Calls);
     }
 
     [Fact]
@@ -606,14 +714,24 @@ public class OfdEtrnGatewayTests
         public OfdHandler Handler { get; }
         public RecordingSigner Signer { get; }
         public OfdTokenStore Store { get; }
+        public LineLogger Logger { get; }
+        public SignerNames Names { get; }
         public OfdEtrnGateway Gateway { get; }
         public EtrnOperatorContext Context { get; set; } = OfdEtrnGatewayTests.Context("2775225", "plain-key");
 
-        private World(OfdHandler handler, RecordingSigner signer, OfdTokenStore store, OfdEtrnGateway gateway)
+        private World(
+            OfdHandler handler,
+            RecordingSigner signer,
+            OfdTokenStore store,
+            LineLogger logger,
+            SignerNames names,
+            OfdEtrnGateway gateway)
         {
             Handler = handler;
             Signer = signer;
             Store = store;
+            Logger = logger;
+            Names = names;
             Gateway = gateway;
         }
 
@@ -622,6 +740,8 @@ public class OfdEtrnGatewayTests
             var handler = new OfdHandler();
             var signer = new RecordingSigner();
             var store = new OfdTokenStore();
+            var logger = new LineLogger();
+            var names = new SignerNames();
             var tokens = new OfdTokenClient(
                 new HttpClient(handler, disposeHandler: false),
                 new FixedAttachedSignature(),
@@ -633,8 +753,10 @@ public class OfdEtrnGatewayTests
                 tokens,
                 signer,
                 () => SignedAt,
-                _ => Task.CompletedTask);
-            return new World(handler, signer, store, gateway);
+                _ => Task.CompletedTask,
+                logger,
+                _ => names.Value);
+            return new World(handler, signer, store, logger, names, gateway);
         }
     }
 
@@ -651,6 +773,36 @@ public class OfdEtrnGatewayTests
             byte[] content,
             CancellationToken cancellationToken) =>
             Task.FromResult(Result.Success("Q1NT"));
+    }
+
+    private sealed class SignerNames
+    {
+        public Result<EtrnSignerName> Value { get; set; } = Result.Success(new EtrnSignerName
+        {
+            Surname = "Большаков",
+            Name = "Сергей",
+            Patronymic = "Александрович"
+        });
+    }
+
+    private sealed class LineLogger : ILogger<OfdEtrnGateway>
+    {
+        public List<string> Warnings { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            if (logLevel == LogLevel.Warning)
+                Warnings.Add(formatter(state, exception));
+        }
     }
 
     private sealed class RecordingSigner : IEtrnSignaturePort
@@ -690,7 +842,9 @@ public class OfdEtrnGatewayTests
             return Respond(call);
         }
 
-        public static HttpResponseMessage Json(string json) => new(HttpStatusCode.OK)
+        public static HttpResponseMessage Json(string json) => Json(HttpStatusCode.OK, json);
+
+        public static HttpResponseMessage Json(HttpStatusCode status, string json) => new(status)
         {
             Content = new StringContent(json, Encoding.UTF8, "application/json")
         };

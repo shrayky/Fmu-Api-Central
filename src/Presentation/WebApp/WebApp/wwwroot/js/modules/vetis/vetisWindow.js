@@ -43,6 +43,13 @@ export function openVetisWindow({ id, title, width, height, body, fill, canClose
     };
     webix.UIManager.addHotKey("esc", closeOnEsc, null);
     dialog.attachEvent("onDestruct", () => webix.UIManager.removeHotKey("esc", closeOnEsc));
+    // Вложенное окно снимает Esc карточки, иначе закрываются оба.
+    dialog.suspendEsc = () => webix.UIManager.removeHotKey("esc", closeOnEsc);
+    dialog.resumeEsc = () => {
+        webix.UIManager.removeHotKey("esc", closeOnEsc);
+        if ($$(id))
+            webix.UIManager.addHotKey("esc", closeOnEsc, null);
+    };
 
     dialog.show();
     return dialog;

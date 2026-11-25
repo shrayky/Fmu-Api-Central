@@ -15,6 +15,14 @@ public static class EtrnMethods
 
     public const string Probe = "Проверка подключения";
 
+    public const string OfdList = "Список ЭТрН";
+    public const string OfdTitles = "Титулы ЭТрН";
+    public const string OfdShipperTitle = "Титул грузоотправителя";
+    public const string OfdConsigneeTitle = "Титул грузополучателя";
+    public const string OfdConsigneeSignature = "Подпись титула грузополучателя";
+    public const string OfdCard = "Карточка ЭТрН";
+    public const string OfdSubscriber = "Абонент ЭДО";
+
     public static readonly string[] Service =
     [
         ChangesList,
@@ -22,7 +30,14 @@ public static class EtrnMethods
         WriteEnclosure,
         PrepareAction,
         ExecuteAction,
-        Probe
+        Probe,
+        OfdList,
+        OfdTitles,
+        OfdShipperTitle,
+        OfdConsigneeTitle,
+        OfdConsigneeSignature,
+        OfdCard,
+        OfdSubscriber
     ];
 
     public static string Label(string? method) => method switch

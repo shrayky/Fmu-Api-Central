@@ -121,7 +121,10 @@ public sealed class EtrnIncomingQueryService
                     EditableWeight = line.HasWeight
                 })
                 .ToList(),
-            CanDecide = document.CanDecide
+            CanDecide = document.CanDecide,
+            CanCorrect = document.CanCorrect,
+            CorrectionNumber = document.CorrectionNumber,
+            CorrectionDate = document.CorrectionDate
         };
         Fill(view, document, organizations, salePoints);
         return Result.Success(view);

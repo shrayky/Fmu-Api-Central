@@ -73,6 +73,8 @@ public sealed class EtrnAcceptanceService
         var document = found.Value;
         if (document.Status == EtrnDocumentStatus.Sending)
             return Result.Failure<EtrnIncomingView>(EtrnDocumentState.AlreadyRunning);
+        if (command.Correction)
+            return await CorrectAsync(document, command, cancellationToken);
         if (EtrnDocumentStatus.IsFinal(document.Status))
             return Result.Failure<EtrnIncomingView>(EtrnDocumentState.AlreadyClosed);
 
@@ -153,6 +155,97 @@ public sealed class EtrnAcceptanceService
         return await _query.GetAsync(document.Id);
     }
 
+    private async Task<Result<EtrnIncomingView>> CorrectAsync(
+        EtrnIncomingDocumentEntity document,
+        EtrnAcceptCommand command,
+        CancellationToken cancellationToken)
+    {
+        if (!document.CanCorrect)
+            return Result.Failure<EtrnIncomingView>(EtrnDocumentState.AlreadyClosed);
+
+        var correction = EtrnCorrection.Read(command.CorrectionNumber, command.CorrectionDate);
+        if (correction.IsFailure)
+            return Result.Failure<EtrnIncomingView>(correction.Error);
+
+        document.CorrectionNumber = correction.Value.Number;
+        document.CorrectionDate = correction.Value.Date;
+        var remembered = await _incoming.Save(document);
+        if (remembered.IsFailure)
+            return Result.Failure<EtrnIncomingView>("Исправление не сохранено: " + remembered.Error);
+
+        var organization = await _organizations.GetById(document.OrganizationId);
+        if (organization.IsFailure)
+            return Result.Failure<EtrnIncomingView>(organization.Error);
+
+        var connection = (organization.Value.EtrnConnections ?? []).FirstOrDefault(item =>
+            string.Equals(item.Id, document.Operator.ConnectionId, StringComparison.OrdinalIgnoreCase));
+        if (connection == null)
+            return Result.Failure<EtrnIncomingView>("Подключение оператора не найдено.");
+        if (!string.Equals(connection.Type, EtrnOperatorType.Ofd, StringComparison.OrdinalIgnoreCase))
+            return Result.Failure<EtrnIncomingView>(EtrnDocumentState.AlreadyClosed);
+
+        if (string.IsNullOrWhiteSpace(organization.Value.TrueApiIntegrationSettings?.DigitalSignature))
+            return Result.Failure<EtrnIncomingView>("Не выбран сертификат организации");
+
+        var @operator = _operators.FirstOrDefault(item =>
+            string.Equals(item.Type, connection.Type, StringComparison.OrdinalIgnoreCase));
+        if (@operator == null)
+            return Result.Failure<EtrnIncomingView>($"Оператор {EtrnOperatorType.Label(connection.Type)} не поддерживается.");
+
+        var decision = EtrnAcceptance.Stored(document);
+        var restore = document.Status;
+        var now = _clock.GetUtcNow();
+        var started = EtrnDocumentState.StartCorrection(document, now);
+        if (started.IsFailure)
+            return Result.Failure<EtrnIncomingView>(started.Error);
+
+        var pending = await _incoming.Save(document);
+        if (pending.IsFailure)
+            return Result.Failure<EtrnIncomingView>("Приёмка не сохранена: " + pending.Error);
+
+        var context = Context(organization.Value, connection);
+        Result<EtrnExecuteResult> executed;
+        try
+        {
+            executed = await @operator.ExecuteAsync(
+                context,
+                new EtrnExecuteCommand
+                {
+                    Document = document,
+                    Decision = decision,
+                    Correction = correction.Value
+                },
+                cancellationToken);
+        }
+        catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
+        {
+            _logger.LogError(ex, "Исправление ЭТрН {Id} прервано", document.Id);
+            return await FailAsync(document, ex.Message, restore);
+        }
+
+        if (executed.IsFailure)
+            return await FailAsync(document, executed.Error, restore);
+
+        await _recorder.RecordAsync(executed.Value.Exchanges, document.OrganizationId, context.Operator);
+        if (!executed.Value.Completed)
+        {
+            var error = string.IsNullOrWhiteSpace(executed.Value.Error)
+                ? "Платформа ЭТрН не подтвердила отправку титула."
+                : executed.Value.Error;
+            return await FailAsync(document, error, restore);
+        }
+
+        var succeeded = EtrnDocumentState.Succeed(document, decision, now);
+        if (succeeded.IsFailure)
+            return Result.Failure<EtrnIncomingView>(succeeded.Error);
+
+        var stored = await _incoming.Save(document);
+        if (stored.IsFailure)
+            return Result.Failure<EtrnIncomingView>("Титул отправлен, но документ не сохранён: " + stored.Error);
+
+        return await _query.GetAsync(document.Id);
+    }
+
     private async Task<Result<EtrnIncomingView>> FinishAsync(EtrnIncomingDocumentEntity document, string? error)
     {
         EtrnDocumentState.Finish(document, error);
@@ -164,11 +257,18 @@ public sealed class EtrnAcceptanceService
     }
 
     /// <summary>
-    /// Сбой на любом шаге отправки возвращает документ в ожидание: повтор должен быть возможен.
+    /// Сбой первой отправки возвращает документ в ожидание.
+    /// Исправление возвращает прежний статус: карточка не открывается для новой приёмки.
     /// </summary>
-    private async Task<Result<EtrnIncomingView>> FailAsync(EtrnIncomingDocumentEntity document, string? error)
+    private async Task<Result<EtrnIncomingView>> FailAsync(
+        EtrnIncomingDocumentEntity document,
+        string? error,
+        string? restoreStatus = null)
     {
-        EtrnDocumentState.Fail(document, error);
+        if (string.IsNullOrEmpty(restoreStatus))
+            EtrnDocumentState.Fail(document, error);
+        else
+            EtrnDocumentState.Restore(document, restoreStatus, error);
         var saved = await _incoming.Save(document);
         if (saved.IsFailure)
             return Result.Failure<EtrnIncomingView>("Отправка не удалась, документ не сохранён: " + saved.Error);

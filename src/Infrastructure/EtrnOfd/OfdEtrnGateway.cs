@@ -2,10 +2,13 @@ using System.Globalization;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using CertificateSigning;
 using CSharpFunctionalExtensions;
 using Domain.Etrn;
 using Domain.Etrn.Xml;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace EtrnOfd;
 
@@ -24,6 +27,8 @@ public sealed class OfdEtrnGateway : IEtrnOperator
     private readonly IHttpClientFactory _http;
     private readonly OfdTokenClient _tokens;
     private readonly IEtrnSignaturePort _signer;
+    private readonly ILogger<OfdEtrnGateway> _logger;
+    private readonly Func<string, Result<EtrnSignerName>>? _names;
     private readonly Func<DateTimeOffset> _now;
     private readonly Func<CancellationToken, Task> _pause;
 
@@ -31,8 +36,16 @@ public sealed class OfdEtrnGateway : IEtrnOperator
     public OfdEtrnGateway(
         IHttpClientFactory http,
         OfdTokenClient tokens,
-        IEtrnSignaturePort signer)
-        : this(http, tokens, signer, () => DateTimeOffset.Now)
+        IEtrnSignaturePort signer,
+        ILogger<OfdEtrnGateway> logger,
+        IOrganizationCertificateDirectory certificates)
+        : this(
+            http,
+            tokens,
+            signer,
+            () => DateTimeOffset.Now,
+            logger: logger,
+            names: serial => ReadSigner(certificates, serial))
     {
     }
 
@@ -41,11 +54,15 @@ public sealed class OfdEtrnGateway : IEtrnOperator
         OfdTokenClient tokens,
         IEtrnSignaturePort signer,
         Func<DateTimeOffset> clock,
-        Func<CancellationToken, Task>? pause = null)
+        Func<CancellationToken, Task>? pause = null,
+        ILogger<OfdEtrnGateway>? logger = null,
+        Func<string, Result<EtrnSignerName>>? names = null)
     {
         _http = http;
         _tokens = tokens;
         _signer = signer;
+        _logger = logger ?? NullLogger<OfdEtrnGateway>.Instance;
+        _names = names;
         _now = clock;
         _pause = pause ?? (cancellationToken => Task.Delay(TimeSpan.FromMilliseconds(1500), cancellationToken));
     }
@@ -136,7 +153,7 @@ public sealed class OfdEtrnGateway : IEtrnOperator
                     null,
                     null,
                     null,
-                    "Список ЭТрН",
+                    EtrnMethods.OfdList,
                     subscriber.Value,
                     listUrl,
                     exchanges,
@@ -237,11 +254,21 @@ public sealed class OfdEtrnGateway : IEtrnOperator
             if (ready.IsFailure)
                 return Result.Success(new EtrnExecuteResult { Error = ready.Error, Exchanges = exchanges });
 
+            var person = (_names ?? (_ => Result.Failure<EtrnSignerName>(CertificateSubjectName.Missing)))
+                .Invoke(context.CertificateNumber);
+            if (person.IsFailure)
+                return Result.Success(new EtrnExecuteResult { Error = person.Error, Exchanges = exchanges });
+
             var token = await _tokens.AccessTokenAsync(context, cancellationToken);
             if (token.IsFailure)
                 return Result.Success(new EtrnExecuteResult { Error = token.Error, Exchanges = exchanges });
 
-            var xml = ConsigneeTitleWriter.Build(command.Document, command.Decision, _now());
+            var xml = ConsigneeTitleWriter.Build(
+                command.Document,
+                command.Decision,
+                _now(),
+                person.Value,
+                command.Correction);
             var bytes = ConsigneeTitleWriter.ToWindows1251(xml);
             var id = (command.Document.OperatorDocumentId ?? "").Trim();
             var api = context.Connection.ResolvedApiUrl();
@@ -260,7 +287,7 @@ public sealed class OfdEtrnGateway : IEtrnOperator
                 bytes,
                 "application/xml",
                 null,
-                "Титул грузополучателя",
+                EtrnMethods.OfdConsigneeTitle,
                 id,
                 xml,
                 exchanges,
@@ -307,7 +334,7 @@ public sealed class OfdEtrnGateway : IEtrnOperator
                 signature,
                 "application/octet-stream",
                 null,
-                "Подпись титула грузополучателя",
+                EtrnMethods.OfdConsigneeSignature,
                 id,
                 "",
                 exchanges,
@@ -348,7 +375,7 @@ public sealed class OfdEtrnGateway : IEtrnOperator
                 null,
                 null,
                 null,
-                "Карточка ЭТрН",
+                EtrnMethods.OfdCard,
                 id,
                 url,
                 exchanges,
@@ -395,7 +422,7 @@ public sealed class OfdEtrnGateway : IEtrnOperator
             null,
             null,
             null,
-            "Титулы ЭТрН",
+            EtrnMethods.OfdTitles,
             card.Id,
             documentsUrl,
             exchanges,
@@ -414,7 +441,7 @@ public sealed class OfdEtrnGateway : IEtrnOperator
             null,
             null,
             "application/xml",
-            "Титул грузоотправителя",
+            EtrnMethods.OfdShipperTitle,
             card.Id,
             contentUrl,
             exchanges,
@@ -447,7 +474,7 @@ public sealed class OfdEtrnGateway : IEtrnOperator
             null,
             null,
             null,
-            "Титулы ЭТрН",
+            EtrnMethods.OfdTitles,
             etrnId,
             documentsUrl,
             exchanges,
@@ -483,7 +510,7 @@ public sealed class OfdEtrnGateway : IEtrnOperator
                 null,
                 null,
                 null,
-                "Титулы ЭТрН",
+                EtrnMethods.OfdTitles,
                 etrnId,
                 documentsUrl,
                 exchanges,
@@ -504,7 +531,7 @@ public sealed class OfdEtrnGateway : IEtrnOperator
                         null,
                         null,
                         "application/xml",
-                        "Титул грузополучателя",
+                        EtrnMethods.OfdConsigneeTitle,
                         etrnId,
                         contentUrl,
                         exchanges,
@@ -556,6 +583,12 @@ public sealed class OfdEtrnGateway : IEtrnOperator
         var bytes = response.Content == null ? [] : await response.Content.ReadAsByteArrayAsync(cancellationToken);
         var text = Encoding.UTF8.GetString(bytes);
         var ok = response.IsSuccessStatusCode;
+        if (!ok)
+            _logger.LogWarning(
+                "Платформа ЭТрН {Method} ответила {Status}: {Body}",
+                name,
+                (int)response.StatusCode,
+                EtrnDocumentState.Truncate(text));
         exchanges.Add(new EtrnExchange
         {
             Method = name,
@@ -590,7 +623,7 @@ public sealed class OfdEtrnGateway : IEtrnOperator
             null,
             null,
             null,
-            "Абонент ЭДО",
+            EtrnMethods.OfdSubscriber,
             raw,
             url,
             exchanges,
@@ -648,6 +681,25 @@ public sealed class OfdEtrnGateway : IEtrnOperator
     }
 
     private static string TokenNote(int expiresIn) => $"Токен получен, действует {expiresIn} с";
+
+    private static Result<EtrnSignerName> ReadSigner(IOrganizationCertificateDirectory certificates, string serial)
+    {
+        var found = certificates.Find(serial);
+        if (found.IsFailure)
+            return Result.Failure<EtrnSignerName>(found.Error);
+
+        using var certificate = found.Value.Certificate;
+        var read = CertificateSubjectName.Read(certificate.Subject);
+        if (read.IsFailure)
+            return Result.Failure<EtrnSignerName>(read.Error);
+
+        return Result.Success(new EtrnSignerName
+        {
+            Surname = read.Value.Surname,
+            Name = read.Value.Name,
+            Patronymic = read.Value.Patronymic
+        });
+    }
 
     private static Result Ready(EtrnOperatorContext context)
     {

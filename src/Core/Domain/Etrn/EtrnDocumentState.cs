@@ -62,6 +62,20 @@ public static class EtrnDocumentState
         return Result.Success();
     }
 
+    public static Result StartCorrection(EtrnIncomingDocumentEntity document, DateTimeOffset now)
+    {
+        if (document.Status == EtrnDocumentStatus.Sending)
+            return Result.Failure(AlreadyRunning);
+        if (!document.CanCorrect)
+            return Result.Failure(AlreadyClosed);
+
+        document.Status = EtrnDocumentStatus.Sending;
+        document.SendingAt = now;
+        document.SendingAtUnix = now.ToUnixTimeSeconds();
+        document.LastError = "";
+        return Result.Success();
+    }
+
     public static Result Succeed(EtrnIncomingDocumentEntity document, EtrnDecision decision, DateTimeOffset now)
     {
         if (document.Status != EtrnDocumentStatus.Sending)
@@ -89,9 +103,12 @@ public static class EtrnDocumentState
         return Result.Success();
     }
 
-    public static void Fail(EtrnIncomingDocumentEntity document, string? error)
+    public static void Fail(EtrnIncomingDocumentEntity document, string? error) =>
+        Restore(document, EtrnDocumentStatus.Waiting, error);
+
+    public static void Restore(EtrnIncomingDocumentEntity document, string status, string? error)
     {
-        document.Status = EtrnDocumentStatus.Waiting;
+        document.Status = status;
         document.SendingAt = null;
         document.SendingAtUnix = 0;
         document.LastError = Truncate(error);

@@ -190,6 +190,45 @@ public class EtrnIncomingDocumentTests
     }
 
     [Fact]
+    public void Исправление_доступно_только_подписанной_Платформе()
+    {
+        var document = new EtrnIncomingDocumentEntity
+        {
+            Status = EtrnDocumentStatus.Accepted,
+            Operator = new EtrnOperator { Type = EtrnOperatorType.Ofd }
+        };
+
+        Assert.True(document.CanCorrect);
+
+        document.Status = EtrnDocumentStatus.Rejected;
+        Assert.True(document.CanCorrect);
+
+        document.Status = EtrnDocumentStatus.Waiting;
+        Assert.False(document.CanCorrect);
+
+        document.Status = EtrnDocumentStatus.Accepted;
+        document.Operator.Type = EtrnOperatorType.Saby;
+        Assert.False(document.CanCorrect);
+
+        document.Operator.Type = EtrnOperatorType.Ofd;
+        document.Status = EtrnDocumentStatus.Closed;
+        Assert.False(document.CanCorrect);
+    }
+
+    [Theory]
+    [InlineData(0, "20.11.2026", EtrnCorrection.BadNumber)]
+    [InlineData(1000, "20.11.2026", EtrnCorrection.BadNumber)]
+    [InlineData(1, "2026-11-20", EtrnCorrection.BadDate)]
+    [InlineData(1, "", EtrnCorrection.BadDate)]
+    public void Номер_и_дата_исправления_проверяются(int number, string date, string error)
+    {
+        var read = EtrnCorrection.Read(number, date);
+
+        Assert.True(read.IsFailure);
+        Assert.Equal(error, read.Error);
+    }
+
+    [Fact]
     public void Оператор_пишется_в_документ()
     {
         var document = new EtrnIncomingDocumentEntity

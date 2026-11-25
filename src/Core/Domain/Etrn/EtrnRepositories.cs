@@ -127,6 +127,12 @@ public sealed class EtrnIncomingView : EtrnIncomingRow
 
     public bool CanDecide { get; set; }
 
+    public bool CanCorrect { get; set; }
+
+    public int CorrectionNumber { get; set; }
+
+    public string CorrectionDate { get; set; } = "";
+
     /// <summary>
     /// Открытые точки организации документа: из них выбирается точка в карточке.
     /// </summary>

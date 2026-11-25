@@ -11,6 +11,10 @@ const COMMENT_ID = "etrnIncomingComment";
 const ERROR_ID = "etrnIncomingError";
 const ACCEPT_ID = "etrnIncomingAccept";
 const REJECT_ID = "etrnIncomingReject";
+const CORRECTION_ID = "etrnIncomingCorrect";
+const PROMPT_ID = "etrnCorrectionPrompt";
+const PROMPT_NUMBER_ID = "etrnCorrectionNumber";
+const PROMPT_DATE_ID = "etrnCorrectionDate";
 
 let openedId = null;
 let busyId = null;
@@ -37,6 +41,7 @@ export async function openEtrnIncomingWindow(row, { onAccepted, onSalePointChang
     openedId = document.id;
     busyId = null;
     let pendingCell = null;
+    let promptOpen = false;
 
     const dialog = openVetisWindow({        id: WINDOW_ID,
         title: `Документ № ${document.number} от ${formatIsoMoment(document.date)}`,
@@ -62,6 +67,7 @@ export async function openEtrnIncomingWindow(row, { onAccepted, onSalePointChang
                             width: 190,
                             css: "webix_primary",
                             disabled: !document.canDecide,
+                            hotkey: document.canDecide ? "alt+enter" : "",
                             click: () => send("sign"),
                         },
                         {
@@ -71,6 +77,14 @@ export async function openEtrnIncomingWindow(row, { onAccepted, onSalePointChang
                             width: 140,
                             disabled: !document.canDecide,
                             click: () => send("reject"),
+                        },
+                        {
+                            view: "button",
+                            id: CORRECTION_ID,
+                            value: "Отправить исправление",
+                            width: 220,
+                            hidden: !document.canCorrect,
+                            click: () => askCorrection(),
                         },
                         {},
                     ],
@@ -130,6 +144,12 @@ export async function openEtrnIncomingWindow(row, { onAccepted, onSalePointChang
 
     if (!document.canDecide)
         setError(document.lastError);
+
+    bindCorrectHotkey(document.canCorrect);
+    dialog.attachEvent("onDestruct", () => {
+        webix.UIManager.removeHotKey("alt+enter", onCorrectEnter);
+        $$(PROMPT_ID)?.destructor();
+    });
 
     async function send(intent) {
         if (busyId)
@@ -198,8 +218,162 @@ export async function openEtrnIncomingWindow(row, { onAccepted, onSalePointChang
             $$(ACCEPT_ID)?.disable();
             $$(REJECT_ID)?.disable();
         }
+        $$(ACCEPT_ID)?.define("hotkey", updated.canDecide ? "alt+enter" : "");
+
+        const correction = $$(CORRECTION_ID);
+        if (correction)
+            updated.canCorrect ? correction.show() : correction.hide();
+        bindCorrectHotkey(!!updated.canCorrect);
 
         setError(updated.lastError);
+    }
+
+    function onCorrectEnter() {
+        if (promptOpen || !document.canCorrect)
+            return false;
+
+        askCorrection();
+        return false;
+    }
+
+    function bindCorrectHotkey(enabled) {
+        webix.UIManager.removeHotKey("alt+enter", onCorrectEnter);
+        if (enabled)
+            webix.UIManager.addHotKey("alt+enter", onCorrectEnter);
+    }
+
+    function askCorrection() {
+        if (busyId || promptOpen)
+            return;
+
+        promptOpen = true;
+        webix.UIManager.removeHotKey("alt+enter", onCorrectEnter);
+        dialog.suspendEsc?.();
+        const onKey = (event) => {
+            if (event.key === "Escape") {
+                event.preventDefault();
+                event.stopPropagation();
+                closePrompt();
+            } else if (event.altKey && event.key === "Enter") {
+                event.preventDefault();
+                event.stopPropagation();
+                submitPrompt();
+            }
+        };
+        const closePrompt = () => {
+            window.removeEventListener("keydown", onKey, true);
+            $$(PROMPT_ID)?.close();
+        };
+
+        const prompt = webix.ui({
+            view: "window",
+            id: PROMPT_ID,
+            modal: true,
+            move: true,
+            position: "center",
+            escHide: false,
+            width: Math.min(420, window.innerWidth - 40),
+            head: {
+                view: "toolbar",
+                elements: [
+                    { view: "label", label: "Исправление" },
+                    { view: "icon", icon: "wxi-close", click: closePrompt },
+                ],
+            },
+            body: {
+                padding: 12,
+                rows: [
+                    {
+                        view: "text",
+                        id: PROMPT_NUMBER_ID,
+                        label: "Номер исправления",
+                        labelPosition: "top",
+                        clear: true,
+                        value: document.correctionNumber > 0 ? String(document.correctionNumber) : "",
+                    },
+                    {
+                        view: "datepicker",
+                        id: PROMPT_DATE_ID,
+                        label: "Дата исправления",
+                        labelPosition: "top",
+                        editable: true,
+                        format: "%d.%m.%Y",
+                        value: storedCorrectionDate(document.correctionDate),
+                    },
+                    {
+                        padding: { top: 8 },
+                        cols: [
+                            {
+                                view: "button",
+                                value: "Отправить",
+                                width: 140,
+                                css: "webix_primary",
+                                click: () => submitPrompt(),
+                            },
+                            {},
+                        ],
+                    },
+                ],
+            },
+        });
+        prompt.attachEvent("onDestruct", () => {
+            promptOpen = false;
+            window.removeEventListener("keydown", onKey, true);
+            if ($$(WINDOW_ID) && !dialog.$destructed) {
+                dialog.resumeEsc?.();
+                bindCorrectHotkey(!!document.canCorrect);
+            }
+        });
+        window.addEventListener("keydown", onKey, true);
+        prompt.show();
+        $$(PROMPT_NUMBER_ID)?.focus();
+
+        function submitPrompt() {
+            const number = Number(String($$(PROMPT_NUMBER_ID)?.getValue() ?? "").trim());
+            const date = readCorrectionDate();
+            if (!Number.isInteger(number) || number < 1 || number > 999) {
+                webix.message({ type: "error", text: "Номер исправления: целое число от 1 до 999" });
+                return;
+            }
+            if (!/^\d{2}\.\d{2}\.\d{4}$/.test(date)) {
+                webix.message({ type: "error", text: "Дата исправления: дата в формате ДД.ММ.ГГГГ" });
+                return;
+            }
+
+            document.correctionNumber = number;
+            document.correctionDate = date;
+            closePrompt();
+            sendCorrection(number, date);
+        }
+    }
+
+    async function sendCorrection(number, date) {
+        if (busyId)
+            return;
+
+        busyId = document.id;
+        setError("");
+        dialog.disable();
+        showStage(dialog, "Отправка исправления");
+
+        try {
+            const updated = await etrnService.accept(document.id, {
+                correction: true,
+                correctionNumber: number,
+                correctionDate: date,
+            });
+            webix.message("Исправление отправлено");
+            applyDocument(updated);
+            if (onAccepted)
+                await onAccepted();
+        } catch (error) {
+            setError(errorText(error.message));
+        } finally {
+            busyId = null;
+            hideStage(dialog);
+            if ($$(WINDOW_ID))
+                dialog.enable();
+        }
     }
 
     function setError(text) {
@@ -213,6 +387,23 @@ export async function openEtrnIncomingWindow(row, { onAccepted, onSalePointChang
             : "");
         view.refresh();
     }
+}
+
+function storedCorrectionDate(text) {
+    const match = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(String(text ?? "").trim());
+    if (!match)
+        return null;
+
+    const date = new Date(Number(match[3]), Number(match[2]) - 1, Number(match[1]));
+    return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function readCorrectionDate() {
+    const value = $$(PROMPT_DATE_ID)?.getValue();
+    if (value instanceof Date && !Number.isNaN(value.getTime()))
+        return webix.Date.dateToStr("%d.%m.%Y")(value);
+
+    return String(value ?? "").trim();
 }
 
 function rows(document) {

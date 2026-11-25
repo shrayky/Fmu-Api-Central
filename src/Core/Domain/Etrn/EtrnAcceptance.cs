@@ -34,6 +34,15 @@ public sealed class EtrnAcceptCommand
 
     [JsonPropertyName("lines")]
     public List<EtrnAcceptanceFact> Lines { get; set; } = [];
+
+    [JsonPropertyName("correction")]
+    public bool Correction { get; set; }
+
+    [JsonPropertyName("correctionNumber")]
+    public int CorrectionNumber { get; set; }
+
+    [JsonPropertyName("correctionDate")]
+    public string CorrectionDate { get; set; } = "";
 }
 
 public sealed class EtrnDecidedLine
@@ -77,6 +86,29 @@ public static class EtrnAcceptance
     public const string FactAboveInvoice = "Факт не может быть больше значения в накладной";
     public const string InvalidWeight = "Факт массы должен быть числом";
     public const string NoLines = "В документе нет строк груза";
+
+    public static EtrnDecision Stored(EtrnIncomingDocumentEntity document)
+    {
+        var rejected = document.Status == EtrnDocumentStatus.Rejected;
+        var action = rejected
+            ? EtrnAcceptanceAction.Rejected
+            : string.IsNullOrWhiteSpace(document.Action)
+                ? EtrnAcceptanceAction.Received
+                : document.Action;
+        return new EtrnDecision
+        {
+            Action = action,
+            Status = rejected ? EtrnDocumentStatus.Rejected : EtrnDocumentStatus.Accepted,
+            GeneralComment = document.GeneralComment,
+            Lines = document.Lines.Select(line => new EtrnDecidedLine
+            {
+                Index = line.Index,
+                FactPlaces = line.FactPlaces,
+                FactWeight = line.FactWeight,
+                Comment = line.Comment
+            }).ToList()
+        };
+    }
 
     public static Result<EtrnDecision> Decide(
         IReadOnlyList<EtrnCargoLine> lines,
